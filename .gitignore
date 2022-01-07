@@ -1,0 +1,4 @@
+.vscode/**
+obj/**
+plexus
+config.json
