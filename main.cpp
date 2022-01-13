@@ -1,11 +1,11 @@
 #include <string>
 #include <iostream>
 #include <memory>
-#include "pipe.h"
+#include "tools.h"
 
 int main(int argc, char** argv)
 {
-    plexus::email_pipe::config config
+    plexus::tools::email_pipe_config config
     {
         "smtp.yandex.ru:465",
         "imap.yandex.ru:993",
@@ -17,7 +17,7 @@ int main(int argc, char** argv)
         "sergey-nine@yandex.ru",
         10
     };
-    std::unique_ptr<plexus::pipe> pipe(plexus::email_pipe::open(config));
+    std::unique_ptr<plexus::tools::pipe> pipe(plexus::tools::create_email_pipe(config));
 
     pipe->push("hello");
     auto data = pipe->pull();

@@ -6,13 +6,13 @@
 #include <memory>
 #include <regex>
 #include <functional>
-#include "pipe.h"
-#include "ssl.h"
+#include "tools.h"
+#include "network.h"
 #include "utils.h"
 
 #define PLEXUS_VERSION "1.0"
 
-namespace plexus { namespace email_pipe {
+namespace plexus { namespace tools {
 
 class ssl_channel_mediator
 {
@@ -21,7 +21,7 @@ class ssl_channel_mediator
 public:
 
     ssl_channel_mediator(const std::string& server, const std::string& cert, const std::string& key, long timeout)
-        : m_channel(ssl_channel::open(server.c_str(), cert.c_str(), key.c_str(), timeout))
+        : m_channel(network::create_ssl_channel(server.c_str(), cert.c_str(), key.c_str(), timeout))
     {
     }
 
@@ -29,7 +29,7 @@ public:
 
     void connect(const response_parser_t& parse)
     {
-        m_channel->connect();
+        m_channel->open();
 
         std::string response;
         do {
@@ -63,8 +63,8 @@ public:
 
 private:
 
-    char m_buffer[8192];
-    std::unique_ptr<ssl_channel> m_channel;
+    char m_buffer[BUFFER_SIZE];
+    std::unique_ptr<network::channel> m_channel;
     bool m_trace = false;
 };
 
@@ -85,7 +85,7 @@ class smtp_strategy
 
 public:
     
-    smtp_strategy(const config& conf)
+    smtp_strategy(const email_pipe_config& conf)
         : m_config(conf)
     {
     }
@@ -122,7 +122,7 @@ public:
 
 private:
 
-    const config m_config;
+    const email_pipe_config m_config;
 };
 
 class imap_strategy
@@ -223,7 +223,7 @@ class imap_strategy
 
 public:
 
-    imap_strategy(const config& conf)
+    imap_strategy(const email_pipe_config& conf)
         : m_config(conf)
     {
     }
@@ -268,7 +268,7 @@ public:
 
 private:
 
-    const config m_config;
+    const email_pipe_config m_config;
     std::list<unsigned long> m_unseen;
     std::string m_data;
     unsigned long m_last_seen = 0;
@@ -282,7 +282,7 @@ class email_pipe : public pipe
 
 public:
 
-    email_pipe(const config& config)
+    email_pipe(const email_pipe_config& config)
         : m_smtp(config)
         , m_imap(config)
     {
@@ -299,7 +299,7 @@ public:
     }
 };
 
-pipe* open(const config& config)
+pipe* create_email_pipe(const email_pipe_config& config)
 {
     return new email_pipe(config);
 }
