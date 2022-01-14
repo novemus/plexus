@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace plexus { namespace tools {
+namespace plexus { namespace features {
 
 struct pipe
 {

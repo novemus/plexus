@@ -9,8 +9,8 @@ namespace plexus { namespace network
         virtual ~channel() {}
         virtual void open() noexcept(false) = 0;
         virtual void close() noexcept(false) = 0;
-        virtual int read(char* buffer, int len) noexcept(false) = 0;
-        virtual int write(const char* buffer, int len) noexcept(false) = 0;
+        virtual size_t read(char* buffer, size_t len) noexcept(false) = 0;
+        virtual size_t write(const char* buffer, size_t len) noexcept(false) = 0;
     };
 
     channel* create_ssl_channel(const std::string& url, const std::string& cert = "", const std::string& key = "", long timeout = 10);

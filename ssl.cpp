@@ -83,20 +83,20 @@ public:
         m_bio.reset();
     }
 
-    int write(const char* buffer, int len) noexcept(false) override
+    size_t write(const char* buffer, size_t len) noexcept(false) override
     {
-        auto size = do_write(buffer, len);
+        auto size = do_write(buffer, static_cast<int>(len));
         if (size < 0)
             throw std::runtime_error("can't write data");
-        return size;
+        return static_cast<size_t>(size);
     }
 
-    int read(char* buffer, int len) noexcept(false) override
+    size_t read(char* buffer, size_t len) noexcept(false) override
     {
-        auto size = do_read(buffer, len);
+        auto size = do_read(buffer, static_cast<int>(len));
         if (size < 0)
             throw std::runtime_error("can't read data");
-        return size;
+        return static_cast<size_t>(size);
     }
 
 private:
