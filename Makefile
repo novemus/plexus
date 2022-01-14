@@ -4,8 +4,8 @@
 
 # Compiler settings - Can be customized.
 CC = g++
-CXXFLAGS = -std=c++17 -Wall -g -I/media/data/nine/projects/ngp.axxon/!ngp-sdk/x86_64/boost_1_68_0/include
-LDFLAGS = -lssl -lcrypto -L/media/data/nine/projects/ngp.axxon/!ngp-sdk/x86_64/boost_1_68_0/lib -lpthread -lboost_thread -lboost_system
+CXXFLAGS = -std=c++17 -Wall -g
+LDFLAGS = -lssl -lcrypto -lpthread -lboost_thread -lboost_system
 
 # Makefile settings - Can be customized.
 APPNAME = plexus

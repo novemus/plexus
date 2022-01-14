@@ -12,7 +12,7 @@ namespace plexus { namespace network {
 
 class asio_udp_channel : public channel
 {
-    boost::asio::io_context        m_io;
+    boost::asio::io_service        m_io;
     boost::asio::deadline_timer    m_timer;
     boost::asio::ip::udp::socket   m_socket;
     boost::asio::ip::udp::endpoint m_src;
@@ -39,8 +39,6 @@ class asio_udp_channel : public channel
             {
                 std::cerr << ex.what() << std::endl;
             }
-
-            m_timer.expires_at(boost::posix_time::pos_infin);
         }
 
         m_timer.async_wait(boost::bind(&asio_udp_channel::check_deadline, this, boost::asio::placeholders::error));
@@ -79,7 +77,7 @@ public:
         , m_socket(m_io)
         , m_timeout(timeout)
     {
-        m_src = boost::asio::ip::udp::endpoint(boost::asio::ip::make_address(src_ip), src_port);
+        m_src = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(src_ip), src_port);
 
         boost::asio::ip::udp::resolver resolver(m_io);
         boost::asio::ip::udp::resolver::query query(dst_ip, std::to_string(dst_port));
