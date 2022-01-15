@@ -46,7 +46,7 @@ public:
         init_openssl();
     }
 
-    void open() noexcept(false) override
+    void connect() noexcept(false) override
     {
         SSL* ssl;
         SSL_CTX* ctx = SSL_CTX_new(SSLv23_client_method());
@@ -77,13 +77,13 @@ public:
         }
     }
 
-    void close() noexcept(false) override
+    void shutdown() noexcept(false) override
     {
         BIO_ssl_shutdown(m_bio.get());
         m_bio.reset();
     }
 
-    size_t write(const char* buffer, size_t len) noexcept(false) override
+    size_t write(const unsigned char* buffer, size_t len) noexcept(false) override
     {
         auto size = do_write(buffer, static_cast<int>(len));
         if (size < 0)
@@ -91,7 +91,7 @@ public:
         return static_cast<size_t>(size);
     }
 
-    size_t read(char* buffer, size_t len) noexcept(false) override
+    size_t read(unsigned char* buffer, size_t len) noexcept(false) override
     {
         auto size = do_read(buffer, static_cast<int>(len));
         if (size < 0)
@@ -118,7 +118,7 @@ private:
         return select(fd + 1, io == IO_READ ? &fds : 0, io == IO_READ ? 0 : &fds, NULL, &timeout);
     }
 
-    int do_read(char* buf, int len) const
+    int do_read(void* buf, int len) const
     {
         int res = -1;
         while (true)
@@ -140,7 +140,7 @@ private:
         return res;
     }
 
-    int do_write(const char* buf, int len) const
+    int do_write(const void* buf, int len) const
     {
         int res = -1;
         while (true)
@@ -163,9 +163,9 @@ private:
     }
 };
 
-channel* create_ssl_channel(const std::string& url, const std::string& cert, const std::string& key, long timeout)
+std::shared_ptr<channel> create_ssl_channel(const std::string& url, const std::string& cert, const std::string& key, long timeout)
 {
-    return new openssl_channel(url, cert, key, timeout);
+    return std::make_shared<openssl_channel>(url, cert, key, timeout);
 }
 
 }}

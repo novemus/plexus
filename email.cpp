@@ -29,12 +29,12 @@ public:
 
     void connect(const response_parser_t& parse)
     {
-        m_channel->open();
+        m_channel->connect();
 
         std::string response;
         do {
             int read = m_channel->read(m_buffer, BUFFER_SIZE);
-            response.append(m_buffer, read);
+            response.append((char*)m_buffer, read);
         } while (!parse(response));
 
         if (m_trace)
@@ -48,13 +48,13 @@ public:
 
         int written = 0;
         do {
-            written += m_channel->write(request.c_str() + written, request.size() - written);
+            written += m_channel->write((const unsigned char*)request.c_str() + written, request.size() - written);
         } while (written < (int)request.size());
 
         std::string response;
         do {
             int read = m_channel->read(m_buffer, BUFFER_SIZE);
-            response.append(m_buffer, read);
+            response.append((char*)m_buffer, read);
         } while (!parse(response));
 
         if (m_trace)
@@ -63,8 +63,8 @@ public:
 
 private:
 
-    char m_buffer[BUFFER_SIZE];
-    std::unique_ptr<network::channel> m_channel;
+    unsigned char m_buffer[BUFFER_SIZE];
+    std::shared_ptr<network::channel> m_channel;
     bool m_trace = false;
 };
 
