@@ -3,9 +3,9 @@
 
 namespace plexus { namespace features {
 
-stun_info explore_nat_by_stun(const std::string& server)
+class stun_network_traverse : public network_traverse
 {
     
-}
+};
 
 }}

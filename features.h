@@ -26,26 +26,38 @@ struct email_pipe_config
 
 pipe* create_email_pipe(const email_pipe_config& config);
 
-enum nat_quality
+struct network_traverse
 {
-    error = 0,
-    address_filter = 0x00000001,
-    port_filter = 0x00000002,
-    port_keep = 0x00000004,
-    port_reuse = 0x00000008,
-    hairpin = 0x00000010,
-    not_nat = 0x80000000
+    struct firewall
+    {
+        enum binding
+        {
+            independent = 0,
+            address_dependend = 1,
+            address_port_dependend = 2
+        };
+
+        int nat : 1,
+            hairpin : 1,
+            retainable_port : 1,
+            immutable_address : 1,
+            outbound_binding : 2,
+            inbound_binding : 2;
+    };
+
+    struct mapping
+    {
+        std::string private_address;
+        unsigned short private_port;
+        std::string public_address;
+        unsigned short public_port;
+    };
+
+    virtual ~network_traverse() {}
+    virtual firewall explore_firewall() noexcept(false) = 0;
+    virtual mapping punch_udp_hole() noexcept(false) = 0;
 };
 
-struct stun_info
-{
-    int nat_qualities;
-    std::string private_address;
-    unsigned short private_port;
-    std::string public_address;
-    unsigned short public_port;
-};
-
-stun_info explore_nat_by_stun(const std::string& server);
+network_traverse* create_stun_network_traverse(const std::string& stun, const std::string& interface);
 
 }}
