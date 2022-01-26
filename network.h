@@ -26,8 +26,8 @@ namespace plexus { namespace network
              std::string service;
              std::vector<unsigned char> buffer;
 
-             transfer(size_t b) : buffer(b) {}
-             transfer(const std::string& h, const std::string& s, size_t b = 0) : host(h), service(s), buffer(b) {}
+             transfer(size_t b) : buffer(b, 0) {}
+             transfer(const std::string& h, const std::string& s, size_t b = 0) : host(h), service(s), buffer(b, 0) {}
              transfer(const std::string& h, const std::string& s, const std::initializer_list<unsigned char>& b) : host(h), service(s), buffer(b) {}
         };
         typedef std::shared_ptr<transfer> transfer_ptr;
