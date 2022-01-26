@@ -16,7 +16,7 @@ namespace plexus { namespace network
         virtual size_t write(const unsigned char* buffer, size_t len) noexcept(false) = 0;
     };
 
-    std::shared_ptr<channel> create_ssl_channel(const std::string& url, const std::string& cert = "", const std::string& key = "", long timeout = 10);
+    std::shared_ptr<channel> create_ssl_channel(const std::string& url, const std::string& cert = "", const std::string& key = "", long timeout_sec = 10);
 
     struct udp_client
     {
@@ -33,9 +33,9 @@ namespace plexus { namespace network
         typedef std::shared_ptr<transfer> transfer_ptr;
 
         virtual ~udp_client() {}
-        virtual std::future<size_t> send(transfer_ptr data) noexcept(false) = 0;
-        virtual std::future<size_t> receive(transfer_ptr data) noexcept(false) = 0;
+        virtual std::future<size_t> send(transfer_ptr data, long timeout_ms = 2000) noexcept(false) = 0;
+        virtual std::future<size_t> receive(transfer_ptr data, long timeout_ms = 2000) noexcept(false) = 0;
     };
 
-    std::shared_ptr<udp_client> create_udp_client(const std::string& address = "127.0.0.1", unsigned short port = 5000, long timeout = 10);
+    std::shared_ptr<udp_client> create_udp_client(const std::string& address = "127.0.0.1", unsigned short port = 5000);
 }}
