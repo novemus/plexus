@@ -6,11 +6,11 @@
 #include "features.h"
 #include "network.h"
 
-std::string stringify(unsigned char* data, int len)
+std::string stringify(uint8_t* data, size_t len)
 {
     std::stringstream ss;
     ss << std::hex;
-    for (int i = 0; i < len; ++i)
+    for (size_t i = 0; i < len; ++i)
         ss << std::setw(2) << std::setfill('0') << (int)data[i];
     return ss.str();
 }
@@ -43,7 +43,7 @@ int main(int argc, char** argv)
 
         std::shared_ptr<plexus::network::udp_client> client = plexus::network::create_udp_client("192.168.0.104", 5000);
 
-        auto send = std::make_shared<plexus::network::udp_client::transfer>("216.93.246.18", "3478", std::initializer_list<unsigned char>{ 
+        auto send = std::make_shared<plexus::network::udp_client::transfer>("216.93.246.18", "3478", std::initializer_list<uint8_t>{ 
             0x00, 0x01, 0x00, 0x08, 0x21, 0x12, 0xa4, 0x42, 0xa6, 0x8b, 0x57, 0x5f, 0x77, 0xb8, 0x0f, 0x1d, 0x09, 0x9f, 0x65, 0x7f, 0x00, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00 });
         auto recv = std::make_shared<plexus::network::udp_client::transfer>(1024);
 

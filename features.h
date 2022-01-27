@@ -21,7 +21,7 @@ struct email_pipe_config
     std::string key;
     std::string frontend;
     std::string backend;
-    long timeout;
+    int64_t timeout;
 };
 
 pipe* create_email_pipe(const email_pipe_config& config);
@@ -48,9 +48,9 @@ struct network_traverse
     struct mapping
     {
         std::string private_address;
-        unsigned short private_port;
+        uint16_t private_port;
         std::string public_address;
-        unsigned short public_port;
+        uint16_t public_port;
     };
 
     virtual ~network_traverse() {}

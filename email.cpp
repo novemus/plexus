@@ -20,7 +20,7 @@ class ssl_channel_mediator
 
 public:
 
-    ssl_channel_mediator(const std::string& server, const std::string& cert, const std::string& key, long timeout)
+    ssl_channel_mediator(const std::string& server, const std::string& cert, const std::string& key, int64_t timeout)
         : m_channel(network::create_ssl_channel(server.c_str(), cert.c_str(), key.c_str(), timeout))
     {
     }
@@ -48,7 +48,7 @@ public:
 
         int written = 0;
         do {
-            written += m_channel->write((const unsigned char*)request.c_str() + written, request.size() - written);
+            written += m_channel->write((const uint8_t*)request.c_str() + written, request.size() - written);
         } while (written < (int)request.size());
 
         std::string response;
@@ -63,7 +63,7 @@ public:
 
 private:
 
-    unsigned char m_buffer[BUFFER_SIZE];
+    uint8_t m_buffer[BUFFER_SIZE];
     std::shared_ptr<network::channel> m_channel;
     bool m_trace = false;
 };
@@ -154,7 +154,7 @@ class imap_strategy
                 std::stringstream ss;
                 ss << match[1].str();
 
-                unsigned long validity;
+                uint64_t validity;
                 ss >> validity;
 
                 if (validity != m_validity)
@@ -179,7 +179,7 @@ class imap_strategy
                 std::stringstream stream;
                 stream << match[1].str();
 
-                unsigned long uid = 0;
+                uint64_t uid = 0;
                 while (stream >> uid)
                 {
                     if (uid > m_last_seen)
@@ -269,10 +269,10 @@ public:
 private:
 
     const email_pipe_config m_config;
-    std::list<unsigned long> m_unseen;
+    std::list<uint64_t> m_unseen;
     std::string m_data;
-    unsigned long m_last_seen = 0;
-    unsigned long m_validity = 0;
+    uint64_t m_last_seen = 0;
+    uint64_t m_validity = 0;
 };
 
 class email_pipe : public pipe

@@ -30,14 +30,14 @@ class openssl_channel : public channel
     const std::string m_url;
     const std::string m_cert;
     const std::string m_key;
-    const long m_timeout;
+    const int64_t m_timeout;
     std::shared_ptr<BIO> m_bio;
 
     enum io_kind { IO_READ, IO_WRITE };
 
 public:
 
-    openssl_channel(const std::string& url, const std::string& cert, const std::string& key, long timeout)
+    openssl_channel(const std::string& url, const std::string& cert, const std::string& key, int64_t timeout)
         : m_url(url)
         , m_cert(cert)
         , m_key(key)
@@ -83,7 +83,7 @@ public:
         m_bio.reset();
     }
 
-    size_t write(const unsigned char* buffer, size_t len) noexcept(false) override
+    size_t write(const uint8_t* buffer, size_t len) noexcept(false) override
     {
         auto size = do_write(buffer, static_cast<int>(len));
         if (size < 0)
@@ -91,7 +91,7 @@ public:
         return static_cast<size_t>(size);
     }
 
-    size_t read(unsigned char* buffer, size_t len) noexcept(false) override
+    size_t read(uint8_t* buffer, size_t len) noexcept(false) override
     {
         auto size = do_read(buffer, static_cast<int>(len));
         if (size < 0)
@@ -163,7 +163,7 @@ private:
     }
 };
 
-std::shared_ptr<channel> create_ssl_channel(const std::string& url, const std::string& cert, const std::string& key, long timeout)
+std::shared_ptr<channel> create_ssl_channel(const std::string& url, const std::string& cert, const std::string& key, int64_t timeout)
 {
     return std::make_shared<openssl_channel>(url, cert, key, timeout);
 }

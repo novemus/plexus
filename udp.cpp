@@ -50,7 +50,7 @@ class asio_udp_client : public udp_client, public std::enable_shared_from_this<a
     typedef std::function<void(const boost::system::error_code&, size_t)> async_io_callback_t;
     typedef std::function<void(const async_io_callback_t&)> async_io_call_t;
 
-    size_t exec(const async_io_call_t& async_io_call, long timeout)
+    size_t exec(const async_io_call_t& async_io_call, int64_t timeout)
     {
         m_timer.expires_from_now(boost::posix_time::milliseconds(timeout));
         m_timer.async_wait(boost::bind(&asio_udp_client::check_deadline, shared_from_this(), boost::asio::placeholders::error));
@@ -95,7 +95,7 @@ class asio_udp_client : public udp_client, public std::enable_shared_from_this<a
 
 public:
 
-    asio_udp_client(const std::string& address, unsigned short port)
+    asio_udp_client(const std::string& address, uint16_t port)
         : m_socket(m_io)
         , m_timer(m_io)
     {
@@ -122,7 +122,7 @@ public:
         }
     }
 
-    std::future<size_t> receive(transfer_ptr data, long timeout) noexcept(false) override
+    std::future<size_t> receive(transfer_ptr data, int64_t timeout) noexcept(false) override
     {
         auto keeper = shared_from_this();
         return std::async(std::launch::async, [&, keeper]()
@@ -140,7 +140,7 @@ public:
         });
     }
 
-    std::future<size_t> send(transfer_ptr data, long timeout) noexcept(false) override
+    std::future<size_t> send(transfer_ptr data, int64_t timeout) noexcept(false) override
     {
         auto keeper = shared_from_this();
         return std::async(std::launch::async, [&, keeper]()
@@ -160,7 +160,7 @@ public:
     }
 };
 
-std::shared_ptr<udp_client> create_udp_client(const std::string& address, unsigned short port)
+std::shared_ptr<udp_client> create_udp_client(const std::string& address, uint16_t port)
 {
     return std::make_shared<asio_udp_client>(address, port);
 }
