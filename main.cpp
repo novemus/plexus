@@ -41,20 +41,10 @@ int main(int argc, char** argv)
             data = pipe->pull();
         }
 
-        std::shared_ptr<plexus::network::udp_client> client = plexus::network::create_udp_client("192.168.0.104", 5000);
-
-        auto send = std::make_shared<plexus::network::udp_client::transfer>("216.93.246.18", "3478", std::initializer_list<uint8_t>{ 
-            0x00, 0x01, 0x00, 0x08, 0x21, 0x12, 0xa4, 0x42, 0xa6, 0x8b, 0x57, 0x5f, 0x77, 0xb8, 0x0f, 0x1d, 0x09, 0x9f, 0x65, 0x7f, 0x00, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00 });
-        auto recv = std::make_shared<plexus::network::udp_client::transfer>(1024);
-
-        auto s = client->send(send);
-        auto r = client->receive(recv);
-
-        auto sent = s.get();
-        std::cout << send->host << ":" << send->service << " <- " << stringify(send->buffer.data(), sent) << std::endl;
-        
-        auto received = r.get();
-        std::cout << recv->host << ":" << recv->service << " -> " << stringify(recv->buffer.data(), received) << std::endl;
+        std::shared_ptr<plexus::features::network_traverse> travers(plexus::features::create_network_traverse(
+            "216.93.246.18", "10.8.0.4", 5000u
+            ));
+        travers->explore_firewall();
     }
     catch(const std::exception& e)
     {
