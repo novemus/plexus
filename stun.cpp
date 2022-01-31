@@ -27,8 +27,21 @@ PF - state of the port change flag
 
 *** testing procedure ***
 
-INIT_TEST: SA, SP, AF=0, PF=0
-    Acquire endpoints of the stun server.
+NAT_TEST: SA, SP, AF=0, PF=0
+    Acquire mapped endpoint from source address and source port of the stun server.
+    If mapped endpoint is equal to the local endpoint, then there is no NAT go to HAIRPIN_TEST and FILERING_TEST_1 tests,
+    otherwise check if the mapping preserves port and go to the MAPPING_TEST_1, HAIRPIN_TEST and FILERING_TEST_1 tests
+MAPPING_TEST_1: CA, CP, AF=0, PF=0
+    Acquire mapped endpoint from changed address and changed port of the stun server.
+    If mapped endpoint is equal to the NAT_TEST endpoint, then there is the independent mapping,
+    otherwise check if the address is variable and go to the MAPPING_TEST_2 test
+MAPPING_TEST_2: CA, SP, AF=0, PF=0
+    Acquire mapped endpoint from changed address and source port of the stun server.
+    if mapped endpoint is equal to the "MAPPING_TEST_1" endpoint, then there is the address dependent mapping,
+    otherwise there is address and port dependent mapping.
+HAIRPIN_TEST: MA, MP, AF=0, PF=0
+    Send request to the mapped endpoint.
+    If response will be received, then there is a hairpin.
 FILERING_TEST_1: SA, SP, AF=1, PF=1
     Tell the stun server to reply from changed address and changed port.
     If response will be received, then there is the endpoint independent filtering,
@@ -37,28 +50,13 @@ FILERING_TEST_2: SA, SP, AF=0, PF=1
     Tell the stun server to reply from source address and changed port.
     if response will be received, then there is the address dependent filtering,
     otherwise there is address and port dependent filtering
-NAT_TEST: CA, CP, AF=0, PF=0
-    Acquire mapped endpoint from source address and source port of the stun server. We can't
-    use mapped endpoint from INIT_TEST because fairwall can drop binding on filtering tests
-    If mapped endpoint is equal to the local endpoint, then there is no NAT,
-    otherwise check if the mapping retains port and go to the MAPPING_TEST_1 test
-MAPPING_TEST_1: CA, CP, AF=0, PF=0
-    Acquire mapped endpoint from changed address and changed port of the stun server.
-    If mapped endpoint is equal to the NAT_TEST endpoint, then there is the independent mapping,
-    otherwise check if address is immutable and go to the HAPPING_TEST_2 test
-MAPPING_TEST_2: CA, SP, AF=0, PF=0
-    Acquire mapped endpoint from changed address and source port of the stun server.
-    if mapped endpoint is equal to the "MAPPING_TEST_1" endpoint, then there is the address dependent mapping,
-    otherwise there is address and port dependent mapping.
-HAIRPIN_TEST: MA, MP, AF=0, PF=0
-    Send request to the mapped endpoint.
-    If response will be received, then there is a hairpin.
 */
 
-namespace plexus { namespace features { namespace stun {
+namespace plexus { namespace network { namespace stun {
 
 typedef std::array<uint8_t, 16> transaction_id;
 typedef std::pair<std::string, uint16_t> endpoint;
+typedef std::shared_ptr<network::udp_client> udp_client_ptr;
 
 const uint16_t default_port = 3478u;
 
@@ -249,36 +247,59 @@ std::ostream& operator<<(std::ostream& stream, const message_ptr& message)
     return stream;
 }
 
-class stun_network_traverse : public network_traverse
+std::ostream& operator<<(std::ostream& stream, const binding& bind)
+{
+    switch (bind)
+    {
+        case binding::independent:
+            return stream << "independent";
+        case binding::address_dependent:
+            return stream << "address dependent";
+        case binding::address_and_port_dependent:
+            return stream << "address and port dependent";
+        default:
+            return stream << "unknown";
+    }
+    return stream;
+}
+
+class stun_session
 {
     inline void send(message_ptr request, int64_t timeout)
     {
         if (m_trace)
-            std::cout << ">>>>> " << request << std::endl;
+            std::cout << "<<<<< " << request << std::endl;
 
-        size_t size = m_client->send(request, timeout).get();
+        size_t size = m_udp->send(request, timeout).get();
         if (size < request->buffer.size())
             throw std::runtime_error("can't send message");
     }
 
     inline void receive(message_ptr response, int64_t timeout)
     {
-        size_t size = m_client->receive(response, timeout).get();
+        size_t size = m_udp->receive(response, timeout).get();
         if (size < msg::min_size || size < response->size())
             throw std::runtime_error("can't receive message");
 
         if (m_trace)
-            std::cout << "<<<<< " << response << std::endl;
+            std::cout << ">>>>> " << response << std::endl;
     }
 
-    message_ptr exec_binding_request(const std::string& address, uint16_t port, uint8_t flags = 0, int64_t deadline = 4600)
+public:
+
+    stun_session(const endpoint& local)
+        : m_udp(create_udp_client(local.first, local.second))
+    {
+    }
+
+    message_ptr exec_binding_request(const endpoint& stun, uint8_t flags = 0, int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        message_ptr request = std::make_shared<message>(address, port, flags);
+        message_ptr request = std::make_shared<message>(stun.first, stun.second, flags);
         message_ptr response = std::make_shared<message>(msg::max_size);
 
         int64_t timeout = 200;
@@ -327,93 +348,103 @@ class stun_network_traverse : public network_traverse
         } 
         while (timer().total_milliseconds() < deadline);
         
-        throw network::timeout_error();
+        throw timeout_error();
     }
+
+private:
+
+    udp_client_ptr m_udp;
+    bool m_trace = false;
+};
+
+class classic_stun_client : public stun_client
+{
+    endpoint m_stun_server;
+    endpoint m_for_mapping;
+    endpoint m_for_filtering;
+    stun_session m_mapping_tester;
+    stun_session m_filtering_tester;
 
 public:
 
-    stun_network_traverse(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
-        : m_client(network::create_udp_client(local_address, local_port))
-        , m_stun_server(stun_server)
-        , m_local_address(local_address)
-        , m_local_port(local_port)
+    classic_stun_client(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
+        : m_stun_server(endpoint{stun_server, stun::default_port})
+        , m_for_mapping(endpoint{local_address, local_port})
+        , m_for_filtering(endpoint{local_address, local_port + 1})
+        , m_mapping_tester(m_for_mapping)
+        , m_filtering_tester(m_for_filtering)
     {
         std::srand(std::time(nullptr));
     }
 
-    firewall explore_firewall() noexcept(false) override
+    traverse explore_network() noexcept(false) override
     {
-        firewall state = {0};
+        traverse state = {0};
 
-        std::cout << "init test..." << std::endl;
+        std::cout << "nat test..." << std::endl;
+        message_ptr response = m_mapping_tester.exec_binding_request(m_stun_server);
 
-        message_ptr resp = exec_binding_request(m_stun_server, stun::default_port);
-        endpoint se = resp->source_endpoint();
-        endpoint ce = resp->changed_endpoint();
+        endpoint mapped = response->mapped_endpoint();
+        endpoint source = response->source_endpoint();
+        endpoint changed = response->changed_endpoint();
+
+        if (mapped != m_for_mapping)
+        {
+            state.nat = 1;
+            state.random_port = mapped.second != m_for_mapping.second ? 1 : 0;
+            
+            std::cout << "first mapping test..." << std::endl;
+            endpoint fst_mapped = m_mapping_tester.exec_binding_request(changed)->mapped_endpoint();
+
+            state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
+
+            if (fst_mapped == mapped)
+            {
+                state.mapping = binding::independent;
+            }
+            else
+            {
+                std::cout << "second mapping test..." << std::endl;
+                endpoint snd_mapped = m_mapping_tester.exec_binding_request(endpoint{changed.first, source.second})->mapped_endpoint();
+
+                state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
+            }
+        }
+
+        std::cout << "hairpin test..." << std::endl;
+        try
+        {
+            m_filtering_tester.exec_binding_request(mapped, 0, 1400);
+            state.hairpin = 1;
+        }
+        catch(const timeout_error&) { }
 
         std::cout << "first filtering test..." << std::endl;
         try
         {
-            exec_binding_request(se.first, se.second, flag::change_address | flag::change_port);
-            state.inbound_binding = firewall::independent;
+            m_filtering_tester.exec_binding_request(m_stun_server, flag::change_address | flag::change_port, 1400);
+            state.filtering = binding::independent;
         }
-        catch(const network::timeout_error&)
+        catch(const timeout_error&)
         {
             std::cout << "second filtering test..." << std::endl;
             try
             {
-                exec_binding_request(se.first, se.second, flag::change_port);
-                state.inbound_binding = firewall::address_dependend;
+                m_filtering_tester.exec_binding_request(m_stun_server, flag::change_port, 1400);
+                state.filtering = binding::address_dependent;
             }
-            catch(const network::timeout_error&)
+            catch(const timeout_error&)
             {
-                state.inbound_binding = firewall::address_port_dependend;
+                state.filtering = binding::address_and_port_dependent;
             }
         }
 
-        std::cout << "nat test..." << std::endl;
-        endpoint me = exec_binding_request(se.first, se.second)->mapped_endpoint();
-
-        if (me.first != m_local_address || me.second != m_local_port)
-        {
-            state.nat = 1;
-            state.retainable_port = me.second == m_local_port ? 1 : 0;
-
-            std::cout << "first mapping test..." << std::endl;
-            endpoint fme = exec_binding_request(ce.first, ce.second)->mapped_endpoint();
-
-            if (fme == me)
-            {
-                state.outbound_binding = firewall::independent;
-            }
-            else
-            {
-                if (fme.first == me.first)
-                {
-                    state.immutable_address = 1;
-                }
-                
-                std::cout << "second mapping test..." << std::endl;
-                endpoint sme = exec_binding_request(ce.first, se.second)->mapped_endpoint();
-
-                state.outbound_binding = sme == fme ? firewall::address_dependend : firewall::address_port_dependend;
-            }
-
-            std::cout << "hairpin test..." << std::endl;
-            try
-            {
-                exec_binding_request(me.first, me.second, 0, 1600);
-                state.hairpin = 1;
-            }
-            catch(const network::timeout_error&) { }
-        }
-
-        std::cout << "\nfirewall:" << std::endl
+        std::cout << "\ntraverse:" << std::endl
                   << "\tnat: " << (state.nat ? "true" : "false") << std::endl
-                  << "\toutbound binding: 0x" << std::hex << state.outbound_binding << std::endl
-                  << "\tinbound binding:  0x" << std::hex << state.inbound_binding << std::endl
-                  << "\tretainable port: " << (state.retainable_port ? "true" : "false") << std::endl
-                  << "\timmutable address: " << (state.retainable_port ? "true" : "false") << std::endl
+                  << "\tmapping: " <<  (binding)state.mapping << std::endl
+                  << "\tfiltering: " << (binding)state.filtering << std::endl
+                  << "\trandom port: " << (state.random_port ? "true" : "false") << std::endl
+                  << "\tvariable address: " << (state.variable_address ? "true" : "false") << std::endl
                   << "\thairpin: " << (state.hairpin ? "true" : "false") << std::endl;
 
         return state;
@@ -421,22 +452,13 @@ public:
 
     endpoint punch_udp_hole() noexcept(false) override
     {
-        message_ptr response = exec_binding_request(m_stun_server, stun::default_port);
-        return response->mapped_endpoint();
+        return m_mapping_tester.exec_binding_request(m_stun_server)->mapped_endpoint();
     }
-
-private:
-
-    std::shared_ptr<network::udp_client> m_client;
-    std::string m_stun_server;
-    std::string m_local_address;
-    uint16_t m_local_port;
-    bool m_trace = false;
 };
 
-network_traverse* create_network_traverse(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
+stun_client* create_stun_client(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
 {
-    return new stun_network_traverse(stun_server, local_address, local_port);
+    return new classic_stun_client(stun_server, local_address, local_port);
 }
 
 }}

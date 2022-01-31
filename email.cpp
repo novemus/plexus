@@ -12,7 +12,7 @@
 
 #define PLEXUS_VERSION "1.0"
 
-namespace plexus { namespace features {
+namespace plexus { namespace network {
 
 class ssl_channel_mediator
 {
