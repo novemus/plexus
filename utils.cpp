@@ -6,9 +6,7 @@
 #include <openssl/opensslv.h>
 #include <openssl/md5.h>
 #include <vector>
-#include <iomanip>
 #include <sstream>
-#include <cstdarg>
 #include "utils.h"
 
 namespace plexus { namespace utils {
@@ -144,13 +142,12 @@ std::string format(const std::string& format, ...)
     return buf.data();
 }
 
-std::string format(const std::string& format, const std::chrono::system_clock::time_point& time)
+std::string format(const std::string& format, const boost::posix_time::ptime& time)
 {
-    std::time_t tt = std::chrono::system_clock::to_time_t(time);
-    std::tm tm = *std::gmtime(&tt);
-    std::stringstream ss;
-    ss << std::put_time(&tm, format.c_str());
-    return ss.str();
+    std::stringstream out;
+    out.imbue(std::locale(out.getloc(), new boost::gregorian::date_facet(format.c_str())));
+    out << time;
+    return out.str();
 }
 
 }}

@@ -243,7 +243,7 @@ public:
 
         if (m_unseen.empty())
         {
-            mediator->request(utils::format("tag UID SEARCH SINCE %d-%b-%Y\r\n", std::chrono::system_clock::now()), search_parser);
+            mediator->request(utils::format("tag UID SEARCH SINCE %d-%b-%Y\r\n", boost::posix_time::second_clock::universal_time()), search_parser);
         }
 
         std::string data;
