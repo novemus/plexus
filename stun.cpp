@@ -238,11 +238,13 @@ std::ostream& operator<<(std::ostream& stream, const message_ptr& message)
 {
     if (message)
     {
+        std::stringstream out;
         size_t size = std::min((size_t)message->size(), message->buffer.size());
         for (size_t i = 0; i < size; ++i)
         {
-            stream << std::setw(2) << std::setfill('0') << (int)message->buffer[i];
+            out << std::setw(2) << std::setfill('0') << std::hex << (int)message->buffer[i];
         }
+        stream << out.str();
     }
     return stream;
 }
@@ -268,7 +270,7 @@ class stun_session
     inline void send(message_ptr request, int64_t timeout)
     {
         if (m_trace)
-            std::cout << "<<<<< " << request << std::endl;
+            std::cout << request->host << ":" << request->service << " <<<<< " << request << std::endl;
 
         size_t size = m_udp->send(request, timeout).get();
         if (size < request->buffer.size())
@@ -282,7 +284,7 @@ class stun_session
             throw std::runtime_error("can't receive message");
 
         if (m_trace)
-            std::cout << ">>>>> " << response << std::endl;
+            std::cout << response->host << ":" << response->service << " >>>>> " << response << std::endl;
     }
 
 public:
@@ -323,9 +325,9 @@ public:
                         endpoint se = response->source_endpoint();
                         endpoint ce = response->changed_endpoint();
 
-                        std::cout << "mapped_endpoint=" << me.first << ":" << me.second << std::endl
-                                  << "source_endpoint=" << se.first << ":" << se.second << std::endl
-                                  << "changed_endpoint=" << ce.first << ":" << ce.second << std::endl;
+                        std::cout << "mapped_endpoint=" << me.first << ":" << me.second
+                                  << " source_endpoint=" << se.first << ":" << se.second
+                                  << " changed_endpoint=" << ce.first << ":" << ce.second << std::endl;
                         break;
                     }
                     case msg::binding_request:
@@ -414,7 +416,7 @@ public:
         std::cout << "hairpin test..." << std::endl;
         try
         {
-            m_filtering_tester.exec_binding_request(mapped, 0, 1400);
+            m_mapping_tester.exec_binding_request(mapped, 0, 1400);
             state.hairpin = 1;
         }
         catch(const timeout_error&) { }
@@ -452,6 +454,7 @@ public:
 
     endpoint punch_udp_hole() noexcept(false) override
     {
+        std::cout << "punch udp hole..." << std::endl;
         return m_mapping_tester.exec_binding_request(m_stun_server)->mapped_endpoint();
     }
 };

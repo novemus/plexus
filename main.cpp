@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <memory>
 #include "features.h"
+#include "utils.h"
 #include "network.h"
 
 std::string stringify(uint8_t* data, size_t len)
@@ -11,7 +12,7 @@ std::string stringify(uint8_t* data, size_t len)
     std::stringstream ss;
     ss << std::hex;
     for (size_t i = 0; i < len; ++i)
-        ss << std::setw(2) << std::setfill('0') << (int)data[i];
+        ss << std::setw(2) << std::setfill('0') << std::hex << (int)data[i];
     return ss.str();
 }
 
@@ -56,7 +57,7 @@ int main(int argc, char** argv)
         // auto received = r.get();
         // std::cout << recv->host << ":" << recv->service << " -> " << stringify(recv->buffer.data(), received) << std::endl;
 
-        std::shared_ptr<plexus::network::stun_client> stun(plexus::network::create_stun_client("216.93.246.18", "10.8.0.3", 5000u));
+        std::shared_ptr<plexus::network::stun_client> stun(plexus::network::create_stun_client("216.93.246.18", "192.168.0.105", 5000u));
         stun->explore_network();
         plexus::network::endpoint endpoint = stun->punch_udp_hole();
         std::cout << endpoint.first << ":" << endpoint.second << std::endl;
