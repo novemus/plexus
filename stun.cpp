@@ -11,6 +11,7 @@
 #include "network.h"
 #include "features.h"
 #include "utils.h"
+#include "log.h"
 
 /* Algorithm of polling the STUN server to test firewall
 
@@ -269,8 +270,7 @@ class stun_session
 {
     inline void send(message_ptr request, int64_t timeout)
     {
-        if (m_trace)
-            std::cout << request->host << ":" << request->service << " <<<<< " << request << std::endl;
+        _trc_ << request->host << ":" << request->service << " <<<<< " << request;
 
         size_t size = m_udp->send(request, timeout).get();
         if (size < request->buffer.size())
@@ -283,8 +283,7 @@ class stun_session
         if (size < msg::min_size || size < response->size())
             throw std::runtime_error("can't receive message");
 
-        if (m_trace)
-            std::cout << response->host << ":" << response->service << " >>>>> " << response << std::endl;
+        _trc_ << response->host << ":" << response->service << " >>>>> " << response;
     }
 
 public:
@@ -325,9 +324,9 @@ public:
                         endpoint se = response->source_endpoint();
                         endpoint ce = response->changed_endpoint();
 
-                        std::cout << "mapped_endpoint=" << me.first << ":" << me.second
-                                  << " source_endpoint=" << se.first << ":" << se.second
-                                  << " changed_endpoint=" << ce.first << ":" << ce.second << std::endl;
+                        _dbg_ << "mapped_endpoint=" << me.first << ":" << me.second
+                              << " source_endpoint=" << se.first << ":" << se.second
+                              << " changed_endpoint=" << ce.first << ":" << ce.second;
                         break;
                     }
                     case msg::binding_request:
@@ -356,7 +355,6 @@ public:
 private:
 
     udp_client_ptr m_udp;
-    bool m_trace = false;
 };
 
 class classic_stun_client : public stun_client
@@ -383,7 +381,7 @@ public:
     {
         traverse state = {0};
 
-        std::cout << "nat test..." << std::endl;
+        _dbg_ << "nat test...";
         message_ptr response = m_mapping_tester.exec_binding_request(m_stun_server);
 
         endpoint mapped = response->mapped_endpoint();
@@ -395,7 +393,7 @@ public:
             state.nat = 1;
             state.random_port = mapped.second != m_for_mapping.second ? 1 : 0;
             
-            std::cout << "first mapping test..." << std::endl;
+            _dbg_ << "first mapping test...";
             endpoint fst_mapped = m_mapping_tester.exec_binding_request(changed)->mapped_endpoint();
 
             state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
@@ -406,14 +404,14 @@ public:
             }
             else
             {
-                std::cout << "second mapping test..." << std::endl;
+                _dbg_ << "second mapping test...";
                 endpoint snd_mapped = m_mapping_tester.exec_binding_request(endpoint{changed.first, source.second})->mapped_endpoint();
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }
         }
 
-        std::cout << "hairpin test..." << std::endl;
+        _dbg_ << "hairpin test...";
         try
         {
             m_mapping_tester.exec_binding_request(mapped, 0, 1400);
@@ -421,7 +419,7 @@ public:
         }
         catch(const timeout_error&) { }
 
-        std::cout << "first filtering test..." << std::endl;
+        _dbg_ << "first filtering test...";
         try
         {
             m_filtering_tester.exec_binding_request(m_stun_server, flag::change_address | flag::change_port, 1400);
@@ -429,7 +427,7 @@ public:
         }
         catch(const timeout_error&)
         {
-            std::cout << "second filtering test..." << std::endl;
+            _dbg_ << "second filtering test...";
             try
             {
                 m_filtering_tester.exec_binding_request(m_stun_server, flag::change_port, 1400);
@@ -441,20 +439,20 @@ public:
             }
         }
 
-        std::cout << "\ntraverse:" << std::endl
-                  << "\tnat: " << (state.nat ? "true" : "false") << std::endl
-                  << "\tmapping: " <<  (binding)state.mapping << std::endl
-                  << "\tfiltering: " << (binding)state.filtering << std::endl
-                  << "\trandom port: " << (state.random_port ? "true" : "false") << std::endl
-                  << "\tvariable address: " << (state.variable_address ? "true" : "false") << std::endl
-                  << "\thairpin: " << (state.hairpin ? "true" : "false") << std::endl;
+        _inf_ << "\ntraverse:"
+              << "\n\tnat: " << (state.nat ? "true" : "false")
+              << "\n\tmapping: " <<  (binding)state.mapping
+              << "\n\tfiltering: " << (binding)state.filtering
+              << "\n\trandom port: " << (state.random_port ? "true" : "false")
+              << "\n\tvariable address: " << (state.variable_address ? "true" : "false")
+              << "\n\thairpin: " << (state.hairpin ? "true" : "false");
 
         return state;
     }
 
     endpoint punch_udp_hole() noexcept(false) override
     {
-        std::cout << "punch udp hole..." << std::endl;
+        _dbg_ << "punch udp hole...";
         return m_mapping_tester.exec_binding_request(m_stun_server)->mapped_endpoint();
     }
 };

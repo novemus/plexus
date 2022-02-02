@@ -9,6 +9,7 @@
 #include "features.h"
 #include "network.h"
 #include "utils.h"
+#include "log.h"
 
 #define PLEXUS_VERSION "1.0"
 
@@ -37,14 +38,12 @@ public:
             response.append((char*)m_buffer, read);
         } while (!parse(response));
 
-        if (m_trace)
-            std::cout << ">>>>>\n" << response << "\n*****" << std::endl;
+        _trc_ << ">>>>>\n" << response << "\n*****";
     }
 
     void request(const std::string& request, const response_parser_t& parse)
     {
-        if (m_trace)
-            std::cout << "<<<<<\n" << request << "\n*****" << std::endl;
+        _trc_ << "<<<<<\n" << request << "\n*****";
 
         int written = 0;
         do {
@@ -57,15 +56,13 @@ public:
             response.append((char*)m_buffer, read);
         } while (!parse(response));
 
-        if (m_trace)
-            std::cout << ">>>>>\n" << response << "\n*****" << std::endl;
+        _trc_ << ">>>>>\n" << response << "\n*****";
     }
 
 private:
 
     uint8_t m_buffer[BUFFER_SIZE];
     std::shared_ptr<network::channel> m_channel;
-    bool m_trace = false;
 };
 
 class smtp_strategy

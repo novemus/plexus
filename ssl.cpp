@@ -7,6 +7,7 @@
 #include <openssl/err.h>
 #include <openssl/crypto.h>
 #include "network.h"
+#include "log.h"
 
 namespace plexus { namespace network {
 
@@ -135,7 +136,7 @@ private:
             }
         }
 
-        std::cout << "read error: " << res << std::endl;
+        _err_ << "read error: " << res;
 
         return res;
     }
@@ -157,7 +158,7 @@ private:
             }
         }
 
-        std::cout << "write error: " << res << std::endl;
+        _err_ << "write error: " << res;
 
         return res;
     }

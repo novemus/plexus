@@ -6,6 +6,7 @@
 #include "features.h"
 #include "utils.h"
 #include "network.h"
+#include "log.h"
 
 std::string stringify(uint8_t* data, size_t len)
 {
@@ -38,7 +39,7 @@ int main(int argc, char** argv)
         // auto data = pipe->pull();
         // while (!data.empty())
         // {
-        //     std::cout << data << std::endl;
+        //     _inf_ << data;
         //     data = pipe->pull();
         // }
 
@@ -52,19 +53,26 @@ int main(int argc, char** argv)
         // auto r = client->receive(recv);
 
         // auto sent = s.get();
-        // std::cout << send->host << ":" << send->service << " <- " << stringify(send->buffer.data(), sent) << std::endl;
+        // _inf_ << send->host << ":" << send->service << " <- " << stringify(send->buffer.data(), sent);
         
         // auto received = r.get();
-        // std::cout << recv->host << ":" << recv->service << " -> " << stringify(recv->buffer.data(), received) << std::endl;
+        // _inf_ << recv->host << ":" << recv->service << " -> " << stringify(recv->buffer.data(), received);
 
-        std::shared_ptr<plexus::network::stun_client> stun(plexus::network::create_stun_client("216.93.246.18", "192.168.0.105", 5000u));
+        plexus::log::init(plexus::log::debug);
+        // _ftl_ << "fatal" << " message " << plexus::log::fatal;
+        // _err_ << "error" << " message " << plexus::log::error;
+        // _wrn_ << "warning" << " message " << plexus::log::warning;
+        // _inf_ << "info" << " message " << plexus::log::info;
+        // _dbg_ << "debug" << " message " << plexus::log::debug;
+        // _trc_ << "trace" << " message " << plexus::log::trace;
+
+        std::shared_ptr<plexus::network::stun_client> stun(plexus::network::create_stun_client("216.93.246.18", "192.168.1.104", 5000u));
         stun->explore_network();
         plexus::network::endpoint endpoint = stun->punch_udp_hole();
-        std::cout << endpoint.first << ":" << endpoint.second << std::endl;
     }
     catch(const std::exception& e)
     {
-        std::cerr << e.what() << std::endl;
+        _ftl_ << e.what();
     }
 
     return 0;
