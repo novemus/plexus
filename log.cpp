@@ -1,13 +1,36 @@
 #include <fstream>
-#include <sys/types.h>
+#include <mutex>
+#include <future>
 #include <boost/thread/thread.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include "log.h"
 
+#include <sys/types.h>
+#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
+#include <sys/syscall.h>
+#define gettid() syscall(SYS_gettid)
+#endif
+
 namespace plexus { namespace log {
 
-std::function<std::ostream&()> get_stream = []() -> std::ostream& { return std::cout; };
-std::function<severity()> get_severity = []() -> severity { return severity::info; };
+severity      g_level;
+std::ofstream g_file;
+std::mutex    g_mutex;
+
+void append(const std::string& line) 
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_file.is_open())
+        g_file << line << std::endl;
+    else
+        std::cout << line << std::endl;
+};
+
+severity level()
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return g_level;
+}
 
 std::ostream& operator<<(std::ostream& out, severity severity)
 {
@@ -19,17 +42,19 @@ std::ostream& operator<<(std::ostream& out, severity severity)
             return out << "ERROR";
         case warning:
             return out << "WARN";
+        case info:
+            return out << "INFO";
         case debug:
             return out << "DEBUG";
         case trace:
             return out << "TRACE";
         default:
-            return out << "INFO";
+            return out << "NONE";
     }
     return out;
 }
 
-logger::logger(severity l) : level(l > get_severity() ? severity::none : l)
+line::line(severity l) : level(l <= log::level() ? l : severity::none)
 {
     if (level != severity::none)
     {
@@ -37,28 +62,26 @@ logger::logger(severity l) : level(l > get_severity() ? severity::none : l)
     }
 }
 
-logger::~logger()
+line::~line()
 {
-    static std::mutex s_mutex;
-
     if (level != severity::none)
     {
-        std::lock_guard<std::mutex> guard(s_mutex);
-
-        std::ostream& out = get_stream();
-        out << stream.rdbuf() << std::endl;
-        out.flush();
+        log::append(stream.str());
     }
 }
 
-void init(severity level, const char* file)
+void set(severity level, const char* file)
 {
+    std::lock_guard<std::mutex> lock(g_mutex);
     if (file)
     {
-        static std::ofstream s_log(file);
-        get_stream = []() -> std::ofstream& { return s_log; };
+        g_file.open(file);
     }
-    get_severity = [level]() -> severity { return level; };
+    else
+    {
+        g_file.close();
+    }
+    g_level = level;
 }
 
 }}

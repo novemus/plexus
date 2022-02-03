@@ -18,13 +18,13 @@ enum severity
     trace
 };
 
-struct logger
+struct line
 {
-    logger(severity level);
-    ~logger();
+    line(severity level);
+    ~line();
     
     template<typename type_t> 
-    logger& operator<<(const type_t& value)
+    line& operator<<(const type_t& value)
     {
         if (level != severity::none)
             stream << value;
@@ -37,13 +37,13 @@ private:
     std::stringstream stream;
 };
 
-void init(severity level, const char* file = 0);
+void set(severity level, const char* file = 0);
 
 }}
 
-#define _ftl_ plexus::log::logger(plexus::log::fatal)
-#define _err_ plexus::log::logger(plexus::log::error)
-#define _wrn_ plexus::log::logger(plexus::log::warning)
-#define _inf_ plexus::log::logger(plexus::log::info)
-#define _dbg_ plexus::log::logger(plexus::log::debug)
-#define _trc_ plexus::log::logger(plexus::log::trace)
+#define _ftl_ plexus::log::line(plexus::log::fatal)
+#define _err_ plexus::log::line(plexus::log::error)
+#define _wrn_ plexus::log::line(plexus::log::warning)
+#define _inf_ plexus::log::line(plexus::log::info)
+#define _dbg_ plexus::log::line(plexus::log::debug)
+#define _trc_ plexus::log::line(plexus::log::trace)

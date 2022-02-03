@@ -58,17 +58,23 @@ int main(int argc, char** argv)
         // auto received = r.get();
         // _inf_ << recv->host << ":" << recv->service << " -> " << stringify(recv->buffer.data(), received);
 
-        plexus::log::init(plexus::log::debug);
-        // _ftl_ << "fatal" << " message " << plexus::log::fatal;
-        // _err_ << "error" << " message " << plexus::log::error;
-        // _wrn_ << "warning" << " message " << plexus::log::warning;
-        // _inf_ << "info" << " message " << plexus::log::info;
-        // _dbg_ << "debug" << " message " << plexus::log::debug;
-        // _trc_ << "trace" << " message " << plexus::log::trace;
+        plexus::log::set(plexus::log::trace, "logger.log");
 
-        std::shared_ptr<plexus::network::stun_client> stun(plexus::network::create_stun_client("216.93.246.18", "192.168.1.104", 5000u));
-        stun->explore_network();
-        plexus::network::endpoint endpoint = stun->punch_udp_hole();
+        _ftl_ << "fatal" << " message " << plexus::log::fatal;
+        _err_ << "error" << " message " << plexus::log::error;
+        _wrn_ << "warning" << " message " << plexus::log::warning;
+        _inf_ << "info" << " message " << plexus::log::info;
+        _dbg_ << "debug" << " message " << plexus::log::debug;
+        _trc_ << "trace" << " message " << plexus::log::trace;
+
+        std::cin.get();
+
+        _dbg_ << "debug" << " message " << plexus::log::debug;
+        _trc_ << "trace" << " message " << plexus::log::trace;
+
+        // std::shared_ptr<plexus::network::stun_client> stun(plexus::network::create_stun_client("216.93.246.18", "192.168.1.104", 5000u));
+        // stun->explore_network();
+        // plexus::network::endpoint endpoint = stun->punch_udp_hole();
     }
     catch(const std::exception& e)
     {
