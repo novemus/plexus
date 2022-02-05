@@ -150,4 +150,14 @@ std::string format(const std::string& format, const boost::posix_time::ptime& ti
     return out.str();
 }
 
+std::string to_hexadecimal(uint8_t* data, size_t len)
+{
+    std::stringstream out;
+    for (size_t i = 0; i < len; ++i)
+    {
+        out << std::setw(2) << std::setfill('0') << std::hex << (int)data[i];
+    }
+    return out.str();
+}
+
 }}

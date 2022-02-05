@@ -8,15 +8,6 @@
 #include "network.h"
 #include "log.h"
 
-std::string stringify(uint8_t* data, size_t len)
-{
-    std::stringstream ss;
-    ss << std::hex;
-    for (size_t i = 0; i < len; ++i)
-        ss << std::setw(2) << std::setfill('0') << std::hex << (int)data[i];
-    return ss.str();
-}
-
 int main(int argc, char** argv)
 {
     try
@@ -58,7 +49,7 @@ int main(int argc, char** argv)
         // auto received = r.get();
         // _inf_ << recv->host << ":" << recv->service << " -> " << stringify(recv->buffer.data(), received);
 
-        plexus::log::set(plexus::log::trace, "logger.log");
+        plexus::log::set(plexus::log::debug, "out.log");
 
         _ftl_ << "fatal" << " message " << plexus::log::fatal;
         _err_ << "error" << " message " << plexus::log::error;
@@ -67,12 +58,9 @@ int main(int argc, char** argv)
         _dbg_ << "debug" << " message " << plexus::log::debug;
         _trc_ << "trace" << " message " << plexus::log::trace;
 
-        std::cin.get();
+        plexus::exec("ls", "-l", "/home/nine", "out.log");
 
-        _dbg_ << "debug" << " message " << plexus::log::debug;
-        _trc_ << "trace" << " message " << plexus::log::trace;
-
-        // std::shared_ptr<plexus::network::stun_client> stun(plexus::network::create_stun_client("216.93.246.18", "192.168.1.104", 5000u));
+        // std::shared_ptr<plexus::network::stun_client> stun(plexus::network::create_stun_client("216.93.246.18", "10.8.0.4", 5000u));
         // stun->explore_network();
         // plexus::network::endpoint endpoint = stun->punch_udp_hole();
     }

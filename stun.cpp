@@ -239,13 +239,7 @@ std::ostream& operator<<(std::ostream& stream, const message_ptr& message)
 {
     if (message)
     {
-        std::stringstream out;
-        size_t size = std::min((size_t)message->size(), message->buffer.size());
-        for (size_t i = 0; i < size; ++i)
-        {
-            out << std::setw(2) << std::setfill('0') << std::hex << (int)message->buffer[i];
-        }
-        stream << out.str();
+        stream << utils::to_hexadecimal(message->buffer.data(), std::min((size_t)message->size(), message->buffer.size()));
     }
     return stream;
 }

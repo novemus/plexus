@@ -2,7 +2,11 @@
 
 #include <string>
 
-namespace plexus { namespace network {
+namespace plexus {
+    
+void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
+
+namespace network {
 
 struct pipe
 {
@@ -51,6 +55,8 @@ struct stun_client
     virtual ~stun_client() {}
     virtual traverse explore_network() noexcept(false) = 0;
     virtual endpoint punch_udp_hole() noexcept(false) = 0;
+    virtual void keep_udp_hole() noexcept(false) {}
+    virtual void touch_remote_host(endpoint host) noexcept(false) {}
 };
 
 stun_client* create_stun_client(const std::string& stun_server, const std::string& local_address, uint16_t local_port);

@@ -70,16 +70,16 @@ line::~line()
     }
 }
 
-void set(severity level, const char* file)
+void set(severity level, const std::string& file)
 {
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (file)
+    if (file.empty())
     {
-        g_file.open(file);
+        g_file.close();
     }
     else
     {
-        g_file.close();
+        g_file.open(file);
     }
     g_level = level;
 }

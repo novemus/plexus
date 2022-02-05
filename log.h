@@ -37,7 +37,7 @@ private:
     std::stringstream stream;
 };
 
-void set(severity level, const char* file = 0);
+void set(severity level, const std::string& file = "");
 
 }}
 

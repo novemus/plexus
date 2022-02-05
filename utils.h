@@ -6,6 +6,7 @@
 
 namespace plexus { namespace utils {
 
+std::string to_hexadecimal(uint8_t* data, size_t len);
 std::string to_base64(const void* data, size_t length);
 std::string to_base64_no_nl(const void* data, size_t length);
 std::string to_base64_url(const void* data, size_t length);
