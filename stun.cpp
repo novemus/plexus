@@ -64,6 +64,7 @@ const uint16_t default_port = 3478u;
 namespace msg {
     const size_t min_size = 20;
     const size_t max_size = 548;
+    const uint16_t indication = 0x0011;
     const uint16_t binding_request = 0x0001;
     const uint16_t binding_response = 0x0101;
     const uint16_t binding_error_response = 0x0111;
@@ -96,6 +97,16 @@ class message : public network::udp_client::transfer
     inline static uint8_t rand_byte()
     {
         return (uint8_t)std::rand();
+    }
+
+    inline static uint8_t high_byte(uint16_t value)
+    {
+        return uint8_t(value >> 8) & 0xff;
+    }
+
+    inline static uint8_t low_byte(uint16_t value)
+    {
+        return uint8_t(value);
     }
 
     const uint8_t* fetch_attribute_place(uint16_t type) const
@@ -171,6 +182,18 @@ public:
             rand_byte(), rand_byte(), rand_byte(), rand_byte(),
             rand_byte(), rand_byte(), rand_byte(), rand_byte(),
             0x00, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, flags
+        };
+    }
+
+    message(const std::string& address, uint16_t port, uint16_t type)
+        : transfer(address, std::to_string(port))
+    {
+        buffer = {
+            high_byte(type), low_byte(type), 0x00, 0x00,
+            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+            rand_byte(), rand_byte(), rand_byte(), rand_byte()
         };
     }
 
@@ -346,27 +369,32 @@ public:
         throw timeout_error();
     }
 
+    void send_indication(const endpoint& stun)
+    {
+        send(std::make_shared<message>(stun.first, stun.second, msg::indication), 1600);
+    }
+
 private:
 
     udp_client_ptr m_udp;
 };
 
-class classic_stun_client : public stun_client
+class stun_udp_puncher : public udp_puncher
 {
     endpoint m_stun_server;
     endpoint m_for_mapping;
     endpoint m_for_filtering;
-    stun_session m_mapping_tester;
-    stun_session m_filtering_tester;
+    stun_session m_mapper;
+    stun_session m_filter;
 
 public:
 
-    classic_stun_client(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
+    stun_udp_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
         : m_stun_server(endpoint{stun_server, stun::default_port})
         , m_for_mapping(endpoint{local_address, local_port})
         , m_for_filtering(endpoint{local_address, local_port + 1})
-        , m_mapping_tester(m_for_mapping)
-        , m_filtering_tester(m_for_filtering)
+        , m_mapper(m_for_mapping)
+        , m_filter(m_for_filtering)
     {
         std::srand(std::time(nullptr));
     }
@@ -376,7 +404,7 @@ public:
         traverse state = {0};
 
         _dbg_ << "nat test...";
-        message_ptr response = m_mapping_tester.exec_binding_request(m_stun_server);
+        message_ptr response = m_mapper.exec_binding_request(m_stun_server);
 
         endpoint mapped = response->mapped_endpoint();
         endpoint source = response->source_endpoint();
@@ -388,7 +416,7 @@ public:
             state.random_port = mapped.second != m_for_mapping.second ? 1 : 0;
             
             _dbg_ << "first mapping test...";
-            endpoint fst_mapped = m_mapping_tester.exec_binding_request(changed)->mapped_endpoint();
+            endpoint fst_mapped = m_mapper.exec_binding_request(changed)->mapped_endpoint();
 
             state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
 
@@ -399,7 +427,7 @@ public:
             else
             {
                 _dbg_ << "second mapping test...";
-                endpoint snd_mapped = m_mapping_tester.exec_binding_request(endpoint{changed.first, source.second})->mapped_endpoint();
+                endpoint snd_mapped = m_mapper.exec_binding_request(endpoint{changed.first, source.second})->mapped_endpoint();
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }
@@ -408,7 +436,7 @@ public:
         _dbg_ << "hairpin test...";
         try
         {
-            m_mapping_tester.exec_binding_request(mapped, 0, 1400);
+            m_mapper.exec_binding_request(mapped, 0, 1400);
             state.hairpin = 1;
         }
         catch(const timeout_error&) { }
@@ -416,7 +444,7 @@ public:
         _dbg_ << "first filtering test...";
         try
         {
-            m_filtering_tester.exec_binding_request(m_stun_server, flag::change_address | flag::change_port, 1400);
+            m_filter.exec_binding_request(m_stun_server, flag::change_address | flag::change_port, 1400);
             state.filtering = binding::independent;
         }
         catch(const timeout_error&)
@@ -424,7 +452,7 @@ public:
             _dbg_ << "second filtering test...";
             try
             {
-                m_filtering_tester.exec_binding_request(m_stun_server, flag::change_port, 1400);
+                m_filter.exec_binding_request(m_stun_server, flag::change_port, 1400);
                 state.filtering = binding::address_dependent;
             }
             catch(const timeout_error&)
@@ -447,13 +475,19 @@ public:
     endpoint punch_udp_hole() noexcept(false) override
     {
         _dbg_ << "punch udp hole...";
-        return m_mapping_tester.exec_binding_request(m_stun_server)->mapped_endpoint();
+        return m_mapper.exec_binding_request(m_stun_server)->mapped_endpoint();
+    }
+
+    void keep_udp_hole() noexcept(false) override
+    {
+        _dbg_ << "send indication...";
+        m_mapper.send_indication(m_stun_server);
     }
 };
 
-stun_client* create_stun_client(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
+udp_puncher* create_udp_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
 {
-    return new classic_stun_client(stun_server, local_address, local_port);
+    return new stun_udp_puncher(stun_server, local_address, local_port);
 }
 
 }}

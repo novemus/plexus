@@ -50,15 +50,15 @@ struct traverse
 
 typedef std::pair<std::string, uint16_t> endpoint;
 
-struct stun_client
+struct udp_puncher
 {
-    virtual ~stun_client() {}
+    virtual ~udp_puncher() {}
     virtual traverse explore_network() noexcept(false) = 0;
     virtual endpoint punch_udp_hole() noexcept(false) = 0;
-    virtual void keep_udp_hole() noexcept(false) {}
+    virtual void keep_udp_hole() noexcept(false) = 0;
     virtual void touch_remote_host(endpoint host) noexcept(false) {}
 };
 
-stun_client* create_stun_client(const std::string& stun_server, const std::string& local_address, uint16_t local_port);
+udp_puncher* create_udp_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port);
 
 }}
