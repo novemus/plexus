@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iomanip>
 #include <memory>
+#include <utility>
 #include "features.h"
 #include "utils.h"
 #include "network.h"
@@ -49,7 +50,7 @@ int main(int argc, char** argv)
         // auto received = r.get();
         // _inf_ << recv->host << ":" << recv->service << " -> " << stringify(recv->buffer.data(), received);
 
-        plexus::log::set(plexus::log::debug);
+        plexus::log::set(plexus::log::trace);
 
         // _ftl_ << "fatal" << " message " << plexus::log::fatal;
         // _err_ << "error" << " message " << plexus::log::error;
@@ -61,9 +62,22 @@ int main(int argc, char** argv)
         //plexus::exec("ls", "-l", "/home/nine", "out.log");
 
         std::shared_ptr<plexus::network::udp_puncher> stun(plexus::network::create_udp_puncher("216.93.246.18", "192.168.0.105", 5000u));
-        stun->explore_network();
-        plexus::network::endpoint endpoint = stun->punch_udp_hole();
-        stun->keep_udp_hole();
+        stun->punch_udp_hole();
+        std::shared_ptr<plexus::network::udp_puncher> peer(plexus::network::create_udp_puncher("77.72.169.211", "192.168.0.105", 5002u));
+        peer->punch_udp_hole();
+
+        auto t1 = std::async(std::launch::async, [stun]() {
+            stun->meet_peer(std::make_pair("192.168.0.105", 5002u));
+            stun->close();
+        });
+
+        auto t2 = std::async(std::launch::async, [peer]() {
+            peer->meet_peer(std::make_pair("192.168.0.105", 5000u));
+            peer->close();
+        });
+
+        t1.get();
+        t2.get();
     }
     catch(const std::exception& e)
     {

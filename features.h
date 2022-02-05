@@ -56,7 +56,8 @@ struct udp_puncher
     virtual traverse explore_network() noexcept(false) = 0;
     virtual endpoint punch_udp_hole() noexcept(false) = 0;
     virtual void keep_udp_hole() noexcept(false) = 0;
-    virtual void touch_remote_host(endpoint host) noexcept(false) {}
+    virtual void meet_peer(endpoint peer, int64_t timeout_ms = 10000) noexcept(false) = 0;
+    virtual void close() noexcept(false) = 0;
 };
 
 udp_puncher* create_udp_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port);
