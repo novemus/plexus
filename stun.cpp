@@ -56,23 +56,20 @@ FILERING_TEST_2: SA, SP, AF=0, PF=1
 namespace plexus { namespace network { namespace stun {
 
 typedef std::array<uint8_t, 16> transaction_id;
-typedef std::pair<std::string, uint16_t> endpoint;
-typedef std::shared_ptr<network::udp_client> udp_client_ptr;
 
-const uint16_t default_port = 3478u;
+const uint16_t STUN_PORT = 3478u;
 
-constexpr std::initializer_list<uint8_t> greeting = { 0x70, 0x6c, 0x65, 0x78, 0x75, 0x73 };
-
-namespace msg {
+namespace msg
+{
     const size_t min_size = 20;
     const size_t max_size = 548;
-    const uint16_t indication = 0x0011;
     const uint16_t binding_request = 0x0001;
     const uint16_t binding_response = 0x0101;
     const uint16_t binding_error_response = 0x0111;
 }
 
-namespace attr {
+namespace attr
+{
     const uint16_t mapped_address = 0x0001;
     const uint16_t change_request = 0x0003;
     const uint16_t source_address = 0x0004;
@@ -82,7 +79,8 @@ namespace attr {
     const uint16_t reflected_from = 0x000b;
 }
 
-namespace flag {
+namespace flag
+{
     const uint8_t ip_v4 = 0x01;
     const uint8_t ip_v6 = 0x02;
     const uint8_t change_address = 0x04;
@@ -109,7 +107,7 @@ inline uint8_t low_byte(uint16_t value)
     return uint8_t(value);
 }
 
-class message : public network::udp_client::transfer
+class message : public network::udp::transfer
 {
     const uint8_t* fetch_attribute_place(uint16_t type) const
     {
@@ -174,8 +172,8 @@ class message : public network::udp_client::transfer
 
 public:
 
-    message(const std::string& address, uint16_t port, uint8_t flags = 0)
-        : transfer(address, std::to_string(port))
+    message(const endpoint& stun, uint8_t flags = 0)
+        : transfer(stun)
     {
         buffer = {
             0x00, 0x01, 0x00, 0x08,
@@ -187,8 +185,8 @@ public:
         };
     }
 
-    message(const std::string& address, uint16_t port, uint16_t type)
-        : transfer(address, std::to_string(port))
+    message(const endpoint& stun, uint16_t type)
+        : transfer(stun)
     {
         buffer = {
             high_byte(type), low_byte(type), 0x00, 0x00,
@@ -256,98 +254,54 @@ public:
 
 typedef std::shared_ptr<message> message_ptr;
 
-}
-
-using namespace stun;
-using transfer = udp_client::transfer;
-using transfer_ptr = udp_client::transfer_ptr;
-
-std::ostream& operator<<(std::ostream& stream, const transfer_ptr& message)
+class session
 {
-    if (message)
+    std::shared_ptr<udp> m_udp;
+
+    struct dummy_udp : udp
     {
-        stream << utils::to_hexadecimal(message->buffer.data(), message->buffer.size());
-    }
-    return stream;
-}
+        virtual size_t send(std::shared_ptr<udp::transfer> data, int64_t timeout_ms) noexcept(false) override
+        {
+            throw std::runtime_error("upd client is closed");
+        }
 
-std::ostream& operator<<(std::ostream& stream, const binding& bind)
-{
-    switch (bind)
-    {
-        case binding::independent:
-            return stream << "independent";
-        case binding::address_dependent:
-            return stream << "address dependent";
-        case binding::address_and_port_dependent:
-            return stream << "address and port dependent";
-        default:
-            return stream << "unknown";
-    }
-    return stream;
-}
-
-class stun_session
-{
-    template<class request_ptr>
-    inline void send(request_ptr request, int64_t timeout)
-    {
-        _trc_ << request->host << ":" << request->service << " <<<<< " << request;
-
-        size_t size = m_udp->send(request, timeout).get();
-        if (size < request->buffer.size())
-            throw std::runtime_error("can't send message");
-    }
-
-    template<class response_ptr>
-    inline void receive(response_ptr response, int64_t timeout)
-    {
-        size_t size = m_udp->receive(response, timeout).get();
-        if (size == 0)
-            throw std::runtime_error("can't receive message");
-
-        response->buffer.resize(size);
-
-        _trc_ << response->host << ":" << response->service << " >>>>> " << response;
-    }
+        virtual size_t receive(std::shared_ptr<udp::transfer> data, int64_t timeout_ms) noexcept(false) override
+        {
+            throw std::runtime_error("upd client is closed");
+        }
+    };
 
 public:
 
-    stun_session(const endpoint& local)
-        : m_udp(create_udp_client(local.first, local.second))
+    session(const std::string& address, uint16_t port) : m_udp(create_udp_client(address, port))
     {
     }
 
     message_ptr exec_binding_request(const endpoint& stun, uint8_t flags = 0, int64_t deadline = 4600)
     {
-        if (!m_udp)
-            throw std::runtime_error("upd client is closed");
-
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        message_ptr request = std::make_shared<message>(stun.first, stun.second, flags);
+        message_ptr request = std::make_shared<message>(stun, flags);
         message_ptr response = std::make_shared<message>(msg::max_size);
 
         int64_t timeout = 200;
-        do
+        while (timer().total_milliseconds() < deadline)
         {
-            send(request, timeout);
+            m_udp->send(request, timeout);
 
             try
             {
-                do
-                {
-                    if (timer().total_milliseconds() >= deadline)
-                        throw timeout_error();
+                m_udp->receive(response, timeout);
 
-                    receive(response, timeout);
-                } 
-                while (request->transaction() != response->transaction());
+                if (timer().total_milliseconds() >= deadline)
+                    throw timeout_error();
+                else if (request->transaction() != response->transaction())
+                    continue;
 
-                switch(response->type())
+                switch (response->type())
                 {
                     case msg::binding_response:
                     {
@@ -375,95 +329,94 @@ public:
                 if (ex.code() != boost::asio::error::operation_aborted)
                     throw;
 
+                _trc_ << ex.what();
+
                 timeout = std::min(1600l, timeout * 2);
             }
         } 
-        while (timer().total_milliseconds() < deadline);
-        
+
         throw timeout_error();
     }
 
-    void send_indication(const endpoint& stun)
+    void punch_hole_to_peer(endpoint peer, int64_t timeout, int64_t deadline) noexcept(false)
     {
-        if (!m_udp)
-            throw std::runtime_error("upd client is closed");
-
-        send(std::make_shared<message>(stun.first, stun.second, msg::indication), 1600);
-    }
-
-    void meet_peer(endpoint peer, int64_t deadline) noexcept(false)
-    {
-        if (!m_udp)
-            throw std::runtime_error("upd client is closed");
-
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        std::string ip = peer.first;
-        std::string port = std::to_string(peer.second);
+        static const std::vector<uint8_t> RECPLEX = { 0x72, 0x65, 0x63, 0x70, 0x6c, 0x65, 0x78 };
+        static const std::vector<uint8_t> RESPLEX = { 0x72, 0x65, 0x73, 0x70, 0x6c, 0x65, 0x78 };
 
-        transfer_ptr request = std::make_shared<transfer>(ip, port, greeting);
-        transfer_ptr response = std::make_shared<transfer>(sizeof(greeting));
+        std::shared_ptr<udp::transfer> request = std::make_shared<udp::transfer>(peer, RECPLEX);
+        std::shared_ptr<udp::transfer> response = std::make_shared<udp::transfer>(RECPLEX.size());
 
-        int64_t timeout = 200;
-        do
+        while (timer().total_milliseconds() < deadline)
         {
-            send(request, timeout);
+            m_udp->send(request, timeout);
 
             try
             {
-                do
+                if (peer == response->remote && response->buffer == RESPLEX)
                 {
-                    if (timer().total_milliseconds() >= deadline)
-                        throw timeout_error();
+                    _dbg_ << "handhake peer=" << response->remote.first << ":" << response->remote.second;
+                    m_udp = std::make_shared<dummy_udp>();
+                    return;
+                }
 
-                    receive(response, timeout);
-                } 
-                while (ip != response->host && port != response->service);
+                m_udp->receive(response, timeout);
 
-                _dbg_ << "peer=" << response->host << ":" << response->service;
-
-                return;
+                if (peer == response->remote && request->buffer == RECPLEX)
+                {
+                    _dbg_ << "welcome peer=" << response->remote.first << ":" << response->remote.second;
+                    request = std::make_shared<udp::transfer>(peer, RESPLEX);
+                }
             }
             catch(const boost::system::system_error& ex)
             {
                 if (ex.code() != boost::asio::error::operation_aborted)
                     throw;
 
-                timeout = std::min(1600l, timeout * 2);
+                _trc_ << ex.what();
             }
-        } 
-        while (timer().total_milliseconds() < deadline);
-        
+        }
+
         throw timeout_error();
     }
-
-    void close()
-    {
-        m_udp.reset();
-    }
-
-private:
-
-    udp_client_ptr m_udp;
 };
 
-class stun_udp_puncher : public udp_puncher
+}
+
+using namespace stun;
+
+std::ostream& operator<<(std::ostream& stream, const binding& bind)
+{
+    switch (bind)
+    {
+        case binding::independent:
+            return stream << "independent";
+        case binding::address_dependent:
+            return stream << "address dependent";
+        case binding::address_and_port_dependent:
+            return stream << "address and port dependent";
+        default:
+            return stream << "unknown";
+    }
+    return stream;
+}
+
+class stun_puncher : public puncher
 {
     endpoint m_stun;
     endpoint m_local;
-    stun_session m_map_session;
-    stun_session m_flt_session;
+    session  m_session;
 
 public:
 
-    stun_udp_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
-        : m_stun(endpoint{stun_server, stun::default_port})
+    stun_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
+        : m_stun(endpoint{stun_server, STUN_PORT})
         , m_local(endpoint{local_address, local_port})
-        , m_map_session(m_local)
-        , m_flt_session(endpoint{local_address, local_port + 1})
+        , m_session(local_address, local_port)
     {
         std::srand(std::time(nullptr));
     }
@@ -473,7 +426,7 @@ public:
         traverse state = {0};
 
         _dbg_ << "nat test...";
-        message_ptr response = m_map_session.exec_binding_request(m_stun);
+        message_ptr response = m_session.exec_binding_request(m_stun);
 
         endpoint mapped = response->mapped_endpoint();
         endpoint source = response->source_endpoint();
@@ -485,7 +438,7 @@ public:
             state.random_port = mapped.second != m_local.second ? 1 : 0;
             
             _dbg_ << "first mapping test...";
-            endpoint fst_mapped = m_map_session.exec_binding_request(changed)->mapped_endpoint();
+            endpoint fst_mapped = m_session.exec_binding_request(changed)->mapped_endpoint();
 
             state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
 
@@ -496,32 +449,33 @@ public:
             else
             {
                 _dbg_ << "second mapping test...";
-                endpoint snd_mapped = m_map_session.exec_binding_request(endpoint{changed.first, source.second})->mapped_endpoint();
+                endpoint snd_mapped = m_session.exec_binding_request(endpoint{changed.first, source.second})->mapped_endpoint();
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }
         }
 
-        _dbg_ << "hairpin test...";
         try
         {
-            m_map_session.exec_binding_request(mapped, 0, 1400);
+            _dbg_ << "hairpin test...";
+            m_session.exec_binding_request(mapped, 0, 1400);
             state.hairpin = 1;
         }
         catch(const timeout_error&) { }
 
-        _dbg_ << "first filtering test...";
+        session filtering(m_local.first, m_local.second + 1);
         try
         {
-            m_flt_session.exec_binding_request(m_stun, flag::change_address | flag::change_port, 1400);
+            _dbg_ << "first filtering test...";
+            filtering.exec_binding_request(m_stun, flag::change_address | flag::change_port, 1400);
             state.filtering = binding::independent;
         }
         catch(const timeout_error&)
         {
-            _dbg_ << "second filtering test...";
             try
             {
-                m_flt_session.exec_binding_request(m_stun, flag::change_port, 1400);
+                _dbg_ << "second filtering test...";
+                filtering.exec_binding_request(m_stun, flag::change_port, 1400);
                 state.filtering = binding::address_dependent;
             }
             catch(const timeout_error&)
@@ -544,31 +498,19 @@ public:
     endpoint punch_udp_hole() noexcept(false) override
     {
         _dbg_ << "punching udp hole...";
-        return m_map_session.exec_binding_request(m_stun)->mapped_endpoint();
+        return m_session.exec_binding_request(m_stun)->mapped_endpoint();
     }
 
-    void keep_udp_hole() noexcept(false) override
+    void punch_hole_to_peer(const endpoint& peer, int64_t timeout, int64_t deadline) noexcept(true)
     {
-        _dbg_ << "sendind indication...";
-        m_map_session.send_indication(m_stun);
-    }
-
-    void meet_peer(endpoint peer, int64_t timeout_ms = 10000) noexcept(false)
-    {
-        _dbg_ << "meeting peer...";
-        m_map_session.meet_peer(peer, timeout_ms);
-    }
-
-    void close()
-    {
-        m_map_session.close();
-        m_flt_session.close();
+        _dbg_ << "reaching peer...";
+        m_session.punch_hole_to_peer(peer, timeout, deadline);
     }
 };
 
-udp_puncher* create_udp_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
+std::shared_ptr<puncher> create_stun_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
 {
-    return new stun_udp_puncher(stun_server, local_address, local_port);
+    return std::make_shared<stun_puncher>(stun_server, local_address, local_port);
 }
 
 }}

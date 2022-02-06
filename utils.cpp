@@ -150,7 +150,16 @@ std::string format(const std::string& format, const boost::posix_time::ptime& ti
     return out.str();
 }
 
-std::string to_hexadecimal(uint8_t* data, size_t len)
+std::string format(const std::string& format, const std::chrono::system_clock::time_point& time)
+{
+    std::time_t tt = std::chrono::system_clock::to_time_t(time);
+    std::tm tm = *std::gmtime(&tt);
+    std::stringstream ss;
+    ss << std::put_time(&tm, format.c_str());
+    return ss.str();
+}
+
+std::string to_hexadecimal(const uint8_t* data, size_t len)
 {
     std::stringstream out;
     for (size_t i = 0; i < len; ++i)

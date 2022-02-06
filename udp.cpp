@@ -8,11 +8,13 @@
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include "network.h"
+#include "utils.h"
+#include "log.h"
 
 
 namespace plexus { namespace network {
 
-class asio_udp_client : public udp_client, public std::enable_shared_from_this<asio_udp_client>
+class asio_udp_client : public udp, public std::enable_shared_from_this<asio_udp_client>
 {
     typedef std::map<std::pair<std::string, std::string>, boost::asio::ip::udp::endpoint> endpoint_cache_t;
 
@@ -27,7 +29,7 @@ class asio_udp_client : public udp_client, public std::enable_shared_from_this<a
         if(error)
         {
             if (error != boost::asio::error::operation_aborted)
-                std::cerr << error.message() << std::endl;
+                _err_ << error.message();
 
             return;
         }
@@ -40,10 +42,11 @@ class asio_udp_client : public udp_client, public std::enable_shared_from_this<a
             }
             catch (const std::exception &ex)
             {
-                std::cerr << ex.what() << std::endl;
+                _err_ << ex.what();
             }
         }
 
+        m_timer.expires_at(boost::posix_time::pos_infin);
         m_timer.async_wait(boost::bind(&asio_udp_client::check_deadline, shared_from_this(), boost::asio::placeholders::error));
     }
 
@@ -64,7 +67,7 @@ class asio_udp_client : public udp_client, public std::enable_shared_from_this<a
         });
 
         do {
-            m_io.run_one(); 
+            m_io.run_one();
         } while (code == boost::asio::error::would_block);
 
         if (code)
@@ -122,45 +125,47 @@ public:
         }
     }
 
-    std::future<size_t> receive(transfer_ptr data, int64_t timeout) noexcept(false) override
+    size_t receive(std::shared_ptr<transfer> data, int64_t timeout) noexcept(false) override
     {
-        auto keeper = shared_from_this();
-        return std::async(std::launch::async, [&, keeper]()
+        boost::asio::ip::udp::endpoint endpoint;
+        size_t size = exec([&](const async_io_callback_t& callback)
         {
-            boost::asio::ip::udp::endpoint endpoint;
-            size_t size = exec([&](const async_io_callback_t& callback)
-            {
-                m_socket.async_receive_from(boost::asio::buffer(data->buffer), endpoint, callback);
-            }, timeout);
+            m_socket.async_receive_from(boost::asio::buffer(data->buffer), endpoint, callback);
+        }, timeout);
 
-            data->host = endpoint.address().to_string();
-            data->service = std::to_string(endpoint.port());
+        data->remote.first = endpoint.address().to_string();
+        data->remote.second = endpoint.port();
 
-            return size;
-        });
+        _trc_ << data->remote.first << ":" << data->remote.second << " >>>>> " << utils::to_hexadecimal(data->buffer.data(), size);
+
+        if (size == 0)
+            throw std::runtime_error("can't receive message");
+
+        return size;
     }
 
-    std::future<size_t> send(transfer_ptr data, int64_t timeout) noexcept(false) override
+    size_t send(std::shared_ptr<transfer> data, int64_t timeout) noexcept(false) override
     {
-        auto keeper = shared_from_this();
-        return std::async(std::launch::async, [&, keeper]()
+        _trc_ << data->remote.first << ":" << data->remote.second << " <<<<< " << utils::to_hexadecimal(data->buffer.data(), data->buffer.size());
+
+        auto endpoint = resolve_endpoint(
+            data->remote.first,
+            std::to_string(data->remote.second)
+            );
+
+        size_t size = exec([&](const async_io_callback_t& callback)
         {
-            auto endpoint = resolve_endpoint(
-                data->host,
-                data->service
-                );
+            m_socket.async_send_to(boost::asio::buffer(data->buffer), endpoint, callback);
+        }, timeout);
 
-            size_t size = exec([&](const async_io_callback_t& callback)
-            {
-                m_socket.async_send_to(boost::asio::buffer(data->buffer), endpoint, callback);
-            }, timeout);
+        if (size < data->buffer.size())
+            throw std::runtime_error("can't send message");
 
-            return size;
-        });
+        return size;
     }
 };
 
-std::shared_ptr<udp_client> create_udp_client(const std::string& address, uint16_t port)
+std::shared_ptr<udp> create_udp_client(const std::string& address, uint16_t port)
 {
     return std::make_shared<asio_udp_client>(address, port);
 }

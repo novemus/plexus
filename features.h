@@ -1,34 +1,30 @@
 #pragma once
 
 #include <string>
+#include "network.h"
 
 namespace plexus {
     
 void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
 
+struct postman
+{
+    virtual ~postman() {}
+    virtual void send_message(const std::string& data) noexcept(false) = 0;
+    virtual std::string receive_message() noexcept(false) = 0;
+};
+
+std::shared_ptr<postman> create_email_postman(const std::string& smtp,
+                                              const std::string& imap,
+                                              const std::string& sender,
+                                              const std::string& recipient,
+                                              const std::string& login,
+                                              const std::string& password,
+                                              const std::string& certificate = "",
+                                              const std::string& key = "",
+                                              int64_t timeout_sec = 10);
+
 namespace network {
-
-struct pipe
-{
-    virtual ~pipe() {}
-    virtual void push(const std::string& data) noexcept(false) = 0;
-    virtual std::string pull() noexcept(false) = 0;
-};
-
-struct email_pipe_config
-{
-    std::string smtp;
-    std::string imap;
-    std::string login;
-    std::string password;
-    std::string certificate;
-    std::string key;
-    std::string frontend;
-    std::string backend;
-    int64_t timeout;
-};
-
-pipe* create_email_pipe(const email_pipe_config& config);
 
 enum binding
 {
@@ -48,18 +44,17 @@ struct traverse
                  filtering : 2; // enum binding
 };
 
-typedef std::pair<std::string, uint16_t> endpoint;
-
-struct udp_puncher
+struct puncher
 {
-    virtual ~udp_puncher() {}
+    virtual ~puncher() {}
     virtual traverse explore_network() noexcept(false) = 0;
     virtual endpoint punch_udp_hole() noexcept(false) = 0;
-    virtual void keep_udp_hole() noexcept(false) = 0;
-    virtual void meet_peer(endpoint peer, int64_t timeout_ms = 10000) noexcept(false) = 0;
-    virtual void close() noexcept(false) = 0;
+    /*
+        disposes udp connection on success
+    */
+    virtual void punch_hole_to_peer(const endpoint& peer, int64_t timeout_ms = 4000, int64_t deadline_ms = 120000) noexcept(false) = 0;
 };
 
-udp_puncher* create_udp_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port);
+std::shared_ptr<puncher> create_stun_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port);
 
 }}
