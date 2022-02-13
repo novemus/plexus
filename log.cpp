@@ -13,7 +13,7 @@
 
 namespace plexus { namespace log {
 
-severity      g_level;
+severity      g_level(severity::info);
 std::ofstream g_file;
 std::mutex    g_mutex;
 

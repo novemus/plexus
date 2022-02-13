@@ -26,6 +26,8 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
 
 namespace network {
 
+const uint16_t DEFAULT_STUN_PORT = 3478u;
+
 enum binding
 {
     unknown = 0,
@@ -55,6 +57,6 @@ struct puncher
     virtual void punch_hole_to_peer(const endpoint& peer, int64_t timeout_ms = 4000, int64_t deadline_ms = 120000) noexcept(false) = 0;
 };
 
-std::shared_ptr<puncher> create_stun_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port);
+std::shared_ptr<puncher> create_stun_puncher(const std::string& stun_address, uint16_t stun_port, const std::string& local_address, uint16_t local_port);
 
 }}

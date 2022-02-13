@@ -17,6 +17,8 @@ namespace plexus { namespace network {
 class asio_udp_client : public udp, public std::enable_shared_from_this<asio_udp_client>
 {
     typedef std::map<std::pair<std::string, std::string>, boost::asio::ip::udp::endpoint> endpoint_cache_t;
+    typedef std::function<void(const boost::system::error_code&, size_t)> async_io_callback_t;
+    typedef std::function<void(const async_io_callback_t&)> async_io_call_t;
 
     boost::asio::io_service      m_io;
     boost::asio::ip::udp::socket m_socket;
@@ -24,18 +26,18 @@ class asio_udp_client : public udp, public std::enable_shared_from_this<asio_udp
     endpoint_cache_t             m_remotes;
     std::mutex                   m_mutex;
 
-    void check_deadline(const boost::system::error_code& error)
+    size_t exec(const async_io_call_t& async_io_call, int64_t timeout)
     {
-        if(error)
-        {
-            if (error != boost::asio::error::operation_aborted)
+        m_timer.expires_from_now(boost::posix_time::milliseconds(timeout));
+        m_timer.async_wait([&](const boost::system::error_code& error) {
+            if(error)
+            {
+                if (error == boost::asio::error::operation_aborted)
+                    return;
+
                 _err_ << error.message();
+            }
 
-            return;
-        }
-
-        if (m_timer.expires_at() <= boost::asio::deadline_timer::traits_type::now())
-        {
             try
             {
                 m_socket.cancel();
@@ -44,19 +46,7 @@ class asio_udp_client : public udp, public std::enable_shared_from_this<asio_udp
             {
                 _err_ << ex.what();
             }
-        }
-
-        m_timer.expires_at(boost::posix_time::pos_infin);
-        m_timer.async_wait(boost::bind(&asio_udp_client::check_deadline, shared_from_this(), boost::asio::placeholders::error));
-    }
-
-    typedef std::function<void(const boost::system::error_code&, size_t)> async_io_callback_t;
-    typedef std::function<void(const async_io_callback_t&)> async_io_call_t;
-
-    size_t exec(const async_io_call_t& async_io_call, int64_t timeout)
-    {
-        m_timer.expires_from_now(boost::posix_time::milliseconds(timeout));
-        m_timer.async_wait(boost::bind(&asio_udp_client::check_deadline, shared_from_this(), boost::asio::placeholders::error));
+        });
 
         boost::system::error_code code = boost::asio::error::would_block;
         size_t length = 0;
@@ -69,6 +59,8 @@ class asio_udp_client : public udp, public std::enable_shared_from_this<asio_udp
         do {
             m_io.run_one();
         } while (code == boost::asio::error::would_block);
+
+        m_io.reset();
 
         if (code)
             throw boost::system::system_error(code);

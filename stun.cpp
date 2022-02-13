@@ -57,8 +57,6 @@ namespace plexus { namespace network { namespace stun {
 
 typedef std::array<uint8_t, 16> transaction_id;
 
-const uint16_t STUN_PORT = 3478u;
-
 namespace msg
 {
     const size_t min_size = 20;
@@ -335,7 +333,7 @@ public:
             }
         } 
 
-        throw timeout_error();
+        throw plexus::network::timeout_error();
     }
 
     void punch_hole_to_peer(endpoint peer, int64_t timeout, int64_t deadline) noexcept(false)
@@ -345,8 +343,8 @@ public:
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        static const std::vector<uint8_t> RECPLEX = { 0x72, 0x65, 0x63, 0x70, 0x6c, 0x65, 0x78 };
-        static const std::vector<uint8_t> RESPLEX = { 0x72, 0x65, 0x73, 0x70, 0x6c, 0x65, 0x78 };
+        static const std::vector<uint8_t> RECPLEX { 0x72, 0x65, 0x63, 0x70, 0x6c, 0x65, 0x78 };
+        static const std::vector<uint8_t> RESPLEX { 0x72, 0x65, 0x73, 0x70, 0x6c, 0x65, 0x78 };
 
         std::shared_ptr<udp::transfer> request = std::make_shared<udp::transfer>(peer, RECPLEX);
         std::shared_ptr<udp::transfer> response = std::make_shared<udp::transfer>(RECPLEX.size());
@@ -381,7 +379,7 @@ public:
             }
         }
 
-        throw timeout_error();
+        throw plexus::network::timeout_error();
     }
 };
 
@@ -413,8 +411,8 @@ class stun_puncher : public puncher
 
 public:
 
-    stun_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
-        : m_stun(endpoint{stun_server, STUN_PORT})
+    stun_puncher(const std::string& stun_address, uint16_t stun_port, const std::string& local_address, uint16_t local_port)
+        : m_stun(endpoint{stun_address, stun_port})
         , m_local(endpoint{local_address, local_port})
         , m_session(local_address, local_port)
     {
@@ -453,6 +451,12 @@ public:
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }
+        }
+        else
+        {
+            state.random_port = 0;
+            state.variable_address = 0;
+            state.mapping = binding::independent;
         }
 
         try
@@ -501,16 +505,16 @@ public:
         return m_session.exec_binding_request(m_stun)->mapped_endpoint();
     }
 
-    void punch_hole_to_peer(const endpoint& peer, int64_t timeout, int64_t deadline) noexcept(true)
+    void punch_hole_to_peer(const endpoint& peer, int64_t timeout, int64_t deadline) noexcept(false)
     {
         _dbg_ << "reaching peer...";
         m_session.punch_hole_to_peer(peer, timeout, deadline);
     }
 };
 
-std::shared_ptr<puncher> create_stun_puncher(const std::string& stun_server, const std::string& local_address, uint16_t local_port)
+std::shared_ptr<puncher> create_stun_puncher(const std::string& stun_address, uint16_t stun_port, const std::string& local_address, uint16_t local_port)
 {
-    return std::make_shared<stun_puncher>(stun_server, local_address, local_port);
+    return std::make_shared<stun_puncher>(stun_address, stun_port, local_address, local_port);
 }
 
 }}

@@ -1,79 +1,137 @@
-#include <string>
-#include <iostream>
-#include <sstream>
-#include <iomanip>
-#include <memory>
-#include <utility>
+#include <regex>
+#include <boost/program_options.hpp>
+#include <boost/lexical_cast.hpp>
 #include "features.h"
 #include "utils.h"
-#include "network.h"
 #include "log.h"
 
 int main(int argc, char** argv)
 {
+    boost::program_options::options_description desc("plexus options");
+    desc.add_options()
+        ("help", "produce help message")
+        ("smtps-server", boost::program_options::value<std::string>()->required(), "smtps server used by plexus postman service")
+        ("imaps-server", boost::program_options::value<std::string>()->required(), "imaps server used by plexus postman service")
+        ("local-postman", boost::program_options::value<std::string>()->required(), "email address of local plexus postman to send from")
+        ("remote-postman", boost::program_options::value<std::string>()->required(), "email address of remote plexus postman to receive from")
+        ("postman-login", boost::program_options::value<std::string>()->required(), "login of plexus postman email account")
+        ("postman-password", boost::program_options::value<std::string>()->required(), "password of plexus postman email account")
+        ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to ssl certificate for email service")
+        ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to email ssl key for email service")
+        ("email-timeout", boost::program_options::value<int64_t>()->default_value(10), "timeout (seconds) to connect to email server")
+        ("stun-ip", boost::program_options::value<std::string>()->required(), "ip of stun server")
+        ("stun-port", boost::program_options::value<uint16_t>()->default_value(3478u), "port of stun server")
+        ("local-ip", boost::program_options::value<std::string>()->required(), "local ip address to bind plexus")
+        ("local-port", boost::program_options::value<uint16_t>()->required(), "local port address to bind plexus")
+        ("handshake-timeout", boost::program_options::value<int64_t>()->default_value(120), "timeout (seconds) to handshake with a peer")
+        ("retry-timeout", boost::program_options::value<int64_t>()->default_value(0), "timeout (seconds) to retry to connect with a peer")
+        ("retry-count", boost::program_options::value<int64_t>()->default_value(0), "number of attempts to connect with a peer")
+        ("exec-command", boost::program_options::value<std::string>()->required(), "command to execute after a peer is available")
+        ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
+        ("exec-log", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
+        ("log-level", boost::program_options::value<int>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warnine, 4 - info, 5 - debug, 6 - trace")
+        ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file");
+
+    boost::program_options::variables_map vm;
+    boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
+    boost::program_options::notify(vm);
+    
+    if(vm.count("help"))
+    {
+        std::cout << desc;
+        return 0;
+    }
+
     try
     {
-        plexus::log::set(plexus::log::debug);
+        plexus::log::set((plexus::log::severity)vm["log-level"].as<int>(), vm["log-file"].as<std::string>());
 
-        // _ftl_ << "fatal" << " message " << plexus::log::fatal;
-        // _err_ << "error" << " message " << plexus::log::error;
-        // _wrn_ << "warning" << " message " << plexus::log::warning;
-        // _inf_ << "info" << " message " << plexus::log::info;
-        // _dbg_ << "debug" << " message " << plexus::log::debug;
-        // _trc_ << "trace" << " message " << plexus::log::trace;
+        std::shared_ptr<plexus::postman> postman = plexus::create_email_postman(
+            vm["smtps-server"].as<std::string>(),
+            vm["imaps-server"].as<std::string>(),
+            vm["local-postman"].as<std::string>(),
+            vm["remote-postman"].as<std::string>(),
+            vm["postman-login"].as<std::string>(),
+            vm["postman-password"].as<std::string>(),
+            vm["email-cert"].as<std::string>(),
+            vm["email-key"].as<std::string>(),
+            vm["email-timeout"].as<int64_t>()
+        );
 
-        // std::unique_ptr<plexus::postman> postman(plexus::create_email_postman(
-        //     "smtp.yandex.ru:465",
-        //     "imap.yandex.ru:993",
-        //     "sergey-nine@yandex.ru",
-        //     "sergey-nine@yandex.ru",
-        //     "sergey-nine@yandex.ru",
-        //     "",
-        //     "",
-        //     "",
-        //     10
-        // ));
+        int64_t tries = vm["retry-count"].as<int64_t>();
 
-        //postman->send_message("hello");
-        // auto data = postman->receive_message();
-        // while (!data.empty())
-        // {
-        //     _inf_ << data;
-        //     data = postman->receive_message();
-        // }
+        plexus::network::endpoint me;
+        plexus::network::endpoint peer;
+        do
+        {
+            try
+            {
+                std::shared_ptr<plexus::network::puncher> puncher = plexus::network::create_stun_puncher(
+                    vm["stun-ip"].as<std::string>(),
+                    vm["stun-port"].as<uint16_t>(),
+                    vm["local-ip"].as<std::string>(),
+                    vm["local-port"].as<uint16_t>()
+                    );
 
-        // std::shared_ptr<plexus::network::udp> client = plexus::network::create_udp_client("192.168.1.104", 5000);
+                plexus::network::traverse state = puncher->explore_network();
+                if (state.mapping != plexus::network::independent)
+                {
+                    _err_ << "network configuration does not allow to establish peer connection";
+                    return 0;
+                }
 
-        // auto send = std::make_shared<plexus::network::udp::transfer>("192.168.1.104", "5000", std::initializer_list<unsigned char>{ 
-        //     0x00, 0x01, 0x00, 0x08, 0x21, 0x12, 0xa4, 0x42, 0xa6, 0x8b, 0x57, 0x5f, 0x77, 0xb8, 0x0f, 0x1d, 0x09, 0x9f, 0x65, 0x7f, 0x00, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00 });
-        // auto recv = std::make_shared<plexus::network::udp::transfer>(1024);
+                plexus::network::endpoint endpoint = puncher->punch_udp_hole();
+                if (me != endpoint)
+                {
+                    me = endpoint;
+                    std::string request = "READY " + endpoint.first + " " + std::to_string(endpoint.second);
+                    postman->send_message(plexus::utils::to_base64(request.c_str(), request.size()));
+                }
 
-        // client->send(send);
-        // client->receive(recv);
+                std::string message;
+                do
+                {
+                    message = postman->receive_message();
+                    if (!message.empty())
+                    {
+                        std::string response = plexus::utils::from_base64(message.c_str(), message.size());
+                        std::smatch match;
+                        if (std::regex_search(response, match, std::regex("^READY\\s+(\\S+)\\s+(\\d+)$")))
+                        {
+                            peer = std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str()));
+                        }
+                    }
+                } 
+                while (!message.empty());
 
-        // _inf_ << send->host << ":" << send->service << " <- " << client->send(send);
-        // _inf_ << recv->host << ":" << recv->service << " -> " << client->receive(recv);
+                if (!peer.first.empty())
+                {
+                    puncher->punch_hole_to_peer(peer, 4000, vm["handshake-timeout"].as<int64_t>() * 1000);
 
-        //plexus::exec("ls", "-l", "/home/nine", "out.log");
+                    std::string args = plexus::utils::format("%s %d %s %d",
+                        vm["local-ip"].as<std::string>().c_str(),
+                        vm["local-port"].as<uint16_t>(),
+                        me.first,
+                        me.second,
+                        peer.first,
+                        peer.second
+                        );
 
-        std::shared_ptr<plexus::network::puncher> stun = plexus::network::create_stun_puncher("216.93.246.18", "192.168.0.105", 5000u);
-        stun->explore_network();
-        // stun->punch_udp_hole();
-
-        auto t1 = std::async(std::launch::async, [stun]() {
-            stun->punch_hole_to_peer(std::make_pair("192.168.0.105", 5002u));
-        });
-
-        std::shared_ptr<plexus::network::puncher> peer(plexus::network::create_stun_puncher("77.72.169.211", "192.168.0.105", 5002u));
-        peer->explore_network();
-        // peer->punch_udp_hole();
-
-        auto t2 = std::async(std::launch::async, [peer]() {
-            peer->punch_hole_to_peer(std::make_pair("192.168.0.105", 5000u));
-        });
-
-        t1.get();
-        t2.get();
+                    plexus::exec(
+                        vm["exec-command"].as<std::string>(),
+                        args,
+                        vm["exec-pwd"].as<std::string>(),
+                        vm["exec-log"].as<std::string>()
+                        );
+                }
+            }
+            catch(const plexus::network::timeout_error&)
+            {
+                _err_ << "timeout";
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(vm["retry-timeout"].as<int64_t>()));
+        }
+        while (--tries > 0);
     }
     catch(const std::exception& e)
     {

@@ -78,6 +78,16 @@ private:
     std::shared_ptr<network::ssl> m_ssl;
 };
 
+std::string address(const std::string& email)
+{
+    std::smatch match;
+    if (std::regex_search(email, match, std::regex("[\\w\\s]*\\<?([^\\<]+@[^\\>]+)\\>?\\s*")))
+    {
+        return match[1].str();
+    }
+    throw std::runtime_error("bad email address");
+}
+
 class smtp
 {
     typedef mediator::response_parser_t response_parser_t;
@@ -124,10 +134,10 @@ public:
         mdr->request("AUTH LOGIN\r\n", code_checker(334));
         mdr->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.login.c_str(), m_config.login.size()).c_str()), code_checker(334));
         mdr->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.password.c_str(), m_config.password.size()).c_str()), code_checker(235));
-        mdr->request(utils::format("MAIL FROM: %s\r\n", m_config.sender.c_str()), code_checker(250));
-        mdr->request(utils::format("RCPT TO: %s\r\n", m_config.recipient.c_str()), code_checker(250));
+        mdr->request(utils::format("MAIL FROM: %s\r\n", address(m_config.sender).c_str()), code_checker(250));
+        mdr->request(utils::format("RCPT TO: %s\r\n", address(m_config.recipient).c_str()), code_checker(250));
         mdr->request("DATA\r\n", code_checker(354));
-        mdr->request(utils::format(EMAIL, m_config.sender.c_str(), m_config.recipient.c_str(), utils::to_base64_no_nl(data.c_str(), data.size()).c_str()), code_checker(250));
+        mdr->request(utils::format(EMAIL, m_config.recipient.c_str(), m_config.sender.c_str(), utils::to_base64_no_nl(data.c_str(), data.size()).c_str()), code_checker(250));
     }
 
 private:
@@ -304,11 +314,13 @@ public:
 
     void send_message(const std::string& data) noexcept(false) override
     {
+        _dbg_ << "sending plexus message...";
         m_smtp.push(data);
     }
 
     std::string receive_message() noexcept(false) override
     {
+        _dbg_ << "receiving plexus message...";
         return m_imap.pull();
     }
 };

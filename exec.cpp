@@ -37,7 +37,6 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
     std::string pwd = boost::replace_all_copy(dir, " ", "\\ ");
     std::string command = pwd.empty() ? cmd : "cd " + pwd + " && " + cmd;
-    std::string outfile = boost::replace_all_copy(log, " ", "\\ ");
 
     const char* argv[] = { "sh", "-c", command.c_str(), 0 };
     std::shared_ptr<char*> env = copy_environment();
@@ -49,6 +48,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
     if (!log.empty())
     {
+        std::string outfile = boost::replace_all_copy(log, " ", "\\ ");
         status = posix_spawn_file_actions_addopen(&action, 1, outfile.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0644);
         if (status)
             throw std::runtime_error(utils::format("posix_spawn_file_actions_addopen: error=%d", status));

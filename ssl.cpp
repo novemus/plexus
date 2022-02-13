@@ -128,7 +128,7 @@ private:
             if (res < 0 && BIO_should_retry(m_bio.get()))
             {
                 if (wait(IO_READ) == 0)
-                    break;
+                    throw timeout_error();
             }
             else
             {
@@ -150,7 +150,7 @@ private:
             if (res < 0 && BIO_should_retry(m_bio.get()))
             {
                 if (wait(IO_WRITE) == 0)
-                    break;
+                    throw timeout_error();
             }
             else
             {

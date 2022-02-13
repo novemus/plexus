@@ -5,7 +5,7 @@
 # Compiler settings - Can be customized.
 CC = g++
 CXXFLAGS = -std=c++17 -Wall -g
-LDFLAGS = -lssl -lcrypto -lpthread -lboost_thread -lboost_system
+LDFLAGS = -lssl -lcrypto -lpthread -lboost_thread -lboost_system -lboost_program_options
 
 # Makefile settings - Can be customized.
 APPNAME = plexus
