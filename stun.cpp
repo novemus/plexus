@@ -357,7 +357,7 @@ public:
             {
                 if (peer == response->remote && response->buffer == RESPLEX)
                 {
-                    _dbg_ << "handhake peer=" << response->remote.first << ":" << response->remote.second;
+                    _dbg_ << "handshake peer=" << response->remote.first << ":" << response->remote.second;
                     m_udp = std::make_shared<dummy_udp>();
                     return;
                 }

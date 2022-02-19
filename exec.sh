@@ -1,7 +1,9 @@
 #!/bin/bash
 
+echo "$*"
+
 if [[ $# -ne 6 ]]; then
-    echo "not enough agguments"
+    echo "not enough arguments"
     exit 1
 fi
 

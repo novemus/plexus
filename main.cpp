@@ -108,12 +108,12 @@ int main(int argc, char** argv)
                 {
                     puncher->punch_hole_to_peer(peer, 4000, vm["handshake-timeout"].as<int64_t>() * 1000);
 
-                    std::string args = plexus::utils::format("%s %d %s %d",
+                    std::string args = plexus::utils::format("%s %d %s %d %s %d",
                         vm["local-ip"].as<std::string>().c_str(),
                         vm["local-port"].as<uint16_t>(),
-                        me.first,
+                        me.first.c_str(),
                         me.second,
-                        peer.first,
+                        peer.first.c_str(),
                         peer.second
                         );
 
