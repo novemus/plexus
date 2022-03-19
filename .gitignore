@@ -2,3 +2,5 @@
 obj/**
 plexus
 config.json
+tests/obj/**
+tests/tests
