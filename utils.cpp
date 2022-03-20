@@ -145,7 +145,7 @@ std::string format(const std::string& format, ...)
 std::string format(const std::string& format, const boost::posix_time::ptime& time)
 {
     std::stringstream out;
-    out.imbue(std::locale(out.getloc(), new boost::gregorian::date_facet(format.c_str())));
+    out.imbue(std::locale(std::cout.getloc(), new boost::posix_time::time_facet(format.c_str())));
     out << time;
     return out.str();
 }
