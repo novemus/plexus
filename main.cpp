@@ -85,7 +85,7 @@ int main(int argc, char** argv)
                 {
                     me = endpoint;
                     std::string request = "READY " + endpoint.first + " " + std::to_string(endpoint.second);
-                    postman->send_message(plexus::utils::to_base64(request.c_str(), request.size()));
+                    postman->send_message(request);
                 }
 
                 std::string message;
@@ -94,9 +94,8 @@ int main(int argc, char** argv)
                     message = postman->receive_message();
                     if (!message.empty())
                     {
-                        std::string response = plexus::utils::from_base64(message.c_str(), message.size());
                         std::smatch match;
-                        if (std::regex_search(response, match, std::regex("^READY\\s+(\\S+)\\s+(\\d+)$")))
+                        if (std::regex_search(message, match, std::regex("^READY\\s+(\\S+)\\s+(\\d+)$")))
                         {
                             peer = std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str()));
                         }
