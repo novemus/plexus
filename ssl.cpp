@@ -26,7 +26,7 @@ void init_openssl()
     });
 }
 
-class openssl_channel : public ssl
+class openssl_client : public ssl
 {
     const std::string m_url;
     const std::string m_cert;
@@ -38,7 +38,7 @@ class openssl_channel : public ssl
 
 public:
 
-    openssl_channel(const std::string& url, const std::string& cert, const std::string& key, int64_t timeout)
+    openssl_client(const std::string& url, const std::string& cert, const std::string& key, int64_t timeout)
         : m_url(url)
         , m_cert(cert)
         , m_key(key)
@@ -164,9 +164,9 @@ private:
     }
 };
 
-std::shared_ptr<ssl> create_ssl_channel(const std::string& url, const std::string& cert, const std::string& key, int64_t timeout)
+std::shared_ptr<ssl> create_ssl_client(const std::string& url, const std::string& cert, const std::string& key, int64_t timeout)
 {
-    return std::make_shared<openssl_channel>(url, cert, key, timeout);
+    return std::make_shared<openssl_client>(url, cert, key, timeout);
 }
 
 }}

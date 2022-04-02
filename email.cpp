@@ -35,7 +35,7 @@ class mediator
 public:
 
     mediator(const std::string& server, const std::string& cert, const std::string& key, int64_t timeout)
-        : m_ssl(network::create_ssl_channel(server.c_str(), cert.c_str(), key.c_str(), timeout))
+        : m_ssl(network::create_ssl_client(server.c_str(), cert.c_str(), key.c_str(), timeout))
     {
     }
 

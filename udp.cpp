@@ -157,7 +157,7 @@ public:
     }
 };
 
-std::shared_ptr<udp> create_udp_client(const std::string& address, uint16_t port)
+std::shared_ptr<udp> create_udp_channel(const std::string& address, uint16_t port)
 {
     return std::make_shared<asio_udp_client>(address, port);
 }

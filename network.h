@@ -18,7 +18,7 @@ namespace plexus { namespace network
         virtual size_t write(const uint8_t* buffer, size_t len) noexcept(false) = 0;
     };
 
-    std::shared_ptr<ssl> create_ssl_channel(const std::string& url, const std::string& cert = "", const std::string& key = "", int64_t timeout_sec = 10);
+    std::shared_ptr<ssl> create_ssl_client(const std::string& url, const std::string& cert = "", const std::string& key = "", int64_t timeout_sec = 10);
 
     typedef std::pair<std::string, uint16_t> endpoint;
 
@@ -40,5 +40,5 @@ namespace plexus { namespace network
         virtual size_t receive(std::shared_ptr<transfer> data, int64_t timeout_ms = 1600) noexcept(false) = 0;
     };
 
-    std::shared_ptr<udp> create_udp_client(const std::string& address = "127.0.0.1", uint16_t port = 5000);
+    std::shared_ptr<udp> create_udp_channel(const std::string& address = "127.0.0.1", uint16_t port = 5000);
 }}

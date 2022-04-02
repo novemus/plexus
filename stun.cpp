@@ -271,7 +271,7 @@ class session
 
 public:
 
-    session(const std::string& address, uint16_t port) : m_udp(create_udp_client(address, port))
+    session(const std::string& address, uint16_t port) : m_udp(create_udp_channel(address, port))
     {
     }
 
