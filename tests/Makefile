@@ -9,9 +9,9 @@ OBJ_DIR = obj
 DEP_SRC_DIR = ..
 DEP_OBJ_DIR = ../obj
 
-SRC = utils_tests.cpp
+SRC = utils_tests.cpp log_tests.cpp
 OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o)
-DEP_OBJ = ../obj/utils.o
+DEP_OBJ = ../obj/utils.o ../obj/log.o
 
 all: tests
 
