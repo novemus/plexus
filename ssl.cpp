@@ -31,6 +31,7 @@ class openssl_client : public ssl
     const std::string m_url;
     const std::string m_cert;
     const std::string m_key;
+    const std::string m_ca;
     const int64_t m_timeout;
     std::shared_ptr<BIO> m_bio;
 
@@ -38,10 +39,11 @@ class openssl_client : public ssl
 
 public:
 
-    openssl_client(const std::string& url, const std::string& cert, const std::string& key, int64_t timeout)
+    openssl_client(const std::string& url, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
         : m_url(url)
         , m_cert(cert)
         , m_key(key)
+        , m_ca(ca)
         , m_timeout(timeout)
     {
         init_openssl();
@@ -51,15 +53,28 @@ public:
     {
         SSL* ssl;
         SSL_CTX* ctx = SSL_CTX_new(SSLv23_client_method());
+
+        if (!m_ca.empty())
+        {
+            SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+            if (!SSL_CTX_load_verify_locations(ctx, m_ca.c_str(), NULL))
+                throw std::runtime_error(ERR_error_string(ERR_get_error(), NULL));
+        }
+
         m_bio.reset(BIO_new_ssl_connect(ctx), BIO_free_all);
+
+        BIO_get_ssl(m_bio.get(), &ssl);
 
         if (!m_cert.empty() && !m_key.empty())
         {
-            SSL_CTX_use_certificate_file(ctx, m_cert.c_str(), SSL_FILETYPE_PEM);
-            SSL_CTX_use_PrivateKey_file(ctx, m_key.c_str(), SSL_FILETYPE_PEM);
+            if (SSL_use_certificate_file(ssl, m_cert.c_str(), SSL_FILETYPE_PEM) <= 0)
+                throw std::runtime_error(ERR_error_string(ERR_get_error(), NULL));
+            if (SSL_use_PrivateKey_file(ssl, m_key.c_str(), SSL_FILETYPE_PEM) <= 0)
+                throw std::runtime_error(ERR_error_string(ERR_get_error(), NULL));
+            if (!SSL_check_private_key(ssl))
+                throw std::runtime_error("wrong private key");
         }
 
-        BIO_get_ssl(m_bio.get(), &ssl);
         SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
 
         BIO_set_conn_hostname(m_bio.get(), m_url.c_str());
@@ -68,9 +83,9 @@ public:
         while (true)
         {
             int res = BIO_do_connect(m_bio.get());
-            if (res <= 0 && BIO_should_retry(m_bio.get()))
+            if (res <= 0)
             {
-                if (wait(IO_WRITE) == 0)
+                if (!BIO_should_retry(m_bio.get()) || wait(IO_WRITE) == 0)
                     throw std::runtime_error("can't connect server");
             }
             else
@@ -164,9 +179,9 @@ private:
     }
 };
 
-std::shared_ptr<ssl> create_ssl_client(const std::string& url, const std::string& cert, const std::string& key, int64_t timeout)
+std::shared_ptr<ssl> create_ssl_client(const std::string& url, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
 {
-    return std::make_shared<openssl_client>(url, cert, key, timeout);
+    return std::make_shared<openssl_client>(url, cert, key, ca, timeout);
 }
 
 }}

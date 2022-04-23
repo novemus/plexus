@@ -22,6 +22,7 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
                                               const std::string& password,
                                               const std::string& certificate = "",
                                               const std::string& key = "",
+                                              const std::string& ca = "",
                                               int64_t timeout_sec = 10);
 
 namespace network {

@@ -25,6 +25,7 @@ struct config
     std::string password;
     std::string certificate;
     std::string key;
+    std::string ca;
     int64_t timeout;
 };
 
@@ -34,8 +35,8 @@ class mediator
 
 public:
 
-    mediator(const std::string& server, const std::string& cert, const std::string& key, int64_t timeout)
-        : m_ssl(network::create_ssl_client(server.c_str(), cert.c_str(), key.c_str(), timeout))
+    mediator(const std::string& server, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+        : m_ssl(network::create_ssl_client(server, cert, key, ca, timeout))
     {
     }
 
@@ -126,6 +127,7 @@ public:
             m_config.smtp,
             m_config.certificate,
             m_config.key,
+            m_config.ca,
             m_config.timeout
         );
 
@@ -254,6 +256,7 @@ public:
             m_config.imap,
             m_config.certificate,
             m_config.key,
+            m_config.ca,
             m_config.timeout
         );
 
@@ -333,6 +336,7 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
                                               const std::string& password,
                                               const std::string& certificate,
                                               const std::string& key,
+                                              const std::string& ca,
                                               int64_t timeout)
 {
     return std::make_shared<email_postman>(config{
@@ -344,6 +348,7 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
         password,
         certificate,
         key,
+        ca,
         timeout});
 }
 

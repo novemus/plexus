@@ -1,0 +1,84 @@
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            a2:cc:2f:d1:df:8b:32:79:fb:5f:cb:5d:d2:7a:32:ea
+    Signature Algorithm: sha256WithRSAEncryption
+        Issuer: CN=Plexus CA
+        Validity
+            Not Before: Apr 23 23:28:33 2022 GMT
+            Not After : Apr 20 23:28:33 2032 GMT
+        Subject: CN=client
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:ae:6a:0b:08:f6:d9:68:17:11:b9:7e:54:eb:1f:
+                    44:b8:94:7d:92:76:c0:e0:04:b4:24:46:6a:00:ea:
+                    7d:2e:18:af:70:61:b5:a2:2e:60:ae:cd:0a:d9:ce:
+                    a4:2a:80:af:47:7b:5d:61:c2:d1:0a:58:3a:e6:ce:
+                    cb:37:47:08:0e:f8:bb:f9:bf:f9:f1:f3:61:25:e2:
+                    ab:00:28:ac:db:fa:56:44:89:9d:28:11:b5:0d:da:
+                    9f:fd:b3:c3:86:72:f5:b3:2d:42:be:6b:89:b4:fd:
+                    7e:05:10:8f:c5:4e:4b:f6:0a:f1:5e:8d:83:cf:29:
+                    fe:32:63:c7:69:ac:14:76:eb:10:f7:67:9a:8a:d0:
+                    50:c1:45:b3:14:cc:09:e0:8c:f9:06:4d:0c:b3:99:
+                    77:30:bd:00:fe:a6:16:a3:fb:52:2b:c2:c7:99:09:
+                    59:85:d3:7e:7d:48:d3:68:47:ae:39:31:7d:94:63:
+                    21:7d:75:ef:05:88:0a:e5:62:6b:4a:26:64:73:56:
+                    00:a9:9d:7f:cf:e0:bd:70:b8:e7:b9:43:12:5c:6e:
+                    bd:4b:c2:d4:98:b7:e8:45:3b:ff:01:19:82:0f:42:
+                    23:d3:3f:21:c4:c5:c2:c7:ed:ab:54:47:6e:56:78:
+                    23:76:9a:03:98:8d:99:a1:6f:99:c1:74:c7:91:54:
+                    36:23
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Basic Constraints: 
+                CA:FALSE
+            X509v3 Subject Key Identifier: 
+                A0:46:4F:D8:22:A9:80:7B:77:B8:1A:89:4F:72:9D:01:58:DA:2C:F0
+            X509v3 Authority Key Identifier: 
+                keyid:10:8E:59:CF:F6:77:EE:50:A0:7D:9B:8E:1C:B7:BB:94:6C:8D:40:63
+                DirName:/CN=Plexus CA
+                serial:80:8A:67:28:9C:EB:D7:C7
+
+            X509v3 Extended Key Usage: 
+                TLS Web Client Authentication
+            X509v3 Key Usage: 
+                Digital Signature
+    Signature Algorithm: sha256WithRSAEncryption
+         38:f7:08:2c:59:75:51:49:48:b7:23:33:cd:25:24:c4:79:2e:
+         0e:47:7e:a8:95:20:41:25:ef:35:09:5f:43:d9:ba:10:53:18:
+         99:35:26:9e:b1:8f:e1:b7:52:4b:6b:88:d6:a7:46:ea:28:02:
+         98:78:62:d1:52:86:99:ac:a5:ab:a6:01:09:53:a3:b4:a5:12:
+         c2:19:60:47:a3:75:5e:39:71:67:a2:1d:5d:6e:b4:37:fd:53:
+         76:83:38:36:8b:1b:f8:b3:ce:4c:35:96:c2:0b:ef:d4:88:a9:
+         91:3a:8b:65:8a:e2:31:e5:4f:b1:56:0e:a8:c1:59:25:ab:b7:
+         ad:ff:6e:3f:3b:50:d0:4d:35:30:8a:48:33:cc:9f:06:2f:ab:
+         5a:5f:7d:13:d0:24:7a:11:6c:65:83:99:c0:8e:fd:ea:9a:f5:
+         93:69:3f:37:5f:4b:ea:6c:13:1a:07:5a:3f:ba:28:ba:be:cc:
+         a6:25:d4:7a:c4:cc:72:df:98:d5:0c:cc:fd:24:07:1b:e9:7e:
+         15:93:93:83:62:a6:90:45:c5:ba:25:b0:86:6b:85:43:bd:b6:
+         af:0f:19:52:e4:41:1f:06:c8:ea:92:c6:cb:b0:56:72:c5:29:
+         d4:3e:58:4f:cc:f4:74:c3:da:12:6f:93:93:d8:35:e0:59:df:
+         29:2d:85:63
+-----BEGIN CERTIFICATE-----
+MIIDRjCCAi6gAwIBAgIRAKLML9HfizJ5+1/LXdJ6MuowDQYJKoZIhvcNAQELBQAw
+FDESMBAGA1UEAwwJUGxleHVzIENBMB4XDTIyMDQyMzIzMjgzM1oXDTMyMDQyMDIz
+MjgzM1owETEPMA0GA1UEAwwGY2xpZW50MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEArmoLCPbZaBcRuX5U6x9EuJR9knbA4AS0JEZqAOp9LhivcGG1oi5g
+rs0K2c6kKoCvR3tdYcLRClg65s7LN0cIDvi7+b/58fNhJeKrACis2/pWRImdKBG1
+Ddqf/bPDhnL1sy1CvmuJtP1+BRCPxU5L9grxXo2Dzyn+MmPHaawUdusQ92eaitBQ
+wUWzFMwJ4Iz5Bk0Ms5l3ML0A/qYWo/tSK8LHmQlZhdN+fUjTaEeuOTF9lGMhfXXv
+BYgK5WJrSiZkc1YAqZ1/z+C9cLjnuUMSXG69S8LUmLfoRTv/ARmCD0Ij0z8hxMXC
+x+2rVEduVngjdpoDmI2ZoW+ZwXTHkVQ2IwIDAQABo4GVMIGSMAkGA1UdEwQCMAAw
+HQYDVR0OBBYEFKBGT9giqYB7d7gaiU9ynQFY2izwMEQGA1UdIwQ9MDuAFBCOWc/2
+d+5QoH2bjhy3u5RsjUBjoRikFjAUMRIwEAYDVQQDDAlQbGV4dXMgQ0GCCQCAimco
+nOvXxzATBgNVHSUEDDAKBggrBgEFBQcDAjALBgNVHQ8EBAMCB4AwDQYJKoZIhvcN
+AQELBQADggEBADj3CCxZdVFJSLcjM80lJMR5Lg5HfqiVIEEl7zUJX0PZuhBTGJk1
+Jp6xj+G3UktriNanRuooAph4YtFShpmspaumAQlTo7SlEsIZYEejdV45cWeiHV1u
+tDf9U3aDODaLG/izzkw1lsIL79SIqZE6i2WK4jHlT7FWDqjBWSWrt63/bj87UNBN
+NTCKSDPMnwYvq1pffRPQJHoRbGWDmcCO/eqa9ZNpPzdfS+psExoHWj+6KLq+zKYl
+1HrEzHLfmNUMzP0kBxvpfhWTk4NippBFxbolsIZrhUO9tq8PGVLkQR8GyOqSxsuw
+VnLFKdQ+WE/M9HTD2hJvk5PYNeBZ3ykthWM=
+-----END CERTIFICATE-----

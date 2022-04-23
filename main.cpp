@@ -14,10 +14,11 @@ int main(int argc, char** argv)
         ("imaps-server", boost::program_options::value<std::string>()->required(), "imaps server used by plexus postman service")
         ("local-postman", boost::program_options::value<std::string>()->required(), "email address of local plexus postman to send from")
         ("remote-postman", boost::program_options::value<std::string>()->required(), "email address of remote plexus postman to receive from")
-        ("postman-login", boost::program_options::value<std::string>()->required(), "login of plexus postman email account")
-        ("postman-password", boost::program_options::value<std::string>()->required(), "password of plexus postman email account")
+        ("email-login", boost::program_options::value<std::string>()->required(), "login of plexus postman email account")
+        ("email-password", boost::program_options::value<std::string>()->required(), "password of plexus postman email account")
         ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to ssl certificate for email service")
         ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to email ssl key for email service")
+        ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to email certification authority for email service")
         ("email-timeout", boost::program_options::value<int64_t>()->default_value(10), "timeout (seconds) to connect to email server")
         ("stun-ip", boost::program_options::value<std::string>()->required(), "ip of stun server")
         ("stun-port", boost::program_options::value<uint16_t>()->default_value(3478u), "port of stun server")
@@ -51,10 +52,11 @@ int main(int argc, char** argv)
             vm["imaps-server"].as<std::string>(),
             vm["local-postman"].as<std::string>(),
             vm["remote-postman"].as<std::string>(),
-            vm["postman-login"].as<std::string>(),
-            vm["postman-password"].as<std::string>(),
+            vm["email-login"].as<std::string>(),
+            vm["email-password"].as<std::string>(),
             vm["email-cert"].as<std::string>(),
             vm["email-key"].as<std::string>(),
+            vm["email-ca"].as<std::string>(),
             vm["email-timeout"].as<int64_t>()
         );
 
