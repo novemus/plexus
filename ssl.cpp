@@ -11,6 +11,17 @@
 
 namespace plexus { namespace network {
 
+std::string get_last_error()
+{
+    std::string ssl = ERR_error_string(ERR_get_error(), NULL);
+    std::string sys = strerror(errno);
+    if (ssl.empty())
+        return sys;
+    if (sys.empty())
+        return ssl;
+    return ssl + "\n" + sys;
+}
+
 void init_openssl()
 {
     static std::once_flag flag;
@@ -58,7 +69,7 @@ public:
         {
             SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
             if (!SSL_CTX_load_verify_locations(ctx, m_ca.c_str(), NULL))
-                throw std::runtime_error(ERR_error_string(ERR_get_error(), NULL));
+                throw std::runtime_error(get_last_error());
         }
 
         m_bio.reset(BIO_new_ssl_connect(ctx), BIO_free_all);
@@ -68,11 +79,11 @@ public:
         if (!m_cert.empty() && !m_key.empty())
         {
             if (SSL_use_certificate_file(ssl, m_cert.c_str(), SSL_FILETYPE_PEM) <= 0)
-                throw std::runtime_error(ERR_error_string(ERR_get_error(), NULL));
+                throw std::runtime_error(get_last_error());
             if (SSL_use_PrivateKey_file(ssl, m_key.c_str(), SSL_FILETYPE_PEM) <= 0)
-                throw std::runtime_error(ERR_error_string(ERR_get_error(), NULL));
+                throw std::runtime_error(get_last_error());
             if (!SSL_check_private_key(ssl))
-                throw std::runtime_error("wrong private key");
+                throw std::runtime_error(get_last_error());
         }
 
         SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
@@ -85,8 +96,15 @@ public:
             int res = BIO_do_connect(m_bio.get());
             if (res <= 0)
             {
-                if (!BIO_should_retry(m_bio.get()) || wait(IO_WRITE) == 0)
-                    throw std::runtime_error("can't connect server");
+                if (BIO_should_retry(m_bio.get()))
+                {
+                    if (wait(IO_WRITE) == 0)
+                        throw timeout_error();
+                }
+                else
+                {
+                    throw std::runtime_error(get_last_error());
+                }
             }
             else
                 break;
@@ -101,18 +119,12 @@ public:
 
     size_t write(const uint8_t* buffer, size_t len) noexcept(false) override
     {
-        auto size = do_write(buffer, static_cast<int>(len));
-        if (size < 0)
-            throw std::runtime_error("can't write data");
-        return static_cast<size_t>(size);
+        return static_cast<size_t>(do_write(buffer, static_cast<int>(len)));
     }
 
     size_t read(uint8_t* buffer, size_t len) noexcept(false) override
     {
-        auto size = do_read(buffer, static_cast<int>(len));
-        if (size < 0)
-            throw std::runtime_error("can't read data");
-        return static_cast<size_t>(size);
+        return static_cast<size_t>(do_read(buffer, static_cast<int>(len)));
     }
 
 private:
@@ -140,18 +152,23 @@ private:
         while (true)
         {
             res = BIO_read(m_bio.get(), buf, len);
-            if (res < 0 && BIO_should_retry(m_bio.get()))
+            if (res < 0)
             {
-                if (wait(IO_READ) == 0)
-                    throw timeout_error();
+                if (BIO_should_retry(m_bio.get()))
+                {
+                    if (wait(IO_READ) == 0)
+                        throw timeout_error();
+                }
+                else
+                {
+                    throw std::runtime_error(get_last_error());
+                }
             }
             else
             {
-                return res;
+                break;
             }
         }
-
-        _err_ << "read error: " << res;
 
         return res;
     }
@@ -162,18 +179,23 @@ private:
         while (true)
         {
             res = BIO_write(m_bio.get(), buf, len);
-            if (res < 0 && BIO_should_retry(m_bio.get()))
+            if (res < 0)
             {
-                if (wait(IO_WRITE) == 0)
-                    throw timeout_error();
+                if (BIO_should_retry(m_bio.get()))
+                {
+                    if (wait(IO_WRITE) == 0)
+                        throw timeout_error();
+                }
+                else
+                {
+                    throw std::runtime_error(get_last_error());
+                }
             }
             else
             {
-                return res;
+                break;
             }
         }
-
-        _err_ << "write error: " << res;
 
         return res;
     }
