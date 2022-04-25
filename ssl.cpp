@@ -11,15 +11,17 @@
 
 namespace plexus { namespace network {
 
-std::string get_last_error()
+std::string get_last_error(const std::string& comment = "")
 {
-    std::string ssl = ERR_error_string(ERR_get_error(), NULL);
-    std::string sys = strerror(errno);
-    if (ssl.empty())
-        return sys;
-    if (sys.empty())
-        return ssl;
-    return ssl + "\n" + sys;
+    auto ssl = ERR_get_error();
+    if (ssl != 0)
+        return comment + ": " + ERR_error_string(ssl, NULL);
+    
+    auto sys = errno;
+    if (sys != 0)
+        return comment + ": " + strerror(errno);
+
+    return comment;
 }
 
 void init_openssl()
@@ -69,7 +71,7 @@ public:
         {
             SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
             if (!SSL_CTX_load_verify_locations(ctx, m_ca.c_str(), NULL))
-                throw std::runtime_error(get_last_error());
+                throw std::runtime_error(get_last_error("SSL_CTX_load_verify_locations failed"));
         }
 
         m_bio.reset(BIO_new_ssl_connect(ctx), BIO_free_all);
@@ -78,12 +80,12 @@ public:
 
         if (!m_cert.empty() && !m_key.empty())
         {
-            if (SSL_use_certificate_file(ssl, m_cert.c_str(), SSL_FILETYPE_PEM) <= 0)
-                throw std::runtime_error(get_last_error());
-            if (SSL_use_PrivateKey_file(ssl, m_key.c_str(), SSL_FILETYPE_PEM) <= 0)
-                throw std::runtime_error(get_last_error());
+            if (!SSL_use_certificate_file(ssl, m_cert.c_str(), SSL_FILETYPE_PEM))
+                throw std::runtime_error(get_last_error("SSL_use_certificate_file failed"));
+            if (!SSL_use_PrivateKey_file(ssl, m_key.c_str(), SSL_FILETYPE_PEM))
+                throw std::runtime_error(get_last_error("SSL_use_PrivateKey_file failed"));
             if (!SSL_check_private_key(ssl))
-                throw std::runtime_error(get_last_error());
+                throw std::runtime_error(get_last_error("SSL_check_private_key failed"));
         }
 
         SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
@@ -103,7 +105,7 @@ public:
                 }
                 else
                 {
-                    throw std::runtime_error(get_last_error());
+                    throw std::runtime_error(get_last_error("BIO_do_connect failed"));
                 }
             }
             else
@@ -161,7 +163,7 @@ private:
                 }
                 else
                 {
-                    throw std::runtime_error(get_last_error());
+                    throw std::runtime_error(get_last_error("BIO_read failed"));
                 }
             }
             else
@@ -188,7 +190,7 @@ private:
                 }
                 else
                 {
-                    throw std::runtime_error(get_last_error());
+                    throw std::runtime_error(get_last_error("BIO_write failed"));
                 }
             }
             else

@@ -11,15 +11,17 @@
 #include <boost/test/unit_test.hpp>
 #include "../network.h"
 
-std::string get_last_error()
+std::string get_last_error(const std::string& comment = "")
 {
-    std::string ssl = ERR_error_string(ERR_get_error(), NULL);
-    std::string sys = strerror(errno);
-    if (ssl.empty())
-        return sys;
-    if (sys.empty())
-        return ssl;
-    return ssl + "\n" + sys;
+    auto ssl = ERR_get_error();
+    if (ssl != 0)
+        return comment + ": " + ERR_error_string(ssl, NULL);
+    
+    auto sys = errno;
+    if (sys != 0)
+        return comment + ": " + strerror(errno);
+
+    return comment;
 }
 
 class ssl_echo_server
@@ -43,23 +45,23 @@ public:
     {
         m_context = SSL_CTX_new(SSLv23_server_method());
         if (!m_context)
-            throw std::runtime_error(get_last_error());
+            throw std::runtime_error(get_last_error("SSL_CTX_new failed"));
         
         if (!SSL_CTX_use_certificate_file(m_context, cert.c_str(), SSL_FILETYPE_PEM))
-            throw std::runtime_error(get_last_error());
+            throw std::runtime_error(get_last_error("SSL_CTX_use_certificate_file failed"));
 
         if (!SSL_CTX_use_PrivateKey_file(m_context, key.c_str(), SSL_FILETYPE_PEM))
-            throw std::runtime_error(get_last_error());
+            throw std::runtime_error(get_last_error("SSL_CTX_use_PrivateKey_file failed"));
 
         if (!SSL_CTX_check_private_key(m_context))
-            throw std::runtime_error(get_last_error());
+            throw std::runtime_error(get_last_error("SSL_CTX_check_private_key failed"));
 
         if (!ca.empty())
         {
             SSL_CTX_set_verify(m_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
 
             if (!SSL_CTX_load_verify_locations(m_context, ca.c_str(), NULL))
-                throw std::runtime_error(get_last_error());
+                throw std::runtime_error(get_last_error("SSL_CTX_load_verify_locations failed"));
         }
 
         sockaddr_in addr;
@@ -103,9 +105,10 @@ public:
                     SSL* ssl = SSL_new(m_context);
                     SSL_set_fd(ssl, client);
 
-                    if (SSL_accept(ssl) <= 0)
+                    int ret = SSL_accept(ssl);
+                    if (ret <= 0)
                     {
-                        std::cerr << get_last_error() << std::endl;
+                        std::cerr << "SSL_accept failed: " << ERR_error_string(SSL_get_error(ssl, ret), NULL) << std::endl;
                         return;
                     }
 
@@ -122,7 +125,7 @@ public:
                             }
                             else if (err == SSL_ERROR_SYSCALL || err == SSL_ERROR_SSL)
                             {
-                                std::cerr << get_last_error() << std::endl;
+                                std::cerr << "SSL_read failed: " << ERR_error_string(err, NULL) << std::endl;
                                 return;
                             }
                         }
@@ -132,7 +135,7 @@ public:
                             size = SSL_write(ssl, buffer, size);
                             if (size < 0)
                             {
-                                std::cerr << get_last_error() << std::endl;
+                                std::cerr << "SSL_write failed: " << ERR_error_string(SSL_get_error(ssl, size), NULL) << std::endl;
                                 return;
                             }
                         }
