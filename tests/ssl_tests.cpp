@@ -41,6 +41,8 @@ public:
             );
     }
 
+protected:
+
     void handle_handshake(const boost::system::error_code &error)
     {
         if (!error)
@@ -136,6 +138,8 @@ public:
             m_work.wait();
     }
 
+protected:
+
     void start_accept()
     {
         ssl_echo_session* session = new ssl_echo_session(m_io, m_ssl);
@@ -209,36 +213,23 @@ BOOST_AUTO_TEST_CASE(check_certs)
     BOOST_REQUIRE_NO_THROW(server.stop());
 }
 
-BOOST_AUTO_TEST_CASE(wrong_server)
+BOOST_AUTO_TEST_CASE(mistakes)
 {
     std::shared_ptr<plexus::network::ssl> client(
         plexus::network::create_ssl_client("127.0.0.1:4433")
         );
-    BOOST_REQUIRE_THROW(client->connect(), std::exception);
+    BOOST_REQUIRE_THROW(client->connect(), std::runtime_error);
     BOOST_REQUIRE_NO_THROW(client->shutdown());
-}
 
-BOOST_AUTO_TEST_CASE(timeout)
-{
     ssl_echo_server server(4433, "./certs/server.crt", "./certs/server.key");
     BOOST_REQUIRE_NO_THROW(server.start());
     
-    std::shared_ptr<plexus::network::ssl> client(
-        plexus::network::create_ssl_client("127.0.0.1:4433", "", "", "", 2)
-        );
+    client = plexus::network::create_ssl_client("127.0.0.1:4433", "", "", "", 2);
     BOOST_REQUIRE_NO_THROW(client->connect());
 
     char buffer[1024];
-    std::strcpy(buffer, "hello");
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->write((uint8_t*)buffer, strlen(buffer) + 1), strlen(buffer) + 1));
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), strlen(buffer) + 1));
-    BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
-
-    BOOST_REQUIRE_NO_THROW(server.stop());
-
-    std::strcpy(buffer, "bye bye");
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->write((uint8_t*)buffer, strlen(buffer) + 1), strlen(buffer) + 1));
-    BOOST_REQUIRE_THROW(client->read((uint8_t*)buffer, sizeof(buffer)), std::exception);
+    BOOST_REQUIRE_THROW(client->read((uint8_t*)buffer, sizeof(buffer)), plexus::network::timeout_error);
 
     BOOST_REQUIRE_NO_THROW(client->shutdown());
+    BOOST_REQUIRE_NO_THROW(server.stop());
 }
