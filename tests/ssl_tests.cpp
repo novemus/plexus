@@ -58,14 +58,12 @@ protected:
         }
     }
 
-    void handle_read(const boost::system::error_code &error,
-                     size_t bytes_transferred)
+    void handle_read(const boost::system::error_code &error, size_t transferred)
     {
         if (!error)
         {
-            boost::asio::async_write(
-                m_socket,
-                boost::asio::buffer(m_data, bytes_transferred),
+            m_socket.async_write_some(
+                boost::asio::buffer(m_data, transferred),
                 boost::bind(&ssl_echo_session::handle_write, this, boost::asio::placeholders::error)
                 );
         }
@@ -100,16 +98,16 @@ class ssl_echo_server
 
 public:
 
-    ssl_echo_server(unsigned short port, const std::string& crt, const std::string& key, const std::string& ca = "")
+    ssl_echo_server(unsigned short port, const std::string& cert, const std::string& key, const std::string& ca = "")
         : m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)),
           m_ssl(boost::asio::ssl::context::sslv23)
     {
-        m_ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2);
-        m_ssl.use_certificate_file(crt, boost::asio::ssl::context::pem);
+        m_ssl.set_options(boost::asio::ssl::context::default_workarounds| boost::asio::ssl::context::sslv23_server);
+        m_ssl.use_certificate_file(cert, boost::asio::ssl::context::pem);
         m_ssl.use_private_key_file(key, boost::asio::ssl::context::pem);
         if (!ca.empty())
         {
-            m_ssl.set_verify_mode(SSL_VERIFY_PEER);
+            m_ssl.set_verify_mode(boost::asio::ssl::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert | boost::asio::ssl::verify_client_once);
             m_ssl.load_verify_file(ca);
         }
     }
@@ -164,19 +162,24 @@ protected:
     }
 };
 
+std::shared_ptr<ssl_echo_server> create_ssl_server(unsigned short port, const std::string& cert = "", const std::string& key = "", const std::string& ca = "")
+{
+    return std::make_shared<ssl_echo_server>(port, cert, key, ca);
+}
+
 BOOST_AUTO_TEST_CASE(no_check_certs)
 {
-    ssl_echo_server server(4433, "./certs/server.crt", "./certs/server.key");
-    BOOST_REQUIRE_NO_THROW(server.start());
+    auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key");
+    BOOST_REQUIRE_NO_THROW(server->start());
 
-    std::shared_ptr<plexus::network::ssl> client(plexus::network::create_ssl_client("127.0.0.1:4433"));
+    auto client = plexus::network::create_ssl_client("127.0.0.1:4433");
     BOOST_REQUIRE_NO_THROW(client->connect());
 
     char buffer[1024];
 
     std::strcpy(buffer, "hello");
     BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->write((uint8_t *)buffer, strlen(buffer) + 1), strlen(buffer) + 1));
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->read((uint8_t *)buffer, sizeof(buffer)), strlen(buffer) + 1));
+    BOOST_CHECK_EQUAL(client->read((uint8_t *)buffer, sizeof(buffer)), strlen(buffer) + 1);
     BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
 
     std::strcpy(buffer, "bye bye");
@@ -184,18 +187,16 @@ BOOST_AUTO_TEST_CASE(no_check_certs)
     BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->read((uint8_t *)buffer, sizeof(buffer)), strlen(buffer) + 1));
     BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
 
-    BOOST_REQUIRE_NO_THROW(client->shutdown());
-    BOOST_REQUIRE_NO_THROW(server.stop());
+    client->shutdown();
+    BOOST_REQUIRE_NO_THROW(server->stop());
 }
 
 BOOST_AUTO_TEST_CASE(check_certs)
 {
-    ssl_echo_server server(4433, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
-    BOOST_REQUIRE_NO_THROW(server.start());
+    auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
+    BOOST_REQUIRE_NO_THROW(server->start());
 
-    std::shared_ptr<plexus::network::ssl> client(
-        plexus::network::create_ssl_client("127.0.0.1:4433", "./certs/client.crt", "./certs/client.key", "./certs/ca.crt")
-        );
+    auto client = plexus::network::create_ssl_client("127.0.0.1:4433", "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
     BOOST_REQUIRE_NO_THROW(client->connect());
 
     char buffer[1024];
@@ -210,26 +211,29 @@ BOOST_AUTO_TEST_CASE(check_certs)
     BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
 
     BOOST_REQUIRE_NO_THROW(client->shutdown());
-    BOOST_REQUIRE_NO_THROW(server.stop());
+    BOOST_REQUIRE_NO_THROW(server->stop());
 }
 
 BOOST_AUTO_TEST_CASE(mistakes)
 {
-    std::shared_ptr<plexus::network::ssl> client(
-        plexus::network::create_ssl_client("127.0.0.1:4433")
-        );
-    BOOST_REQUIRE_THROW(client->connect(), std::runtime_error);
-    BOOST_REQUIRE_NO_THROW(client->shutdown());
+    auto client = plexus::network::create_ssl_client("127.0.0.1:4433");
+    BOOST_REQUIRE_THROW(client->connect(), boost::system::system_error);
+    BOOST_REQUIRE_THROW(client->shutdown(), boost::system::system_error);
 
-    ssl_echo_server server(4433, "./certs/server.crt", "./certs/server.key");
-    BOOST_REQUIRE_NO_THROW(server.start());
+    auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key");
+    BOOST_REQUIRE_NO_THROW(server->start());
     
     client = plexus::network::create_ssl_client("127.0.0.1:4433", "", "", "", 2);
     BOOST_REQUIRE_NO_THROW(client->connect());
 
     char buffer[1024];
-    BOOST_REQUIRE_THROW(client->read((uint8_t*)buffer, sizeof(buffer)), plexus::network::timeout_error);
+    BOOST_REQUIRE_THROW(client->read((uint8_t*)buffer, sizeof(buffer)), boost::system::system_error);
 
     BOOST_REQUIRE_NO_THROW(client->shutdown());
-    BOOST_REQUIRE_NO_THROW(server.stop());
+    BOOST_REQUIRE_NO_THROW(server->stop());
+
+    server = create_ssl_server(4433, "./certs/alien/server.crt", "./certs/alien/server.key", "./certs/alien/ca.crt");
+    BOOST_REQUIRE_NO_THROW(server->start());
+    auto client = plexus::network::create_ssl_client("127.0.0.1:4433", "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+    BOOST_REQUIRE_THROW(client->connect(), boost::system::system_error);
 }

@@ -14,7 +14,7 @@
 
 namespace plexus { namespace network {
 
-class asio_udp_client : public udp, public std::enable_shared_from_this<asio_udp_client>
+class asio_udp_channel : public udp, public std::enable_shared_from_this<asio_udp_channel>
 {
     typedef std::map<std::pair<std::string, std::string>, boost::asio::ip::udp::endpoint> endpoint_cache_t;
     typedef std::function<void(const boost::system::error_code&, size_t)> async_io_callback_t;
@@ -90,7 +90,7 @@ class asio_udp_client : public udp, public std::enable_shared_from_this<asio_udp
 
 public:
 
-    asio_udp_client(const std::string& address, uint16_t port)
+    asio_udp_channel(const std::string& address, uint16_t port)
         : m_socket(m_io)
         , m_timer(m_io)
     {
@@ -107,7 +107,7 @@ public:
         m_socket.bind(endpoint);
     }
 
-    ~asio_udp_client()
+    ~asio_udp_channel()
     {
         if (m_socket.is_open())
         {
@@ -159,7 +159,7 @@ public:
 
 std::shared_ptr<udp> create_udp_channel(const std::string& address, uint16_t port)
 {
-    return std::make_shared<asio_udp_client>(address, port);
+    return std::make_shared<asio_udp_channel>(address, port);
 }
 
 }}

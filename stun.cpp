@@ -295,7 +295,7 @@ public:
                 m_udp->receive(response, timeout);
 
                 if (timer().total_milliseconds() >= deadline)
-                    throw timeout_error();
+                    throw plexus::network::timeout_error();
                 else if (request->transaction() != response->transaction())
                     continue;
 
@@ -465,7 +465,7 @@ public:
             m_session.exec_binding_request(mapped, 0, 1400);
             state.hairpin = 1;
         }
-        catch(const timeout_error&) { }
+        catch(const plexus::network::timeout_error&) { }
 
         session filtering(m_local.first, m_local.second + 1);
         try
@@ -474,7 +474,7 @@ public:
             filtering.exec_binding_request(m_stun, flag::change_address | flag::change_port, 1400);
             state.filtering = binding::independent;
         }
-        catch(const timeout_error&)
+        catch(const plexus::network::timeout_error&)
         {
             try
             {
@@ -482,7 +482,7 @@ public:
                 filtering.exec_binding_request(m_stun, flag::change_port, 1400);
                 state.filtering = binding::address_dependent;
             }
-            catch(const timeout_error&)
+            catch(const plexus::network::timeout_error&)
             {
                 state.filtering = binding::address_and_port_dependent;
             }

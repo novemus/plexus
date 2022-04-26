@@ -1,211 +1,152 @@
+#include <cstdlib>
 #include <iostream>
-#include <cstring>
-#include <thread>
-#include <mutex>
-#include <openssl/bio.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/crypto.h>
+#include <regex>
+#include <boost/bind.hpp>
+#include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
+#include <boost/asio/deadline_timer.hpp>
+#include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <boost/lexical_cast.hpp>
 #include "network.h"
 #include "log.h"
+#include "utils.h"
 
 namespace plexus { namespace network {
 
-std::string get_last_error(const std::string& comment = "")
+class asio_ssl_client : public plexus::network::ssl
 {
-    auto ssl = ERR_get_error();
-    if (ssl != 0)
-        return comment + ": " + ERR_error_string(ssl, NULL);
-    
-    auto sys = errno;
-    if (sys != 0)
-        return comment + ": " + strerror(errno);
+    typedef std::function<void(const boost::system::error_code&, size_t)> async_io_callback_t;
+    typedef std::function<void(const async_io_callback_t&)> async_io_call_t;
+    typedef std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> ssl_stream_socket_ptr;
 
-    return comment;
-}
+    boost::asio::io_service         m_io;
+    boost::asio::ssl::context       m_ssl;
+    ssl_stream_socket_ptr           m_socket;
+    boost::asio::deadline_timer     m_timer;
+    boost::asio::ip::tcp::endpoint  m_endpoint;
+    boost::posix_time::seconds      m_timeout;
 
-void init_openssl()
-{
-    static std::once_flag flag;
-
-    std::call_once(flag, []()
+    size_t exec(const async_io_call_t& async_io_call)
     {
-        OPENSSL_malloc_init();
-        SSL_library_init();
-        SSL_load_error_strings();
-        ERR_load_BIO_strings();
-        OpenSSL_add_all_algorithms();
-        ERR_load_crypto_strings();
-    });
-}
+        m_timer.expires_from_now(m_timeout);
+        m_timer.async_wait([&](const boost::system::error_code& error) {
+            if(error)
+            {
+                if (error == boost::asio::error::operation_aborted)
+                    return;
 
-class openssl_client : public ssl
-{
-    const std::string m_url;
-    const std::string m_cert;
-    const std::string m_key;
-    const std::string m_ca;
-    const int64_t m_timeout;
-    std::shared_ptr<BIO> m_bio;
+                _err_ << error.message();
+            }
 
-    enum io_kind { IO_READ, IO_WRITE };
+            try
+            {
+                m_socket->lowest_layer().cancel();
+            }
+            catch (const std::exception &ex)
+            {
+                _err_ << ex.what();
+            }
+        });
+
+        boost::system::error_code code = boost::asio::error::would_block;
+        size_t length = 0;
+
+        async_io_call([&code, &length](const boost::system::error_code& c, size_t l) {
+            code = c;
+            length = l;
+        });
+
+        do {
+            m_io.run_one();
+        } while (code == boost::asio::error::would_block);
+
+        m_io.reset();
+
+        if (code)
+            throw boost::system::system_error(code);
+
+        return length;
+    }
 
 public:
 
-    openssl_client(const std::string& url, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
-        : m_url(url)
-        , m_cert(cert)
-        , m_key(key)
-        , m_ca(ca)
+    asio_ssl_client(const std::string& address, uint16_t port, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+        : m_ssl(boost::asio::ssl::context::sslv23)
+        , m_timer(m_io)
+        , m_endpoint(boost::asio::ip::address::from_string(address), port)
         , m_timeout(timeout)
     {
-        init_openssl();
+        m_ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::sslv23_client);
+        if (!cert.empty() && !key.empty())
+        {
+            m_ssl.use_certificate_file(cert, boost::asio::ssl::context::pem);
+            m_ssl.use_private_key_file(key, boost::asio::ssl::context::pem);
+        }
+
+        if (!ca.empty())
+        {
+            m_ssl.set_verify_mode(boost::asio::ssl::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert | boost::asio::ssl::verify_client_once );
+            m_ssl.load_verify_file(ca);
+        }
+
+        m_socket = std::make_shared<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>>(m_io, m_ssl);
     }
 
     void connect() noexcept(false) override
     {
-        SSL* ssl;
-        SSL_CTX* ctx = SSL_CTX_new(SSLv23_client_method());
-
-        if (!m_ca.empty())
-        {
-            SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
-            if (!SSL_CTX_load_verify_locations(ctx, m_ca.c_str(), NULL))
-                throw std::runtime_error(get_last_error("SSL_CTX_load_verify_locations failed"));
-        }
-
-        m_bio.reset(BIO_new_ssl_connect(ctx), BIO_free_all);
-
-        BIO_get_ssl(m_bio.get(), &ssl);
-
-        if (!m_cert.empty() && !m_key.empty())
-        {
-            if (!SSL_use_certificate_file(ssl, m_cert.c_str(), SSL_FILETYPE_PEM))
-                throw std::runtime_error(get_last_error("SSL_use_certificate_file failed"));
-            if (!SSL_use_PrivateKey_file(ssl, m_key.c_str(), SSL_FILETYPE_PEM))
-                throw std::runtime_error(get_last_error("SSL_use_PrivateKey_file failed"));
-            if (!SSL_check_private_key(ssl))
-                throw std::runtime_error(get_last_error("SSL_check_private_key failed"));
-        }
-
-        SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
-
-        BIO_set_conn_hostname(m_bio.get(), m_url.c_str());
-        BIO_set_nbio(m_bio.get(), 1);
-
-        while (true)
-        {
-            int res = BIO_do_connect(m_bio.get());
-            if (res <= 0)
-            {
-                if (BIO_should_retry(m_bio.get()))
-                {
-                    if (wait(IO_WRITE) == 0)
-                        throw timeout_error();
-                }
-                else
-                {
-                    throw std::runtime_error(get_last_error("BIO_do_connect failed"));
-                }
-            }
-            else
-                break;
-        }
+        m_socket->lowest_layer().connect(m_endpoint);
+        m_socket->handshake(boost::asio::ssl::stream_base::client);
     }
 
     void shutdown() noexcept(false) override
     {
-        BIO_ssl_shutdown(m_bio.get());
-        m_bio.reset();
-    }
-
-    size_t write(const uint8_t* buffer, size_t len) noexcept(false) override
-    {
-        return static_cast<size_t>(do_write(buffer, static_cast<int>(len)));
+        m_socket->lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both);
     }
 
     size_t read(uint8_t* buffer, size_t len) noexcept(false) override
     {
-        return static_cast<size_t>(do_read(buffer, static_cast<int>(len)));
-    }
-
-private:
-
-    int wait(io_kind io) const
-    {
-        int fd;
-        BIO_get_fd(m_bio.get(), &fd);
-
-        fd_set fds;
-        FD_ZERO(&fds);
-
-        FD_SET(fd, &fds);
-
-        struct timeval timeout;
-        timeout.tv_usec = 0;
-        timeout.tv_sec = m_timeout;
-
-        return select(fd + 1, io == IO_READ ? &fds : 0, io == IO_READ ? 0 : &fds, NULL, &timeout);
-    }
-
-    int do_read(void* buf, int len) const
-    {
-        int res = -1;
-        while (true)
+        size_t size = exec([&](const async_io_callback_t& callback)
         {
-            res = BIO_read(m_bio.get(), buf, len);
-            if (res < 0)
-            {
-                if (BIO_should_retry(m_bio.get()))
-                {
-                    if (wait(IO_READ) == 0)
-                        throw timeout_error();
-                }
-                else
-                {
-                    throw std::runtime_error(get_last_error("BIO_read failed"));
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
+            m_socket->async_read_some(boost::asio::buffer(buffer, len), callback);
+        });
 
-        return res;
+        _trc_ << " <<<<< " << utils::to_hexadecimal(buffer, size);
+
+        if (size == 0)
+            throw std::runtime_error("can't read data");
+
+        return size;
     }
 
-    int do_write(const void* buf, int len) const
+    size_t write(const uint8_t* buffer, size_t len) noexcept(false) override
     {
-        int res = -1;
-        while (true)
+        size_t size = exec([&](const async_io_callback_t& callback)
         {
-            res = BIO_write(m_bio.get(), buf, len);
-            if (res < 0)
-            {
-                if (BIO_should_retry(m_bio.get()))
-                {
-                    if (wait(IO_WRITE) == 0)
-                        throw timeout_error();
-                }
-                else
-                {
-                    throw std::runtime_error(get_last_error("BIO_write failed"));
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
+            m_socket->async_write_some(boost::asio::buffer(buffer, len), callback);
+        });
 
-        return res;
+        _trc_ << " >>>>> " << utils::to_hexadecimal(buffer, size);
+
+        if (size == 0)
+            throw std::runtime_error("can't write data");
+
+        return size;
     }
 };
 
-std::shared_ptr<ssl> create_ssl_client(const std::string& url, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+std::shared_ptr<ssl> create_ssl_client(const std::string& server, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
 {
-    return std::make_shared<openssl_client>(url, cert, key, ca, timeout);
+    std::string address = server;
+    uint16_t port = 443;
+
+    std::smatch match;
+    if (std::regex_search(server, match, std::regex("(\\w+://)?(.+):(.*)")))
+    {
+        address = match[2].str();
+        port = boost::lexical_cast<uint16_t>(match[3].str());
+    }
+
+    return std::make_shared<asio_ssl_client>(address, port, cert, key, ca, timeout);
 }
 
 }}

@@ -27,6 +27,8 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
 
 namespace network {
 
+struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout") {} };
+
 const uint16_t DEFAULT_STUN_PORT = 3478u;
 
 enum binding

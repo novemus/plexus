@@ -7,8 +7,6 @@
 
 namespace plexus { namespace network
 {
-    struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout") {} };
-
     struct ssl
     {
         virtual ~ssl() {}
