@@ -16,7 +16,7 @@ namespace plexus { namespace network
         virtual size_t write(const uint8_t* buffer, size_t len) noexcept(false) = 0;
     };
 
-    std::shared_ptr<ssl> create_ssl_client(const std::string& url, const std::string& cert = "", const std::string& key = "", const std::string& ca = "", int64_t timeout_sec = 10);
+    std::shared_ptr<ssl> create_ssl_client(const std::string& address, uint16_t port, const std::string& cert = "", const std::string& key = "", const std::string& ca = "", int64_t timeout_sec = 10);
 
     typedef std::pair<std::string, uint16_t> endpoint;
 

@@ -1,6 +1,5 @@
 #include <cstdlib>
 #include <iostream>
-#include <regex>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
@@ -139,19 +138,9 @@ public:
     }
 };
 
-std::shared_ptr<ssl> create_ssl_client(const std::string& server, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+std::shared_ptr<ssl> create_ssl_client(const std::string& server, uint16_t port, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
 {
-    std::string address = server;
-    uint16_t port = 443;
-
-    std::smatch match;
-    if (std::regex_search(server, match, std::regex("(\\w+://)?(.+):(.*)")))
-    {
-        address = match[2].str();
-        port = boost::lexical_cast<uint16_t>(match[3].str());
-    }
-
-    return std::make_shared<asio_ssl_client>(address, port, cert, key, ca, timeout);
+    return std::make_shared<asio_ssl_client>(server, port, cert, key, ca, timeout);
 }
 
 }}

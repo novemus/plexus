@@ -17,8 +17,10 @@ namespace plexus { namespace email {
 
 struct config
 {
-    std::string smtp;
-    std::string imap;
+    std::string smtp_server;
+    uint16_t smtp_port;
+    std::string imap_server;
+    uint16_t imap_port;
     std::string sender;
     std::string recipient;
     std::string login;
@@ -35,8 +37,8 @@ class mediator
 
 public:
 
-    mediator(const std::string& server, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
-        : m_ssl(network::create_ssl_client(server, cert, key, ca, timeout))
+    mediator(const std::string& address, uint16_t port, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+        : m_ssl(network::create_ssl_client(address, port, cert, key, ca, timeout))
     {
     }
 
@@ -124,7 +126,8 @@ public:
             ".\r\n";
 
         std::unique_ptr<mediator> mdr = std::make_unique<mediator>(
-            m_config.smtp,
+            m_config.smtp_server,
+            m_config.smtp_port,
             m_config.certificate,
             m_config.key,
             m_config.ca,
@@ -253,7 +256,8 @@ public:
     std::string pull() noexcept(false)
     {
         std::unique_ptr<mediator> mdr = std::make_unique<mediator>(
-            m_config.imap,
+            m_config.imap_server,
+            m_config.imap_port,
             m_config.certificate,
             m_config.key,
             m_config.ca,
@@ -339,9 +343,30 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
                                               const std::string& ca,
                                               int64_t timeout)
 {
+    std::string smtp_server = smtp;
+    uint16_t smtp_port = 25;
+
+    std::smatch match;
+    if (std::regex_search(smtp, match, std::regex("(\\w+://)?(.+):(.*)")))
+    {
+        smtp_server = match[2].str();
+        smtp_port = boost::lexical_cast<uint16_t>(match[3].str());
+    }
+
+    std::string imap_server = imap;
+    uint16_t imap_port = 143;
+
+    if (std::regex_search(imap, match, std::regex("(\\w+://)?(.+):(.*)")))
+    {
+        imap_server = match[2].str();
+        imap_port = boost::lexical_cast<uint16_t>(match[3].str());
+    }
+
     return std::make_shared<email_postman>(config{
-        smtp,
-        imap,
+        smtp_server,
+        smtp_port,
+        imap_server,
+        imap_port,
         sender,
         recipient,
         login,
