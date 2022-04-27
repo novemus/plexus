@@ -98,9 +98,14 @@ public:
         m_socket->handshake(boost::asio::ssl::stream_base::client);
     }
 
-    void shutdown() noexcept(false) override
+    void shutdown() noexcept(true) override
     {
-        m_socket->lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both);
+        if (m_socket->lowest_layer().is_open())
+        {
+            boost::system::error_code ec;
+            m_socket->lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+            m_socket->lowest_layer().close(ec);
+        }
     }
 
     size_t read(uint8_t* buffer, size_t len) noexcept(false) override
@@ -127,7 +132,7 @@ public:
 
         _trc_ << " >>>>> " << utils::to_hexadecimal(buffer, size);
 
-        if (size == 0)
+        if (size < len)
             throw std::runtime_error("can't write data");
 
         return size;

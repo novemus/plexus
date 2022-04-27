@@ -13,10 +13,7 @@
 
 class ssl_echo_session
 {
-    enum
-    {
-        max_length = 1024
-    };
+    enum { max_length = 1024 };
 
     char m_data[max_length];
     boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_socket;
@@ -53,9 +50,7 @@ protected:
                 );
         }
         else
-        {
             delete this;
-        }
     }
 
     void handle_read(const boost::system::error_code &error, size_t transferred)
@@ -68,9 +63,7 @@ protected:
                 );
         }
         else
-        {
             delete this;
-        }
     }
 
     void handle_write(const boost::system::error_code &error)
@@ -83,9 +76,7 @@ protected:
                 );
         }
         else
-        {
             delete this;
-        }
     }
 };
 
@@ -134,6 +125,8 @@ public:
 
         if (m_work.valid())
             m_work.wait();
+
+        m_acceptor.close();
     }
 
 protected:
@@ -150,13 +143,9 @@ protected:
     void handle_accept(ssl_echo_session *session, const boost::system::error_code &error)
     {
         if (!error)
-        {
             session->start();
-        }
         else
-        {
             delete session;
-        }
 
         start_accept();
     }
@@ -170,70 +159,68 @@ std::shared_ptr<ssl_echo_server> create_ssl_server(unsigned short port, const st
 BOOST_AUTO_TEST_CASE(no_check_certs)
 {
     auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key");
-    BOOST_REQUIRE_NO_THROW(server->start());
+    server->start();
 
     auto client = plexus::network::create_ssl_client("127.0.0.1:4433");
-    BOOST_REQUIRE_NO_THROW(client->connect());
+    client->connect();
 
     char buffer[1024];
 
     std::strcpy(buffer, "hello");
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->write((uint8_t *)buffer, strlen(buffer) + 1), strlen(buffer) + 1));
+    BOOST_CHECK_EQUAL(client->write((uint8_t *)buffer, strlen(buffer) + 1), strlen(buffer) + 1);
     BOOST_CHECK_EQUAL(client->read((uint8_t *)buffer, sizeof(buffer)), strlen(buffer) + 1);
     BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
 
     std::strcpy(buffer, "bye bye");
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->write((uint8_t *)buffer, strlen(buffer) + 1), strlen(buffer) + 1));
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->read((uint8_t *)buffer, sizeof(buffer)), strlen(buffer) + 1));
+    BOOST_CHECK_EQUAL(client->write((uint8_t *)buffer, strlen(buffer) + 1), strlen(buffer) + 1);
+    BOOST_CHECK_EQUAL(client->read((uint8_t *)buffer, sizeof(buffer)), strlen(buffer) + 1);
     BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
 
     client->shutdown();
-    BOOST_REQUIRE_NO_THROW(server->stop());
+    server->stop();
 }
 
 BOOST_AUTO_TEST_CASE(check_certs)
 {
     auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
-    BOOST_REQUIRE_NO_THROW(server->start());
+    server->start();
 
     auto client = plexus::network::create_ssl_client("127.0.0.1:4433", "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
-    BOOST_REQUIRE_NO_THROW(client->connect());
+    client->connect();
 
     char buffer[1024];
     std::strcpy(buffer, "hello");
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->write((uint8_t*)buffer, strlen(buffer) + 1), strlen(buffer) + 1));
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), strlen(buffer) + 1));
+    BOOST_CHECK_EQUAL(client->write((uint8_t*)buffer, strlen(buffer) + 1), strlen(buffer) + 1);
+    BOOST_CHECK_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), strlen(buffer) + 1);
     BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
 
     std::strcpy(buffer, "bye bye");
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->write((uint8_t*)buffer, strlen(buffer) + 1), strlen(buffer) + 1));
-    BOOST_REQUIRE_NO_THROW(BOOST_CHECK_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), strlen(buffer) + 1));
+    BOOST_CHECK_EQUAL(client->write((uint8_t*)buffer, strlen(buffer) + 1), strlen(buffer) + 1);
+    BOOST_CHECK_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), strlen(buffer) + 1);
     BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
 
-    BOOST_REQUIRE_NO_THROW(client->shutdown());
-    BOOST_REQUIRE_NO_THROW(server->stop());
+    client->shutdown();
+    server->stop();
 }
 
-BOOST_AUTO_TEST_CASE(mistakes)
+BOOST_AUTO_TEST_CASE(wrong_certs)
 {
-    auto client = plexus::network::create_ssl_client("127.0.0.1:4433");
+    auto client = plexus::network::create_ssl_client("127.0.0.1:4433", "./certs/client.crt", "./certs/client.key", "./certs/ca.crt", 2);
     BOOST_REQUIRE_THROW(client->connect(), boost::system::system_error);
-    BOOST_REQUIRE_THROW(client->shutdown(), boost::system::system_error);
 
-    auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key");
-    BOOST_REQUIRE_NO_THROW(server->start());
+    auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
+    server->start();
     
-    client = plexus::network::create_ssl_client("127.0.0.1:4433", "", "", "", 2);
-    BOOST_REQUIRE_NO_THROW(client->connect());
+    client->connect();
 
     char buffer[1024];
     BOOST_REQUIRE_THROW(client->read((uint8_t*)buffer, sizeof(buffer)), boost::system::system_error);
 
-    BOOST_REQUIRE_NO_THROW(client->shutdown());
-    BOOST_REQUIRE_NO_THROW(server->stop());
+    client->shutdown();
 
-    server = create_ssl_server(4433, "./certs/alien/server.crt", "./certs/alien/server.key", "./certs/alien/ca.crt");
-    BOOST_REQUIRE_NO_THROW(server->start());
-    auto client = plexus::network::create_ssl_client("127.0.0.1:4433", "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+    client = plexus::network::create_ssl_client("127.0.0.1:4433", "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
     BOOST_REQUIRE_THROW(client->connect(), boost::system::system_error);
+
+    client->shutdown();
+    server->stop();
 }

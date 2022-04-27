@@ -11,7 +11,7 @@ namespace plexus { namespace network
     {
         virtual ~ssl() {}
         virtual void connect() noexcept(false) = 0;
-        virtual void shutdown() noexcept(false) = 0;
+        virtual void shutdown() noexcept(true) = 0;
         virtual size_t read(uint8_t* buffer, size_t len) noexcept(false) = 0;
         virtual size_t write(const uint8_t* buffer, size_t len) noexcept(false) = 0;
     };
