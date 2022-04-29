@@ -138,8 +138,6 @@ public:
 
     size_t send(std::shared_ptr<transfer> data, int64_t timeout) noexcept(false) override
     {
-        _trc_ << data->remote.first << ":" << data->remote.second << " <<<<< " << utils::to_hexadecimal(data->buffer.data(), data->buffer.size());
-
         auto endpoint = resolve_endpoint(
             data->remote.first,
             std::to_string(data->remote.second)
@@ -149,6 +147,8 @@ public:
         {
             m_socket.async_send_to(boost::asio::buffer(data->buffer), endpoint, callback);
         }, timeout);
+
+        _trc_ << data->remote.first << ":" << data->remote.second << " <<<<< " << utils::to_hexadecimal(data->buffer.data(), size);
 
         if (size < data->buffer.size())
             throw std::runtime_error("can't send message");
