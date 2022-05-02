@@ -19,7 +19,7 @@ namespace plexus { namespace utils {
 
     std::string smime_sign(const std::string& msg, const std::string& cert, const std::string& key)
     {
-        int flags = PKCS7_DETACHED | PKCS7_STREAM | PKCS7_NOCERTS;
+        int flags = PKCS7_DETACHED | PKCS7_STREAM | PKCS7_NOCERTS | PKCS7_CRLFEOL;
 
         std::shared_ptr<BIO> cert_bio(BIO_new_file(cert.c_str(), "r"), BIO_free);
         if (!cert_bio)
@@ -62,7 +62,7 @@ namespace plexus { namespace utils {
 
     std::string smime_encrypt(const std::string& msg, const std::string& cert)
     {
-        int flags = PKCS7_STREAM;
+        int flags = PKCS7_STREAM | PKCS7_CRLFEOL;
 
         std::shared_ptr<BIO> tbio(BIO_new_file(cert.c_str(), "r"), BIO_free);
 
