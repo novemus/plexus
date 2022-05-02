@@ -16,5 +16,9 @@ std::string from_base64_url(const char* data, size_t length);
 std::string format(const std::string& format, ...);
 std::string format(const std::string& format, const boost::posix_time::ptime& time);
 std::string format(const std::string& format, const std::chrono::system_clock::time_point& time);
+std::string smime_sign(const std::string& msg, const std::string& cert, const std::string& key);
+std::string smime_verify(const std::string& msg, const std::string& cert, const std::string& ca);
+std::string smime_encrypt(const std::string& msg, const std::string& cert);
+std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key);
 
 }}

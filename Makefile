@@ -6,7 +6,7 @@ LDFLAGS = -lssl -lcrypto -lpthread -lboost_thread -lboost_system -lboost_program
 SRC_DIR = .
 OBJ_DIR = obj
 
-SRC = utils.cpp udp.cpp stun.cpp ssl.cpp log.cpp exec.cpp email.cpp main.cpp
+SRC = utils.cpp smime.cpp udp.cpp stun.cpp ssl.cpp log.cpp exec.cpp email.cpp main.cpp
 OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o)
 
 all: plexus
