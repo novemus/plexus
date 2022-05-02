@@ -67,12 +67,21 @@ class asio_ssl_client : public plexus::network::ssl
         return length;
     }
 
+    boost::asio::ip::tcp::endpoint resolve_endpoint(const std::string& host, uint16_t port)
+    {
+        boost::asio::ip::tcp::resolver resolver(m_io);
+        boost::asio::ip::tcp::resolver::query query(host, std::to_string(port));
+        boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(query);
+
+        return *resolver.resolve(query);
+    }
+
 public:
 
     asio_ssl_client(const std::string& address, uint16_t port, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
         : m_ssl(boost::asio::ssl::context::sslv23)
         , m_timer(m_io)
-        , m_endpoint(boost::asio::ip::address::from_string(address), port)
+        , m_endpoint(resolve_endpoint(address, port))
         , m_timeout(timeout)
     {
         m_ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::sslv23_client);
