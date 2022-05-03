@@ -271,7 +271,7 @@ class session
 
 public:
 
-    session(const std::string& address, uint16_t port) : m_udp(create_udp_channel(address, port))
+    session(const endpoint& local) : m_udp(create_udp_channel(local))
     {
     }
 
@@ -411,10 +411,10 @@ class stun_puncher : public puncher
 
 public:
 
-    stun_puncher(const std::string& stun_address, uint16_t stun_port, const std::string& local_address, uint16_t local_port)
-        : m_stun(endpoint{stun_address, stun_port})
-        , m_local(endpoint{local_address, local_port})
-        , m_session(local_address, local_port)
+    stun_puncher(const endpoint& stun, const endpoint& local)
+        : m_stun(stun)
+        , m_local(local)
+        , m_session(local)
     {
         std::srand(std::time(nullptr));
     }
@@ -467,7 +467,7 @@ public:
         }
         catch(const plexus::network::timeout_error&) { }
 
-        session filtering(m_local.first, m_local.second + 1);
+        session filtering(endpoint(m_local.first, m_local.second + 1));
         try
         {
             _dbg_ << "first filtering test...";
@@ -512,9 +512,9 @@ public:
     }
 };
 
-std::shared_ptr<puncher> create_stun_puncher(const std::string& stun_address, uint16_t stun_port, const std::string& local_address, uint16_t local_port)
+std::shared_ptr<puncher> create_stun_puncher(const endpoint& stun, const endpoint& local)
 {
-    return std::make_shared<stun_puncher>(stun_address, stun_port, local_address, local_port);
+    return std::make_shared<stun_puncher>(stun, local);
 }
 
 }}

@@ -16,13 +16,18 @@ struct postman
 
 std::shared_ptr<postman> create_email_postman(const std::string& smtp,
                                               const std::string& imap,
-                                              const std::string& sender,
-                                              const std::string& recipient,
                                               const std::string& login,
-                                              const std::string& password,
-                                              const std::string& certificate = "",
+                                              const std::string& passwd,
+                                              const std::string& from,
+                                              const std::string& to,
+                                              const std::string& subject = "Plexus",
+                                              const std::string& cert = "",
                                               const std::string& key = "",
                                               const std::string& ca = "",
+                                              const std::string& smime_peer = "",
+                                              const std::string& smime_cert = "",
+                                              const std::string& smime_key = "",
+                                              const std::string& smime_ca = "",
                                               int64_t timeout_sec = 10);
 
 namespace network {
@@ -60,6 +65,6 @@ struct puncher
     virtual void punch_hole_to_peer(const endpoint& peer, int64_t timeout_ms = 4000, int64_t deadline_ms = 120000) noexcept(false) = 0;
 };
 
-std::shared_ptr<puncher> create_stun_puncher(const std::string& stun_address, uint16_t stun_port, const std::string& local_address, uint16_t local_port);
+std::shared_ptr<puncher> create_stun_puncher(const endpoint& stun, const endpoint& local);
 
 }}

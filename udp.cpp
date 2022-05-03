@@ -90,11 +90,11 @@ class asio_udp_channel : public udp, public std::enable_shared_from_this<asio_ud
 
 public:
 
-    asio_udp_channel(const std::string& address, uint16_t port)
+    asio_udp_channel(const endpoint& address)
         : m_socket(m_io)
         , m_timer(m_io)
     {
-        boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address::from_string(address), port);
+        boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address::from_string(address.first), address.second);
 
         m_socket.open(endpoint.protocol());
 
@@ -157,9 +157,9 @@ public:
     }
 };
 
-std::shared_ptr<udp> create_udp_channel(const std::string& address, uint16_t port)
+std::shared_ptr<udp> create_udp_channel(const endpoint& address)
 {
-    return std::make_shared<asio_udp_channel>(address, port);
+    return std::make_shared<asio_udp_channel>(address);
 }
 
 }}

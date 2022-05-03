@@ -67,21 +67,19 @@ class asio_ssl_client : public plexus::network::ssl
         return length;
     }
 
-    boost::asio::ip::tcp::endpoint resolve_endpoint(const std::string& host, uint16_t port)
+    boost::asio::ip::tcp::endpoint resolve_endpoint(const endpoint& address)
     {
         boost::asio::ip::tcp::resolver resolver(m_io);
-        boost::asio::ip::tcp::resolver::query query(host, std::to_string(port));
-        boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(query);
-
+        boost::asio::ip::tcp::resolver::query query(address.first, std::to_string(address.second));
         return *resolver.resolve(query);
     }
 
 public:
 
-    asio_ssl_client(const std::string& address, uint16_t port, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+    asio_ssl_client(const endpoint& address, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
         : m_ssl(boost::asio::ssl::context::sslv23)
         , m_timer(m_io)
-        , m_endpoint(resolve_endpoint(address, port))
+        , m_endpoint(resolve_endpoint(address))
         , m_timeout(timeout)
     {
         m_ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::sslv23_client);
@@ -147,9 +145,9 @@ public:
     }
 };
 
-std::shared_ptr<ssl> create_ssl_client(const std::string& server, uint16_t port, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+std::shared_ptr<ssl> create_ssl_client(const endpoint& address, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
 {
-    return std::make_shared<asio_ssl_client>(server, port, cert, key, ca, timeout);
+    return std::make_shared<asio_ssl_client>(address, cert, key, ca, timeout);
 }
 
 }}

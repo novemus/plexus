@@ -16,8 +16,8 @@ const endpoint_t rep = std::make_pair("127.0.0.1", 4321);
 
 BOOST_AUTO_TEST_CASE(sync_udp_exchange)
 {
-    udp_ptr lend = plexus::network::create_udp_channel("127.0.0.1", 1234);
-    udp_ptr rend = plexus::network::create_udp_channel("127.0.0.1", 4321);
+    udp_ptr lend = plexus::network::create_udp_channel(lep);
+    udp_ptr rend = plexus::network::create_udp_channel(rep);
 
     transfer_ptr ltr = std::make_shared<transfer_t>(rep, data);
     transfer_ptr rtr = std::make_shared<transfer_t>(data.size());
@@ -39,10 +39,10 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
 
 BOOST_AUTO_TEST_CASE(async_udp_exchange)
 {
-    auto work = [](uint16_t port, const endpoint_t& peer)
+    auto work = [](const endpoint_t& l, const endpoint_t& r)
     {
-        udp_ptr udp = plexus::network::create_udp_channel("127.0.0.1", port);
-        transfer_ptr reqv = std::make_shared<transfer_t>(peer, data);
+        udp_ptr udp = plexus::network::create_udp_channel(l);
+        transfer_ptr reqv = std::make_shared<transfer_t>(r, data);
         transfer_ptr resp = std::make_shared<transfer_t>(data.size());
 
         BOOST_REQUIRE_EQUAL(udp->send(reqv), reqv->buffer.size());
@@ -50,18 +50,18 @@ BOOST_AUTO_TEST_CASE(async_udp_exchange)
         BOOST_REQUIRE_EQUAL(udp->send(reqv), reqv->buffer.size());
 
         BOOST_REQUIRE_EQUAL(udp->receive(resp), reqv->buffer.size());
-        BOOST_REQUIRE(resp->remote == peer);
+        BOOST_REQUIRE(resp->remote == r);
         BOOST_REQUIRE_EQUAL(std::memcmp(resp->buffer.data(), reqv->buffer.data(), reqv->buffer.size()), 0);
         BOOST_REQUIRE_EQUAL(udp->receive(resp), reqv->buffer.size());
-        BOOST_REQUIRE(resp->remote == peer);
+        BOOST_REQUIRE(resp->remote == r);
         BOOST_REQUIRE_EQUAL(std::memcmp(resp->buffer.data(), reqv->buffer.data(), reqv->buffer.size()), 0);
         BOOST_REQUIRE_EQUAL(udp->receive(resp), reqv->buffer.size());
-        BOOST_REQUIRE(resp->remote == peer);
+        BOOST_REQUIRE(resp->remote == r);
         BOOST_REQUIRE_EQUAL(std::memcmp(resp->buffer.data(), reqv->buffer.data(), reqv->buffer.size()), 0);
     };
 
-    auto l = std::async(std::launch::async, work, 1234, rep);
-    auto r = std::async(std::launch::async, work, 4321, lep);
+    auto l = std::async(std::launch::async, work, lep, rep);
+    auto r = std::async(std::launch::async, work, rep, lep);
 
     BOOST_REQUIRE_NO_THROW(l.wait());
     BOOST_REQUIRE_NO_THROW(r.wait());

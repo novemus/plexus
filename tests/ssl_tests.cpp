@@ -156,12 +156,15 @@ std::shared_ptr<ssl_echo_server> create_ssl_server(unsigned short port, const st
     return std::make_shared<ssl_echo_server>(port, cert, key, ca);
 }
 
+const uint16_t SSL_PORT = 4433;
+const plexus::network::endpoint SSL_SERVER("127.0.0.1", SSL_PORT);
+
 BOOST_AUTO_TEST_CASE(no_check_certs)
 {
-    auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key");
+    auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key");
     server->start();
 
-    auto client = plexus::network::create_ssl_client("127.0.0.1", 4433);
+    auto client = plexus::network::create_ssl_client(SSL_SERVER);
     client->connect();
 
     char buffer[1024];
@@ -182,10 +185,10 @@ BOOST_AUTO_TEST_CASE(no_check_certs)
 
 BOOST_AUTO_TEST_CASE(check_certs)
 {
-    auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
+    auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
     server->start();
 
-    auto client = plexus::network::create_ssl_client("127.0.0.1", 4433, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+    auto client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
     client->connect();
 
     char buffer[1024];
@@ -205,10 +208,10 @@ BOOST_AUTO_TEST_CASE(check_certs)
 
 BOOST_AUTO_TEST_CASE(wrong_certs)
 {
-    auto client = plexus::network::create_ssl_client("127.0.0.1", 4433, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt", 2);
+    auto client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt", 2);
     BOOST_REQUIRE_THROW(client->connect(), boost::system::system_error);
 
-    auto server = create_ssl_server(4433, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
+    auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
     server->start();
     
     client->connect();
@@ -218,7 +221,7 @@ BOOST_AUTO_TEST_CASE(wrong_certs)
 
     client->shutdown();
 
-    client = plexus::network::create_ssl_client("127.0.0.1", 4433, "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
+    client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
     BOOST_REQUIRE_THROW(client->connect(), boost::system::system_error);
 
     client->shutdown();
