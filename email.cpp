@@ -23,7 +23,8 @@ struct config
     std::string passwd;
     std::string from;
     std::string to;
-    std::string subject;
+    std::string subj_from;
+    std::string subj_to;
     std::string cert;
     std::string key;
     std::string ca;
@@ -88,7 +89,7 @@ private:
     std::shared_ptr<network::ssl> m_ssl;
 };
 
-std::string address(const std::string& email)
+std::string get_address(const std::string& email)
 {
     std::smatch match;
     if (std::regex_search(email, match, std::regex("[\\w\\s]*\\<?([^\\<]+@[^\\>]+)\\>?\\s*")))
@@ -113,6 +114,57 @@ class smtp
         };
     }
 
+    std::string build_data(const std::string& data)
+    {
+        if (m_config.smime.peer.empty())
+        {
+            static const char* SIMPLE_EMAIL =
+                "From: %s\r\n"
+                "To: %s\r\n"
+                "Subject: %s\r\n"
+                "\r\n"
+                "%s\r\n"
+                ".\r\n";
+
+            return utils::format(
+                SIMPLE_EMAIL,
+                m_config.from.c_str(),
+                m_config.to.c_str(),
+                m_config.subj_to.c_str(),
+                data.c_str()
+                );
+        }
+
+        static const char* MULTIPART_EMAIL =
+            "From: %s\r\n"
+            "To: %s\r\n"
+            "Subject: %s\r\n"
+            "MIME-Version: 1.0\r\n"
+            "Content-Type: multipart/mixed; boundary=----%s\r\n"
+            "\r\n"
+            "------%s\r\n"
+            "%s\r\n"
+            "------%s--\r\n"
+            ".\r\n";
+
+        std::string bound = plexus::utils::to_hexadecimal((uint8_t*)m_config.to.data(), m_config.to.size());
+        std::string content = plexus::utils::smime_encrypt(
+            plexus::utils::smime_sign(data, m_config.smime.cert, m_config.smime.key),
+            m_config.smime.peer
+            );
+
+        return utils::format(
+            MULTIPART_EMAIL,
+            m_config.from.c_str(),
+            m_config.to.c_str(),
+            m_config.subj_to.c_str(),
+            bound.c_str(),
+            bound.c_str(),
+            content.c_str(),
+            bound.c_str()
+            );
+    }
+
 public:
     
     smtp(const config& conf)
@@ -122,14 +174,6 @@ public:
 
     void push(const std::string& data) noexcept(false)
     {
-        static const char* EMAIL =
-            "From: %s\r\n"
-            "To: %s\r\n"
-            "%s\r\n"
-            "\r\n"
-            "%s\r\n"
-            ".\r\n";
-
         std::unique_ptr<mediator> mdr = std::make_unique<mediator>(
             m_config.smtp,
             m_config.cert,
@@ -143,10 +187,10 @@ public:
         mdr->request("AUTH LOGIN\r\n", code_checker(334));
         mdr->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.login.c_str(), m_config.login.size()).c_str()), code_checker(334));
         mdr->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.passwd.c_str(), m_config.passwd.size()).c_str()), code_checker(235));
-        mdr->request(utils::format("MAIL FROM: %s\r\n", address(m_config.from).c_str()), code_checker(250));
-        mdr->request(utils::format("RCPT TO: %s\r\n", address(m_config.to).c_str()), code_checker(250));
+        mdr->request(utils::format("MAIL FROM: %s\r\n", get_address(m_config.from).c_str()), code_checker(250));
+        mdr->request(utils::format("RCPT TO: %s\r\n", get_address(m_config.to).c_str()), code_checker(250));
         mdr->request("DATA\r\n", code_checker(354));
-        mdr->request(utils::format(EMAIL, m_config.from.c_str(), m_config.to.c_str(), m_config.subject.c_str(), data.c_str()), code_checker(250));
+        mdr->request(build_data(data), code_checker(250));
     }
 
 private:
@@ -224,15 +268,22 @@ class imap
         if (success_checker(response))
         {
             m_data.clear();
-            auto what = utils::format(
-                ".*\\sTo:\\s+%s\\s+From:\\s+%s\\s+X-Plexus-Version:\\s+(\\d+\\.\\d+)\\s+X-Plexus-Data:\\s+(\\S+)\\s.*",
-                m_config.from.c_str(), 
-                m_config.to.c_str());
             std::smatch match;
-            if (std::regex_search(response, match, std::regex(what)))
+            if (std::regex_search(response, match, std::regex("^[^\\r\\n]+\\r\\n([\\s\\S]+)\\r\\n\\)\\r\\n.*")))
             {
-                std::string raw = match[2].str();
-                m_data = utils::from_base64(raw.c_str(), raw.size());
+                std::string raw = match[1].str();
+                if (m_config.smime.peer.empty())
+                {
+                    m_data = match[1].str();
+                }
+                else
+                {
+                    m_data = plexus::utils::smime_verify(
+                        plexus::utils::smime_decrypt(match[1].str(), m_config.smime.cert, m_config.smime.key),
+                        m_config.smime.peer,
+                        m_config.smime.ca
+                        );
+                }
             }
             else
             {
@@ -273,7 +324,12 @@ public:
 
         if (m_unseen.empty())
         {
-            mdr->request(utils::format("tag UID SEARCH SINCE %d-%b-%Y\r\n", std::chrono::system_clock::now()), search_parser);
+            mdr->request(utils::format("tag UID SEARCH (SINCE %s) (From %s) (To %s) (Subject \"%s\")\r\n",
+                utils::format("%d-%b-%Y", std::chrono::system_clock::now()).c_str(),
+                get_address(m_config.from).c_str(),
+                get_address(m_config.to).c_str(),
+                m_config.subj_from.c_str()
+             ), search_parser);
         }
 
         std::string data;
@@ -284,7 +340,7 @@ public:
 
             unsigned int uid = m_unseen.front();
             mdr->request(
-                utils::format("tag UID FETCH %d (BODY.PEEK[HEADER.FIELDS (From To X-Plexus-Version X-Plexus-Data)])\r\n", uid), fetch_parser
+                utils::format("tag UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
             );
             
             m_unseen.pop_front();
@@ -341,7 +397,8 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
                                               const std::string& passwd,
                                               const std::string& from,
                                               const std::string& to,
-                                              const std::string& subject,
+                                              const std::string& subj_from,
+                                              const std::string& subj_to,
                                               const std::string& cert,
                                               const std::string& key,
                                               const std::string& ca,
@@ -370,7 +427,7 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
 
     return std::make_shared<email_postman>(config{
         smtp_ep, imap_ep, login, passwd,
-        from, to, subject,
+        from, to, subj_from, subj_to,
         cert, key, ca,
         timeout, { smime_peer, smime_cert, smime_key, smime_ca }});
 }

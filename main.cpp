@@ -16,7 +16,8 @@ int main(int argc, char** argv)
         ("mailer.passwd", boost::program_options::value<std::string>()->required(), "password of plexus postman email account")
         ("mailer.from", boost::program_options::value<std::string>()->required(), "email address used by local plexus postman")
         ("mailer.to", boost::program_options::value<std::string>()->required(), "email address used by remote plexus postman")
-        ("mailer.subject", boost::program_options::value<std::string>()->default_value("Plexus"), "subject for plexus postman message")
+        ("mailer.subj-from", boost::program_options::value<std::string>()->required(), "subject for incoming plexus postman message")
+        ("mailer.subj-to", boost::program_options::value<std::string>()->required(), "subject for outgoing plexus postman message")
         ("mailer.cert", boost::program_options::value<std::string>()->default_value(""), "path to X509 certificate for email service")
         ("mailer.key", boost::program_options::value<std::string>()->default_value(""), "path to Private Key for email service")
         ("mailer.ca", boost::program_options::value<std::string>()->default_value(""), "path to email Certification Authority for email service")
@@ -59,7 +60,8 @@ int main(int argc, char** argv)
             vm["mailer.passwd"].as<std::string>(),
             vm["mailer.from"].as<std::string>(),
             vm["mailer.to"].as<std::string>(),
-            vm["mailer.subject"].as<std::string>(),
+            vm["mailer.subj-from"].as<std::string>(),
+            vm["mailer.subj-to"].as<std::string>(),
             vm["mailer.cert"].as<std::string>(),
             vm["mailer.key"].as<std::string>(),
             vm["mailer.ca"].as<std::string>(),
