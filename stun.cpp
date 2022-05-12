@@ -252,6 +252,59 @@ public:
 
 typedef std::shared_ptr<message> message_ptr;
 
+class handshake : public network::udp::transfer
+{
+    uint64_t m_secret = 0;
+
+public:
+
+    handshake(const endpoint& peer, uint8_t flags, uint64_t secret) : transfer(peer), m_secret(secret)
+    {
+        buffer = {
+            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+            rand_byte(), rand_byte(), flags, 0x00
+        };
+
+        for (size_t i = 0; i < 8; ++i)
+        {
+            if (i < 7)
+                buffer[7] ^= buffer[i];
+
+            buffer[i] ^= uint8_t(secret >> (i * 8));
+        }
+    }
+
+    handshake(uint64_t secret) : transfer(8), m_secret(secret)
+    {
+    }
+
+    bool valid() const
+    {
+        uint8_t hash = buffer[7];
+
+        for (size_t i = 0; i < 8; ++i)
+        {
+            uint8_t byte = buffer[i];
+            byte ^= uint8_t(m_secret >> (i * 8));
+
+            if (i < 7)
+                hash ^= byte;
+        }
+
+        return hash == 0;
+    }
+
+    uint8_t flags() const
+    {
+        return buffer[6] ^ uint8_t(m_secret >> 48);
+    }
+};
+
+enum handshake_flags
+{
+
+};
+
 class session
 {
     std::shared_ptr<udp> m_udp;
