@@ -60,10 +60,7 @@ struct puncher
     virtual ~puncher() {}
     virtual traverse explore_network() noexcept(false) = 0;
     virtual endpoint punch_udp_hole() noexcept(false) = 0;
-    /*
-        disposes udp connection on success
-    */
-    virtual void punch_hole_to_peer(const endpoint& peer, int64_t timeout_ms = 4000, int64_t deadline_ms = 120000) noexcept(false) = 0;
+    virtual void punch_hole_to_peer(const endpoint& peer, uint64_t secret, int64_t timeout_ms = 120000) noexcept(false) = 0;
 };
 
 std::shared_ptr<puncher> create_stun_puncher(const endpoint& stun, const endpoint& local);

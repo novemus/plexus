@@ -1,4 +1,5 @@
 #include <regex>
+#include <experimental/random>
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
 #include "features.h"
@@ -74,8 +75,11 @@ int main(int argc, char** argv)
 
         int64_t tries = vm["app.retry-count"].as<int64_t>();
 
-        plexus::network::endpoint me;
+        plexus::network::endpoint host;
         plexus::network::endpoint peer;
+        uint64_t host_secret = 0;
+        uint64_t peer_secret = 0;
+
         do
         {
             try
@@ -92,12 +96,12 @@ int main(int argc, char** argv)
                     return 0;
                 }
 
-                plexus::network::endpoint endpoint = puncher->punch_udp_hole();
-                if (me != endpoint)
+                plexus::network::endpoint ep = puncher->punch_udp_hole();
+                if (host != ep)
                 {
-                    me = endpoint;
-                    std::string request = "READY " + endpoint.first + " " + std::to_string(endpoint.second);
-                    postman->send_message(request);
+                    host = ep;
+                    host_secret = std::experimental::randint<uint64_t>(0, 0xFFFFFFFFFFFFFFFF);
+                    postman->send_message(plexus::utils::format("PLEXUS 4.0 %s %u %u", host.first.c_str(), host.second, host_secret));
                 }
 
                 std::string message;
@@ -107,9 +111,10 @@ int main(int argc, char** argv)
                     if (!message.empty())
                     {
                         std::smatch match;
-                        if (std::regex_search(message, match, std::regex("^READY\\s+(\\S+)\\s+(\\d+)$")))
+                        if (std::regex_search(message, match, std::regex("^PLEXUS\\s+4\\.\\d+\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$")))
                         {
                             peer = std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str()));
+                            peer_secret = boost::lexical_cast<uint64_t>(match[3].str());
                         }
                     }
                 } 
@@ -117,13 +122,13 @@ int main(int argc, char** argv)
 
                 if (!peer.first.empty())
                 {
-                    puncher->punch_hole_to_peer(peer, 4000, vm["puncher.timeout"].as<int64_t>() * 1000);
+                    puncher->punch_hole_to_peer(peer, host_secret ^ peer_secret, vm["puncher.timeout"].as<int64_t>() * 1000);
 
                     std::string args = plexus::utils::format("%s %d %s %d %s %d",
                         vm["puncher.bind-ip"].as<std::string>().c_str(),
                         vm["puncher.bind-port"].as<uint16_t>(),
-                        me.first.c_str(),
-                        me.second,
+                        host.first.c_str(),
+                        host.second,
                         peer.first.c_str(),
                         peer.second
                         );

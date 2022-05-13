@@ -258,11 +258,11 @@ class handshake : public network::udp::transfer
 
 public:
 
-    handshake(const endpoint& peer, uint8_t flags, uint64_t secret) : transfer(peer), m_secret(secret)
+    handshake(const endpoint& peer, uint8_t flag, uint64_t secret) : transfer(peer), m_secret(secret)
     {
         buffer = {
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-            rand_byte(), rand_byte(), flags, 0x00
+            rand_byte(), rand_byte(), rand_byte(), flag,
+            rand_byte(), rand_byte(), rand_byte(), 0x00
         };
 
         for (size_t i = 0; i < 8; ++i)
@@ -278,31 +278,31 @@ public:
     {
     }
 
-    bool valid() const
+    bool valid(const endpoint& peer) const
     {
-        uint8_t hash = buffer[7];
-
-        for (size_t i = 0; i < 8; ++i)
+        if (peer == remote)
         {
-            uint8_t byte = buffer[i];
-            byte ^= uint8_t(m_secret >> (i * 8));
+            uint8_t hash = buffer[7];
 
-            if (i < 7)
-                hash ^= byte;
+            for (size_t i = 0; i < 8; ++i)
+            {
+                uint8_t byte = buffer[i];
+                byte ^= uint8_t(m_secret >> (i * 8));
+
+                if (i < 7)
+                    hash ^= byte;
+            }
+
+            return hash == 0;
         }
 
-        return hash == 0;
+        return false;
     }
 
-    uint8_t flags() const
+    uint8_t flag() const
     {
-        return buffer[6] ^ uint8_t(m_secret >> 48);
+        return buffer[3] ^ uint8_t(m_secret >> 24);
     }
-};
-
-enum handshake_flags
-{
-
 };
 
 class session
@@ -389,26 +389,24 @@ public:
         throw plexus::network::timeout_error();
     }
 
-    void punch_hole_to_peer(endpoint peer, int64_t timeout, int64_t deadline) noexcept(false)
+    void punch_hole_to_peer(const endpoint& peer, uint64_t secret, int64_t deadline) noexcept(false)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        static const std::vector<uint8_t> RECPLEX { 0x72, 0x65, 0x63, 0x70, 0x6c, 0x65, 0x78 };
-        static const std::vector<uint8_t> RESPLEX { 0x72, 0x65, 0x73, 0x70, 0x6c, 0x65, 0x78 };
+        std::shared_ptr<handshake> request = std::make_shared<handshake>(peer, 0, secret);
+        std::shared_ptr<handshake> response = std::make_shared<handshake>(secret);
 
-        std::shared_ptr<udp::transfer> request = std::make_shared<udp::transfer>(peer, RECPLEX);
-        std::shared_ptr<udp::transfer> response = std::make_shared<udp::transfer>(RECPLEX.size());
-
+        int64_t timeout = std::max(2000l, std::min(4000l, deadline / 8));
         while (timer().total_milliseconds() < deadline)
         {
             m_udp->send(request, timeout);
 
             try
             {
-                if (peer == response->remote && response->buffer == RESPLEX)
+                if (response->valid(peer) && response->flag() == 1)
                 {
                     _dbg_ << "handshake peer=" << response->remote.first << ":" << response->remote.second;
                     m_udp = std::make_shared<dummy_udp>();
@@ -417,16 +415,19 @@ public:
 
                 m_udp->receive(response, timeout);
 
-                if (peer == response->remote && request->buffer == RECPLEX)
+                if (response->valid(peer) && request->flag() == 0)
                 {
                     _dbg_ << "welcome peer=" << response->remote.first << ":" << response->remote.second;
-                    request = std::make_shared<udp::transfer>(peer, RESPLEX);
+                    request = std::make_shared<handshake>(peer, 1, secret);
                 }
             }
             catch(const boost::system::system_error& ex)
             {
                 if (ex.code() != boost::asio::error::operation_aborted)
                     throw;
+
+                request = std::make_shared<handshake>(peer, 0, secret);
+                response = std::make_shared<handshake>(secret);
 
                 _trc_ << ex.what();
             }
@@ -558,10 +559,10 @@ public:
         return m_session.exec_binding_request(m_stun)->mapped_endpoint();
     }
 
-    void punch_hole_to_peer(const endpoint& peer, int64_t timeout, int64_t deadline) noexcept(false)
+    void punch_hole_to_peer(const endpoint& peer, uint64_t secret, int64_t deadline) noexcept(false)
     {
         _dbg_ << "reaching peer...";
-        m_session.punch_hole_to_peer(peer, timeout, deadline);
+        m_session.punch_hole_to_peer(peer, secret, deadline);
     }
 };
 
