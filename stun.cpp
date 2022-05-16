@@ -256,22 +256,35 @@ class handshake : public network::udp::transfer
 {
     uint64_t m_secret = 0;
 
+    inline uint8_t mask(size_t pos) const
+    {
+        return uint8_t(m_secret >> (pos * 8));
+    }
+
 public:
 
     handshake(const endpoint& peer, uint8_t flag, uint64_t secret) : transfer(peer), m_secret(secret)
     {
         buffer = {
-            rand_byte(), rand_byte(), rand_byte(), flag,
-            rand_byte(), rand_byte(), rand_byte(), 0x00
+            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+            rand_byte(), rand_byte(), rand_byte(), rand_byte()
         };
+
+        size_t flag_pos = m_secret % 8;
+        size_t hash_pos = (m_secret + 1) % 8;
+
+        buffer[flag_pos] = flag;
 
         for (size_t i = 0; i < 8; ++i)
         {
-            if (i < 7)
-                buffer[7] ^= buffer[i];
-
-            buffer[i] ^= uint8_t(secret >> (i * 8));
+            if (i != hash_pos)
+            {
+                buffer[hash_pos] ^= buffer[i];
+                buffer[i] ^= mask(i);
+            }
         }
+
+        buffer[hash_pos] ^= mask(hash_pos);
     }
 
     handshake(uint64_t secret) : transfer(8), m_secret(secret)
@@ -282,15 +295,15 @@ public:
     {
         if (peer == remote)
         {
-            uint8_t hash = buffer[7];
+            size_t hash_pos = (m_secret + 1) % 8;
+            uint8_t hash = buffer[hash_pos] ^ mask(hash_pos);
 
             for (size_t i = 0; i < 8; ++i)
             {
-                uint8_t byte = buffer[i];
-                byte ^= uint8_t(m_secret >> (i * 8));
-
-                if (i < 7)
-                    hash ^= byte;
+                if (i != hash_pos)
+                {
+                    hash ^= buffer[i] ^ mask(i);
+                }
             }
 
             return hash == 0;
@@ -301,7 +314,8 @@ public:
 
     uint8_t flag() const
     {
-        return buffer[3] ^ uint8_t(m_secret >> 24);
+        size_t flag_pos = m_secret % 8;
+        return buffer[flag_pos] ^ mask(flag_pos);
     }
 };
 
