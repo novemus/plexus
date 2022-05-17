@@ -92,11 +92,11 @@ private:
 std::string get_address(const std::string& email)
 {
     std::smatch match;
-    if (std::regex_search(email, match, std::regex("[\\w\\s]*\\<?([^\\<]+@[^\\>]+)\\>?\\s*")))
+    if (std::regex_search(email, match, std::regex("[\\w\\s]*\\<([^\\<]+@[^\\>]+)\\>\\s*")))
     {
         return match[1].str();
     }
-    throw std::runtime_error("bad email address");
+    return email;
 }
 
 class smtp
