@@ -43,7 +43,7 @@ int main(int argc, char** argv)
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
     boost::program_options::notify(vm);
-    
+
     if(vm.count("help"))
     {
         std::cout << desc;
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
                 {
                     host = ep;
                     host_secret = std::experimental::randint<uint64_t>(0, 0xFFFFFFFFFFFFFFFF);
-                    postman->send_message(plexus::utils::format("PLEXUS 4.0 %s %u %u", host.first.c_str(), host.second, host_secret));
+                    postman->send_message(plexus::utils::format("PLEXUS 4.0 %s %u %llu", host.first.c_str(), host.second, host_secret));
                 }
 
                 std::string message;

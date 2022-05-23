@@ -274,6 +274,7 @@ public:
         size_t hash_pos = (m_secret + 1) % 8;
 
         buffer[flag_pos] = flag;
+        buffer[hash_pos] = 0;
 
         for (size_t i = 0; i < 8; ++i)
         {
