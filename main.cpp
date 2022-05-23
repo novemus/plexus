@@ -101,13 +101,18 @@ int main(int argc, char** argv)
                 {
                     host = ep;
                     host_secret = std::experimental::randint<uint64_t>(0, 0xFFFFFFFFFFFFFFFF);
-                    postman->send_message(plexus::utils::format("PLEXUS 4.0 %s %u %llu", host.first.c_str(), host.second, host_secret));
+                    std::string message = plexus::utils::format("PLEXUS 4.0 %s %u %llu", host.first.c_str(), host.second, host_secret);
+
+                    postman->send_message(message);
+                    _dbg_ << "sent message: " << message;
                 }
 
                 std::string message;
                 do
                 {
                     message = postman->receive_message();
+                    _dbg_ << "receive message: " << message;
+
                     if (!message.empty())
                     {
                         std::smatch match;
