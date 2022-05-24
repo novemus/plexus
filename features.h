@@ -35,6 +35,8 @@ namespace network {
 
 struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout") {} };
 
+struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
+
 const uint16_t DEFAULT_STUN_PORT = 3478u;
 
 enum binding

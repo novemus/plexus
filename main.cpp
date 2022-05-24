@@ -150,6 +150,11 @@ int main(int argc, char** argv)
             {
                 _err_ << "timeout";
             }
+            catch(const plexus::network::handshake_error&)
+            {
+                _err_ << "handshake error";
+            }
+
             std::this_thread::sleep_for(std::chrono::seconds(vm["app.retry-timeout"].as<int64_t>()));
         }
         while (--tries > 0);

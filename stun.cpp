@@ -307,7 +307,10 @@ public:
                 }
             }
 
-            return hash == 0;
+            if (hash != 0)
+                throw plexus::network::handshake_error();
+
+            return true;
         }
 
         return false;
