@@ -267,7 +267,6 @@ class imap
     const response_parser_t fetch_parser = [this](const std::string& response) -> bool {
         if (success_checker(response))
         {
-            m_data.clear();
             std::smatch match;
             if (std::regex_search(response, match, std::regex("^[^\\r\\n]+\\r\\n([\\s\\S]+)\\r\\n\\)\\r\\n.*")))
             {
@@ -284,10 +283,6 @@ class imap
                         m_config.smime.ca
                         );
                 }
-            }
-            else
-            {
-                m_data = "";
             }
             return true;
         }

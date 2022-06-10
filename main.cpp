@@ -31,12 +31,12 @@ int main(int argc, char** argv)
         ("puncher.stun-port", boost::program_options::value<uint16_t>()->default_value(3478u), "port of stun server")
         ("puncher.bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch udp hole")
         ("puncher.bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch udp hole")
-        ("puncher.timeout", boost::program_options::value<int64_t>()->default_value(120), "timeout (seconds) to punch hole to a peer")
+        ("puncher.timeout", boost::program_options::value<int64_t>()->default_value(60), "timeout (seconds) to punch hole to a peer")
         ("exec.command", boost::program_options::value<std::string>()->required(), "command to execute after a peer is available")
         ("exec.pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec.log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
-        ("app.retry-timeout", boost::program_options::value<int64_t>()->default_value(0), "timeout (seconds) for retrying to connect to a peer")
-        ("app.retry-count", boost::program_options::value<int64_t>()->default_value(0), "number of attempts to connect to a peer")
+        ("app.retry-timeout", boost::program_options::value<int64_t>()->default_value(10), "timeout (seconds) for retrying to connect to a peer")
+        ("app.retry-count", boost::program_options::value<uint64_t>()->default_value(0), "number of attempts to connect to a peer")
         ("app.log-level", boost::program_options::value<int>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warnine, 4 - info, 5 - debug, 6 - trace")
         ("app.log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file");
 
@@ -73,7 +73,7 @@ int main(int argc, char** argv)
             vm["mailer.timeout"].as<int64_t>()
         );
 
-        int64_t tries = vm["app.retry-count"].as<int64_t>();
+        uint64_t tries = vm["app.retry-count"].as<uint64_t>();
 
         plexus::network::endpoint host;
         plexus::network::endpoint peer;
