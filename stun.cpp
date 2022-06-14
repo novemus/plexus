@@ -479,6 +479,7 @@ class stun_puncher : public puncher
 {
     endpoint m_stun;
     endpoint m_local;
+    endpoint m_mapped;
     session  m_session;
 
 public:
@@ -574,12 +575,20 @@ public:
     endpoint punch_udp_hole() noexcept(false) override
     {
         _dbg_ << "punching udp hole...";
-        return m_session.exec_binding_request(m_stun)->mapped_endpoint();
+        
+        m_mapped = m_session.exec_binding_request(m_stun)->mapped_endpoint();
+        return m_mapped;
     }
 
     void punch_hole_to_peer(const endpoint& peer, uint64_t secret, int64_t deadline) noexcept(false)
     {
         _dbg_ << "reaching peer...";
+
+        endpoint mapped = m_session.exec_binding_request(m_stun)->mapped_endpoint();
+
+        if (mapped != m_mapped)
+            throw plexus::network::handshake_error();
+
         m_session.punch_hole_to_peer(peer, secret, deadline);
     }
 };

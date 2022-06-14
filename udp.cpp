@@ -80,11 +80,12 @@ class asio_udp_channel : public udp, public std::enable_shared_from_this<asio_ud
         }
 
         boost::asio::ip::udp::resolver resolver(m_io);
-        boost::asio::ip::udp::resolver::query query(host, service);
+        boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), host, service);
         boost::asio::ip::udp::endpoint endpoint = *resolver.resolve(query);
 
         std::lock_guard<std::mutex> lock(m_mutex);
         m_remotes.insert(std::make_pair(key, endpoint));
+
         return endpoint;
     }
 
@@ -94,7 +95,7 @@ public:
         : m_socket(m_io)
         , m_timer(m_io)
     {
-        boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address::from_string(address.first), address.second);
+        boost::asio::ip::udp::endpoint endpoint = resolve_endpoint(address.first, std::to_string(address.second));
 
         m_socket.open(endpoint.protocol());
 

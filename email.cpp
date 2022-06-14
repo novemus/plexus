@@ -11,8 +11,6 @@
 #include "utils.h"
 #include "log.h"
 
-#define PLEXUS_VERSION "1.0"
-
 namespace plexus { namespace email {
 
 struct config
@@ -28,7 +26,6 @@ struct config
     std::string cert;
     std::string key;
     std::string ca;
-    int64_t timeout;
 
     struct
     {
@@ -39,14 +36,14 @@ struct config
     } smime;
 };
 
-class mediator
+class channel
 {
     static const int BUFFER_SIZE = 8192;
 
 public:
 
-    mediator(const network::endpoint& address, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
-        : m_ssl(network::create_ssl_client(address, cert, key, ca, timeout))
+    channel(const network::endpoint& address, const std::string& cert, const std::string& key, const std::string& ca)
+        : m_ssl(network::create_ssl_client(address, cert, key, ca))
     {
     }
 
@@ -101,7 +98,7 @@ std::string get_address(const std::string& email)
 
 class smtp
 {
-    typedef mediator::response_parser_t response_parser_t;
+    typedef channel::response_parser_t response_parser_t;
     
     const response_parser_t code_checker(unsigned int code) const
     {
@@ -174,23 +171,22 @@ public:
 
     void push(const std::string& data) noexcept(false)
     {
-        std::unique_ptr<mediator> mdr = std::make_unique<mediator>(
+        std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.smtp,
             m_config.cert,
             m_config.key,
-            m_config.ca,
-            m_config.timeout
+            m_config.ca
         );
 
-        mdr->connect(code_checker(220));
-        mdr->request("HELO smtp\r\n", code_checker(250));
-        mdr->request("AUTH LOGIN\r\n", code_checker(334));
-        mdr->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.login.c_str(), m_config.login.size()).c_str()), code_checker(334));
-        mdr->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.passwd.c_str(), m_config.passwd.size()).c_str()), code_checker(235));
-        mdr->request(utils::format("MAIL FROM: %s\r\n", get_address(m_config.from).c_str()), code_checker(250));
-        mdr->request(utils::format("RCPT TO: %s\r\n", get_address(m_config.to).c_str()), code_checker(250));
-        mdr->request("DATA\r\n", code_checker(354));
-        mdr->request(build_data(data), code_checker(250));
+        session->connect(code_checker(220));
+        session->request("HELO smtp\r\n", code_checker(250));
+        session->request("AUTH LOGIN\r\n", code_checker(334));
+        session->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.login.c_str(), m_config.login.size()).c_str()), code_checker(334));
+        session->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.passwd.c_str(), m_config.passwd.size()).c_str()), code_checker(235));
+        session->request(utils::format("MAIL FROM: %s\r\n", get_address(m_config.from).c_str()), code_checker(250));
+        session->request(utils::format("RCPT TO: %s\r\n", get_address(m_config.to).c_str()), code_checker(250));
+        session->request("DATA\r\n", code_checker(354));
+        session->request(build_data(data), code_checker(250));
     }
 
 private:
@@ -200,7 +196,7 @@ private:
 
 class imap
 {
-    typedef mediator::response_parser_t response_parser_t;
+    typedef channel::response_parser_t response_parser_t;
 
     const response_parser_t connect_checker = [](const std::string& response) -> bool {
             std::smatch match;
@@ -212,8 +208,8 @@ class imap
 
     const response_parser_t success_checker = [](const std::string& response) -> bool {
         std::smatch match;
-        bool done = std::regex_search(response, match, std::regex(".*\\ntag\\s+(OK|NO)\\s+.*\\r\\n$"));
-        if (done && match[1] != "OK")
+        bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?x\\s+(OK|NO)\\s+.*\\r\\n$"));
+        if (done && match[2] != "OK")
             throw std::runtime_error(response);
         return done;
     };
@@ -277,11 +273,18 @@ class imap
                 }
                 else
                 {
-                    m_data = plexus::utils::smime_verify(
-                        plexus::utils::smime_decrypt(match[1].str(), m_config.smime.cert, m_config.smime.key),
-                        m_config.smime.peer,
-                        m_config.smime.ca
-                        );
+                    try
+                    {
+                        m_data = plexus::utils::smime_verify(
+                            plexus::utils::smime_decrypt(match[1].str(), m_config.smime.cert, m_config.smime.key),
+                            m_config.smime.peer,
+                            m_config.smime.ca
+                            );
+                    }
+                    catch(const std::exception& ex)
+                    {
+                        _err_ << ex.what();
+                    }
                 }
             }
             return true;
@@ -305,21 +308,20 @@ public:
 
     std::string pull() noexcept(false)
     {
-        std::unique_ptr<mediator> mdr = std::make_unique<mediator>(
+        std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.imap,
             m_config.cert,
             m_config.key,
-            m_config.ca,
-            m_config.timeout
+            m_config.ca
         );
 
-        mdr->connect(connect_checker);
-        mdr->request(utils::format("tag LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
-        mdr->request("tag SELECT INBOX\r\n", select_parser);
+        session->connect(connect_checker);
+        session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
+        session->request("x SELECT INBOX\r\n", select_parser);
 
         if (m_unseen.empty())
         {
-            mdr->request(utils::format("tag UID SEARCH (SINCE %s) (From %s) (To %s) (Subject \"%s\")\r\n",
+            session->request(utils::format("x UID SEARCH (SINCE %s) (From %s) (To %s) (Subject \"%s\")\r\n",
                 utils::format("%d-%b-%Y", std::chrono::system_clock::now()).c_str(),
                 get_address(m_config.from).c_str(),
                 get_address(m_config.to).c_str(),
@@ -334,8 +336,8 @@ public:
                 break;
 
             unsigned int uid = m_unseen.front();
-            mdr->request(
-                utils::format("tag UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
+            session->request(
+                utils::format("x UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
             );
             
             m_unseen.pop_front();
@@ -360,48 +362,88 @@ private:
 
 using namespace email;
 
-class email_postman : public postman
+class email_mediator : public mediator
 {
     smtp m_smtp;
     imap m_imap;
+    plexus::network::endpoint m_host;
+    plexus::network::endpoint m_peer;
+    uint64_t m_host_secret = 0;
+    uint64_t m_peer_secret = 0;
 
 public:
 
-    email_postman(const config& conf)
+    email_mediator(const config& conf)
         : m_smtp(conf)
         , m_imap(conf)
     {
     }
 
-    void send_message(const std::string& data) noexcept(false) override
+    void invite(const plexus::network::endpoint& host, uint64_t host_secret) noexcept(false) override
     {
-        _dbg_ << "sending plexus message...";
-        m_smtp.push(data);
+        _dbg_ << "sending invite message...";
+
+        if (m_host != host || m_host_secret != host_secret)
+        {
+            m_smtp.push(plexus::utils::format("PLEXUS 1.0 %s %u %llu", host.first.c_str(), host.second, host_secret));
+            m_host = host;
+            m_host_secret = host_secret;
+        }
     }
 
-    std::string receive_message() noexcept(false) override
+    void accept(plexus::network::endpoint& peer, uint64_t& peer_secret) noexcept(false) override
     {
-        _dbg_ << "receiving plexus message...";
-        return m_imap.pull();
+        _dbg_ << "receiving accept message...";
+
+        do
+        {
+            std::string message;
+            do
+            {
+                message = m_imap.pull();
+                
+                std::smatch match;
+                if (std::regex_search(message, match, std::regex("^PLEXUS\\s+1\\.0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$")))
+                {
+                    m_peer = std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str()));
+                    m_peer_secret = boost::lexical_cast<uint64_t>(match[3].str());
+                }
+            }
+            while (!message.empty());
+
+            if (m_peer.first.empty())
+                std::this_thread::sleep_for(std::chrono::seconds(30));
+        } 
+        while (m_peer.first.empty());
+
+        peer = m_peer;
+        peer_secret = m_peer_secret;
+    }
+
+    void refresh() override
+    {
+        m_host = plexus::network::endpoint();
+        m_peer = plexus::network::endpoint();
+        m_host_secret = 0;
+        m_peer_secret = 0;
     }
 };
 
-std::shared_ptr<postman> create_email_postman(const std::string& smtp,
-                                              const std::string& imap,
-                                              const std::string& login,
-                                              const std::string& passwd,
-                                              const std::string& from,
-                                              const std::string& to,
-                                              const std::string& subj_from,
-                                              const std::string& subj_to,
-                                              const std::string& cert,
-                                              const std::string& key,
-                                              const std::string& ca,
-                                              const std::string& smime_peer,
-                                              const std::string& smime_cert,
-                                              const std::string& smime_key,
-                                              const std::string& smime_ca,
-                                              int64_t timeout)
+std::shared_ptr<mediator> create_email_mediator(const std::string& smtp,
+                                                const std::string& imap,
+                                                const std::string& login,
+                                                const std::string& passwd,
+                                                const std::string& from,
+                                                const std::string& to,
+                                                const std::string& subj_from,
+                                                const std::string& subj_to,
+                                                const std::string& cert,
+                                                const std::string& key,
+                                                const std::string& ca,
+                                                const std::string& smime_peer,
+                                                const std::string& smime_cert,
+                                                const std::string& smime_key,
+                                                const std::string& smime_ca)
 {
     network::endpoint smtp_ep(smtp, 25);
 
@@ -420,11 +462,11 @@ std::shared_ptr<postman> create_email_postman(const std::string& smtp,
         imap_ep.second = boost::lexical_cast<uint16_t>(match[3].str());
     }
 
-    return std::make_shared<email_postman>(config{
+    return std::make_shared<email_mediator>(config{
         smtp_ep, imap_ep, login, passwd,
         from, to, subj_from, subj_to,
         cert, key, ca,
-        timeout, { smime_peer, smime_cert, smime_key, smime_ca }});
+        { smime_peer, smime_cert, smime_key, smime_ca }});
 }
 
 }

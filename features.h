@@ -7,29 +7,29 @@ namespace plexus {
     
 void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
 
-struct postman
+struct mediator
 {
-    virtual ~postman() {}
-    virtual void send_message(const std::string& data) noexcept(false) = 0;
-    virtual std::string receive_message() noexcept(false) = 0;
+    virtual ~mediator() {}
+    virtual void invite(const plexus::network::endpoint& host, uint64_t host_secret) noexcept(false) = 0;
+    virtual void accept(plexus::network::endpoint& peer, uint64_t& peer_secret) noexcept(false) = 0;
+    virtual void refresh() = 0;
 };
 
-std::shared_ptr<postman> create_email_postman(const std::string& smtp,
-                                              const std::string& imap,
-                                              const std::string& login,
-                                              const std::string& passwd,
-                                              const std::string& from,
-                                              const std::string& to,
-                                              const std::string& subj_from,
-                                              const std::string& subj_to,
-                                              const std::string& cert = "",
-                                              const std::string& key = "",
-                                              const std::string& ca = "",
-                                              const std::string& smime_peer = "",
-                                              const std::string& smime_cert = "",
-                                              const std::string& smime_key = "",
-                                              const std::string& smime_ca = "",
-                                              int64_t timeout_sec = 10);
+std::shared_ptr<mediator> create_email_mediator(const std::string& smtp,
+                                                const std::string& imap,
+                                                const std::string& login,
+                                                const std::string& passwd,
+                                                const std::string& from,
+                                                const std::string& to,
+                                                const std::string& subj_from,
+                                                const std::string& subj_to,
+                                                const std::string& cert = "",
+                                                const std::string& key = "",
+                                                const std::string& ca = "",
+                                                const std::string& smime_peer = "",
+                                                const std::string& smime_cert = "",
+                                                const std::string& smime_key = "",
+                                                const std::string& smime_ca = "");
 
 namespace network {
 

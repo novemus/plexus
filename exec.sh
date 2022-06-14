@@ -1,7 +1,5 @@
 #!/bin/bash
 
-echo "$*"
-
 if [[ $# -ne 6 ]]; then
     echo "not enough arguments"
     exit 1
@@ -16,7 +14,7 @@ rem_port=$6
 ifconfig=
 
 lhs=${map_ip}${map_port}
-rhs=${rem_ip}${map_port}
+rhs=${rem_ip}${rem_port}
 
 if [ $lhs \> $rhs ]; then
     ifconfig="10.0.0.3 255.255.255.0"
