@@ -1,11 +1,64 @@
-#include <spawn.h>
-#include <sys/wait.h>
 #include <fcntl.h>
 #include <memory>
 #include <vector>
 #include <boost/algorithm/string/replace.hpp>
 #include "features.h"
 #include "utils.h"
+
+#ifdef _WIN32
+
+#include <windows.h>
+#include <processthreadsapi.h>
+
+namespace plexus {
+
+void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
+{
+	std::string cmd = "\"\"" + prog + "\" " + args + "\"";
+
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+
+	std::memset(&si, 0, sizeof(si));
+	si.cb = sizeof(si);
+	std::memset(&pi, 0, sizeof(pi));
+
+	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, false, 0, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
+	{
+
+		WaitForSingleObject(pi.hProcess, INFINITE);
+
+		DWORD code;
+		if (!GetExitCodeProcess(pi.hProcess, &code))
+		{
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+
+			throw std::runtime_error(utils::format("GetExitCodeProcess: error=%d", GetLastError()));
+		}
+		else if (code != 0)
+		{
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+
+			throw std::runtime_error(utils::format("posix_spawn_file_actions_init: error=%d", code));
+		}
+
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+	}
+	else
+	{
+		throw std::runtime_error(utils::format("CreateProcess: error=%d", GetLastError()));
+	}
+}
+
+}
+
+#elif
+
+#include <spawn.h>
+#include <sys/wait.h>
 
 extern char **environ;
 
@@ -77,3 +130,5 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 }
 
 }
+
+#endif

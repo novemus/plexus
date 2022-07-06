@@ -1,14 +1,18 @@
 #include <fstream>
 #include <mutex>
 #include <future>
+#include <sys/types.h>
 #include <boost/thread/thread.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include "log.h"
 
-#include <sys/types.h>
 #if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
 #include <sys/syscall.h>
 #define gettid() syscall(SYS_gettid)
+#elif _WIN32
+#include <windows.h>
+#include <processthreadsapi.h>
+#define gettid() GetCurrentThreadId()
 #endif
 
 namespace plexus { namespace log {

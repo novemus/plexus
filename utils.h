@@ -20,5 +20,6 @@ std::string smime_sign(const std::string& msg, const std::string& cert, const st
 std::string smime_verify(const std::string& msg, const std::string& cert, const std::string& ca);
 std::string smime_encrypt(const std::string& msg, const std::string& cert);
 std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key);
+uint64_t random();
 
 }}

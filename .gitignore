@@ -4,3 +4,5 @@ plexus
 config.json
 tests/obj/**
 tests/tests
+x64/**
+Release/**

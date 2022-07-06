@@ -38,7 +38,7 @@ struct config
 
 class channel
 {
-    static const int BUFFER_SIZE = 8192;
+    static const size_t BUFFER_SIZE = 8192;
 
 public:
 
@@ -55,7 +55,7 @@ public:
 
         std::string response;
         do {
-            int read = m_ssl->read(m_buffer, BUFFER_SIZE);
+			size_t read = m_ssl->read(m_buffer, BUFFER_SIZE);
             response.append((char*)m_buffer, read);
         } while (!parse(response));
 
@@ -66,14 +66,14 @@ public:
     {
         _trc_ << "<<<<<\n" << request << "\n*****";
 
-        int written = 0;
+		size_t written = 0;
         do {
             written += m_ssl->write((const uint8_t*)request.c_str() + written, request.size() - written);
-        } while (written < (int)request.size());
+        } while (written < request.size());
 
         std::string response;
         do {
-            int read = m_ssl->read(m_buffer, BUFFER_SIZE);
+			size_t read = m_ssl->read(m_buffer, BUFFER_SIZE);
             response.append((char*)m_buffer, read);
         } while (!parse(response));
 
@@ -335,7 +335,7 @@ public:
             if (m_unseen.empty())
                 break;
 
-            unsigned int uid = m_unseen.front();
+            auto uid = m_unseen.front();
             session->request(
                 utils::format("x UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
             );

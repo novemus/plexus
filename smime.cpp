@@ -36,7 +36,7 @@ namespace plexus { namespace utils {
         if (!pcert || !pkey)
             throw std::runtime_error(get_last_error());
 
-        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), msg.size()), BIO_free);
+        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), (int)msg.size()), BIO_free);
 
         if (!in)
             throw std::runtime_error(get_last_error());
@@ -79,7 +79,7 @@ namespace plexus { namespace utils {
         if (!recips || !sk_X509_push(recips, pcert.get()))
             throw std::runtime_error(get_last_error());
 
-        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), msg.size()), BIO_free);
+        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), (int)msg.size()), BIO_free);
 
         if (!in)
             throw std::runtime_error(get_last_error());
@@ -120,7 +120,7 @@ namespace plexus { namespace utils {
         if (!pcert || !pkey)
             throw std::runtime_error(get_last_error());
 
-        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), msg.size()), BIO_free);
+        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), (int)msg.size()), BIO_free);
 
         if (!in)
             throw std::runtime_error(get_last_error());
@@ -179,7 +179,7 @@ namespace plexus { namespace utils {
         if (!X509_STORE_add_cert(st.get(), ca_cert.get()))
             throw std::runtime_error(get_last_error());
 
-        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), msg.size()), BIO_free);
+        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), (int)msg.size()), BIO_free);
 
         if (!in)
             throw std::runtime_error(get_last_error());

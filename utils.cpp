@@ -7,6 +7,7 @@
 #include <openssl/md5.h>
 #include <vector>
 #include <sstream>
+#include <random>
 #include "utils.h"
 
 namespace plexus { namespace utils {
@@ -167,6 +168,13 @@ std::string to_hexadecimal(const uint8_t* data, size_t len)
         out << std::setw(2) << std::setfill('0') << std::hex << (int)data[i];
     }
     return out.str();
+}
+
+uint64_t random()
+{
+	std::random_device dev;
+	std::mt19937_64 gen(dev());
+	return gen();
 }
 
 }}

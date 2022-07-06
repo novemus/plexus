@@ -5,13 +5,18 @@
 #include <ctime>
 #include <cstring>
 #include <array>
-#include <netinet/in.h>
 #include <boost/asio/error.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include "network.h"
 #include "features.h"
 #include "utils.h"
 #include "log.h"
+
+#ifndef _WIN32
+#include <netinet/in.h>
+#else
+#include <winsock.h>
+#endif
 
 /* Algorithm of polling the STUN server to test firewall
 
@@ -92,7 +97,7 @@ inline uint16_t read_short(const uint8_t* array, size_t offset = 0)
 
 inline uint8_t rand_byte()
 {
-    return (uint8_t)std::rand();
+    return utils::random() % 256;
 }
 
 inline uint8_t high_byte(uint16_t value)
@@ -400,7 +405,7 @@ public:
 
                 _trc_ << ex.what();
 
-                timeout = std::min(1600l, timeout * 2);
+                timeout = std::min<int64_t>(1600, timeout * 2);
             }
         } 
 
@@ -417,7 +422,7 @@ public:
         std::shared_ptr<handshake> request = std::make_shared<handshake>(peer, 0, secret);
         std::shared_ptr<handshake> response = std::make_shared<handshake>(secret);
 
-        int64_t timeout = std::max(2000l, std::min(4000l, deadline / 8));
+        int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
         while (timer().total_milliseconds() < deadline)
         {
             m_udp->send(request, timeout);
@@ -489,7 +494,6 @@ public:
         , m_local(local)
         , m_session(local)
     {
-        std::srand(std::time(nullptr));
     }
 
     traverse explore_network() noexcept(false) override

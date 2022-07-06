@@ -1,5 +1,4 @@
 #include <regex>
-#include <experimental/random>
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
 #include "features.h"
@@ -88,7 +87,7 @@ int main(int argc, char** argv)
             plexus::network::endpoint host;
             plexus::network::endpoint peer;
 
-            uint64_t host_secret = std::experimental::randint<uint64_t>(0, 0xFFFFFFFFFFFFFFFF);
+            uint64_t host_secret = plexus::utils::random();
             uint64_t peer_secret = 0;
 
             uint64_t tries = vm["retry-count"].as<uint64_t>();
