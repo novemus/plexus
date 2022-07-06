@@ -6,3 +6,4 @@ tests/obj/**
 tests/tests
 x64/**
 Release/**
+build/**
