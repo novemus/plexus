@@ -34,3 +34,10 @@ message(status "** OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_link_libraries(${PROJECT_NAME} OpenSSL::Crypto OpenSSL::SSL)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
+    target_link_libraries(${PROJECT_NAME} Threads::Threads)
+    target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
+endif()

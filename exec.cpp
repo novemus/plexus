@@ -55,7 +55,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
 }
 
-#elif
+#else
 
 #include <spawn.h>
 #include <sys/wait.h>

@@ -10,7 +10,8 @@ Project depends on `boost` and `openssl` libraries. Clone repository and run mak
 cd ~
 git clone git@github.com:novemus/plexus.git
 cd ~/plexus
-make
+cmake -B./build
+cmake --build ./build --target plexus
 ```
 
 ## Using
@@ -19,13 +20,13 @@ To run the example below you need to install `openvpn`. Launch following command
 
 Command for local machine:
 ```console
-cd ~/plexus
+cd ~/plexus/build
 ./plexus --email-smtps=smtp.yourmailer.com:xxx --email-imaps=imap.yourmailer.com:xxx --email-login=yourlogin --email-passwd=yourpassword --email-from=yourhost@yourmailer.com --email-to=peerhost@peermailer.com --email-subj-from=local --email-subj-to=remote --stun-ip=stun.someserver.com --bind-port=xxxx --bind-ip=xxx.xxx.xxx.xxx --exec-command=./exec.sh
 ```
 
 Command for remote machine:
 ```console
-cd ~/plexus
+cd ~/plexus/build
 ./plexus --email-smtps=smtp.peermailer.com:xxx --email-imaps=imap.peermailer.com:xxx --email-login=peerlogin --email-passwd=peerpassword --email-from=peerhost@peermailer.com --email-to=yourhost@yourmailer.com --email-subj-from=remote --email-subj-to=local --stun-ip=stun.someserver.com --bind-port=xxxx --bind-ip=xxx.xxx.xxx.xxx --exec-command=./exec.sh
 ```
 
