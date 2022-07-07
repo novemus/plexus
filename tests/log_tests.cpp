@@ -49,6 +49,9 @@ BOOST_AUTO_TEST_CASE(filelog)
     std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
     BOOST_CHECK(std::regex_match(text, match, pattern));
-    
+
+    plexus::log::set(plexus::log::severity::info);
+
+    file.close();
     std::remove("log.txt");
 }
