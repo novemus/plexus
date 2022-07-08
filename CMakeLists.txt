@@ -6,7 +6,7 @@ project(${PROJECT_NAME} VERSION 1.0)
 set(TESTS tests)
 
 set(SOURCES email.cpp exec.cpp log.cpp smime.cpp ssl.cpp stun.cpp udp.cpp utils.cpp main.cpp)
-set(TESTS_SOURCES log.cpp smime.cpp ssl.cpp udp.cpp utils.cpp ./tests/utils_tests.cpp ./tests/log_tests.cpp ./tests/ssl_tests.cpp ./tests/udp_tests.cpp ./tests/smime_tests.cpp)
+set(TESTS_SOURCES log.cpp smime.cpp ssl.cpp udp.cpp utils.cpp exec.cpp ./tests/utils_tests.cpp ./tests/log_tests.cpp ./tests/ssl_tests.cpp ./tests/udp_tests.cpp ./tests/smime_tests.cpp ./tests/exec_tests.cpp)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     add_definitions(
