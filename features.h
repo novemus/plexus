@@ -4,15 +4,19 @@
 #include "network.h"
 
 namespace plexus {
-    
+
+struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
+struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
+struct incomplete_error : public std::runtime_error { incomplete_error() : std::runtime_error("incomplete error") {} };
+
 void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
+
+typedef std::pair<plexus::network::endpoint, /* puzzle */ uint64_t> identity;
 
 struct mediator
 {
     virtual ~mediator() {}
-    virtual void invite(const plexus::network::endpoint& host, uint64_t host_secret) noexcept(false) = 0;
-    virtual void accept(plexus::network::endpoint& peer, uint64_t& peer_secret) noexcept(false) = 0;
-    virtual void refresh() = 0;
+    virtual identity exchange(const identity& host) noexcept(false) = 0;
 };
 
 std::shared_ptr<mediator> create_email_mediator(const std::string& smtp,
@@ -30,12 +34,6 @@ std::shared_ptr<mediator> create_email_mediator(const std::string& smtp,
                                                 const std::string& smime_cert = "",
                                                 const std::string& smime_key = "",
                                                 const std::string& smime_ca = "");
-
-namespace network {
-
-struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout") {} };
-
-struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
 
 const uint16_t DEFAULT_STUN_PORT = 3478u;
 
@@ -57,6 +55,8 @@ struct traverse
                  filtering : 2; // enum binding
 };
 
+using namespace network;
+
 struct puncher
 {
     virtual ~puncher() {}
@@ -67,4 +67,4 @@ struct puncher
 
 std::shared_ptr<puncher> create_stun_puncher(const endpoint& stun, const endpoint& local);
 
-}}
+}

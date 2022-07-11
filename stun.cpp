@@ -58,7 +58,7 @@ FILERING_TEST_2: SA, SP, AF=0, PF=1
     otherwise there is address and port dependent filtering
 */
 
-namespace plexus { namespace network { namespace stun {
+namespace plexus { namespace stun {
 
 typedef std::array<uint8_t, 16> transaction_id;
 
@@ -313,7 +313,7 @@ public:
             }
 
             if (hash != 0)
-                throw plexus::network::handshake_error();
+                throw plexus::handshake_error();
 
             return true;
         }
@@ -371,7 +371,7 @@ public:
                 m_udp->receive(response, timeout);
 
                 if (timer().total_milliseconds() >= deadline)
-                    throw plexus::network::timeout_error();
+                    throw plexus::timeout_error();
                 else if (request->transaction() != response->transaction())
                     continue;
 
@@ -409,7 +409,7 @@ public:
             }
         } 
 
-        throw plexus::network::timeout_error();
+        throw plexus::timeout_error();
     }
 
     void punch_hole_to_peer(const endpoint& peer, uint64_t secret, int64_t deadline) noexcept(false)
@@ -456,7 +456,7 @@ public:
             }
         }
 
-        throw plexus::network::timeout_error();
+        throw plexus::timeout_error();
     }
 };
 
@@ -542,7 +542,7 @@ public:
             m_session.exec_binding_request(mapped, 0, 1400);
             state.hairpin = 1;
         }
-        catch(const plexus::network::timeout_error&) { }
+        catch(const plexus::timeout_error&) { }
 
         session filtering(endpoint(m_local.first, m_local.second + 1));
         try
@@ -551,7 +551,7 @@ public:
             filtering.exec_binding_request(m_stun, flag::change_address | flag::change_port, 1400);
             state.filtering = binding::independent;
         }
-        catch(const plexus::network::timeout_error&)
+        catch(const plexus::timeout_error&)
         {
             try
             {
@@ -559,7 +559,7 @@ public:
                 filtering.exec_binding_request(m_stun, flag::change_port, 1400);
                 state.filtering = binding::address_dependent;
             }
-            catch(const plexus::network::timeout_error&)
+            catch(const plexus::timeout_error&)
             {
                 state.filtering = binding::address_and_port_dependent;
             }
@@ -591,7 +591,7 @@ public:
         endpoint mapped = m_session.exec_binding_request(m_stun)->mapped_endpoint();
 
         if (mapped != m_mapped)
-            throw plexus::network::handshake_error();
+            throw plexus::handshake_error();
 
         m_session.punch_hole_to_peer(peer, secret, deadline);
     }
@@ -602,4 +602,4 @@ std::shared_ptr<puncher> create_stun_puncher(const endpoint& stun, const endpoin
     return std::make_shared<stun_puncher>(stun, local);
 }
 
-}}
+}

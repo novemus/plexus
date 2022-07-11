@@ -366,10 +366,8 @@ class email_mediator : public mediator
 {
     smtp m_smtp;
     imap m_imap;
-    plexus::network::endpoint m_host;
-    plexus::network::endpoint m_peer;
-    uint64_t m_host_secret = 0;
-    uint64_t m_peer_secret = 0;
+    identity m_host;
+    identity m_peer;
 
 public:
 
@@ -379,53 +377,40 @@ public:
     {
     }
 
-    void invite(const plexus::network::endpoint& host, uint64_t host_secret) noexcept(false) override
+    identity exchange(const identity& host) noexcept(false) override
     {
-        _dbg_ << "sending invite message...";
+        _dbg_ << "exchange of identities...";
 
-        if (m_host != host || m_host_secret != host_secret)
+        if (m_host != host)
         {
-            m_smtp.push(plexus::utils::format("PLEXUS 1.0 %s %u %llu", host.first.c_str(), host.second, host_secret));
+            m_smtp.push(plexus::utils::format("PLEXUS 1.0 %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
             m_host = host;
-            m_host_secret = host_secret;
+
+            _dbg_ << "send host identity: " << m_host.first.first << ":" << m_host.first.second << " " << m_host.second;
         }
-    }
 
-    void accept(plexus::network::endpoint& peer, uint64_t& peer_secret) noexcept(false) override
-    {
-        _dbg_ << "receiving accept message...";
-
+        std::string message;
         do
         {
-            std::string message;
-            do
+            message = m_imap.pull();
+            
+            std::smatch match;
+            if (std::regex_search(message, match, std::regex("^PLEXUS\\s+1\\.0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$")))
             {
-                message = m_imap.pull();
-                
-                std::smatch match;
-                if (std::regex_search(message, match, std::regex("^PLEXUS\\s+1\\.0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$")))
-                {
-                    m_peer = std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str()));
-                    m_peer_secret = boost::lexical_cast<uint64_t>(match[3].str());
-                }
+                m_peer = { 
+                    std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str())),
+                    boost::lexical_cast<uint64_t>(match[3].str())
+                };
+
+                _dbg_ << "received peer identity: " << m_peer.first.first << ":" << m_peer.first.second << " " << m_peer.second;
             }
-            while (!message.empty());
+        }
+        while (!message.empty());
 
-            if (m_peer.first.empty())
-                std::this_thread::sleep_for(std::chrono::seconds(30));
-        } 
-        while (m_peer.first.empty());
+        if (m_peer.first.first.empty())
+            throw plexus::incomplete_error();
 
-        peer = m_peer;
-        peer_secret = m_peer_secret;
-    }
-
-    void refresh() override
-    {
-        m_host = plexus::network::endpoint();
-        m_peer = plexus::network::endpoint();
-        m_host_secret = 0;
-        m_peer_secret = 0;
+        return m_peer;
     }
 };
 
