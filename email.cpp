@@ -292,6 +292,21 @@ class imap
         return false;
     };
 
+    const response_parser_t uid_parser = [this](const std::string& response) -> bool {
+        if (success_checker(response))
+        {
+            std::smatch match;
+            if (std::regex_search(response, match, std::regex("^\\*\\s+\\d+\\s+FETCH\\s+\\(UID\\s+(\\d+)\\)\\r\\n.*")))
+            {
+                std::stringstream ss;
+                ss << match[1].str();
+                ss >> m_last_seen;
+            }
+            return true;
+        }
+        return false;
+    };
+
     inline std::string pull_data()
     {
         std::string data;
@@ -304,6 +319,17 @@ public:
     imap(const config& conf)
         : m_config(conf)
     {
+        std::unique_ptr<channel> session = std::make_unique<channel>(
+            m_config.imap,
+            m_config.cert,
+            m_config.key,
+            m_config.ca
+        );
+        
+        session->connect(connect_checker);
+        session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
+        session->request("x SELECT INBOX\r\n", select_parser);
+        session->request("x FETCH * UID\r\n", uid_parser);
     }
 
     std::string pull() noexcept(false)
@@ -366,8 +392,8 @@ class email_mediator : public mediator
 {
     smtp m_smtp;
     imap m_imap;
-    identity m_host;
-    identity m_peer;
+    reference m_host;
+    reference m_peer;
 
 public:
 
@@ -376,17 +402,42 @@ public:
         , m_imap(conf)
     {
     }
-
-    identity exchange(const identity& host) noexcept(false) override
+    
+    void accept() noexcept(false)
     {
-        _dbg_ << "exchange of identities...";
+        do
+        {
+            std::string message = m_imap.pull();
+            
+            std::smatch match;
+            if (std::regex_search(message, match, std::regex("^PLEXUS\\s+1\\.0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$")))
+            {
+                m_peer = { 
+                    std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str())),
+                    boost::lexical_cast<uint64_t>(match[3].str())
+                };
+
+                _dbg_ << "accept peer reference: " << m_peer.first.first << ":" << m_peer.first.second << " " << m_peer.second;
+
+                return;
+            }
+
+            if (message.empty())
+                std::this_thread::sleep_for(std::chrono::seconds(20));
+        }
+        while (true);
+    }
+
+    reference exchange(const reference& host) noexcept(false) override
+    {
+        _dbg_ << "exchange of references...";
 
         if (m_host != host)
         {
             m_smtp.push(plexus::utils::format("PLEXUS 1.0 %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
             m_host = host;
 
-            _dbg_ << "send host identity: " << m_host.first.first << ":" << m_host.first.second << " " << m_host.second;
+            _dbg_ << "send host reference: " << m_host.first.first << ":" << m_host.first.second << " " << m_host.second;
         }
 
         std::string message;
@@ -402,7 +453,7 @@ public:
                     boost::lexical_cast<uint64_t>(match[3].str())
                 };
 
-                _dbg_ << "received peer identity: " << m_peer.first.first << ":" << m_peer.first.second << " " << m_peer.second;
+                _dbg_ << "received peer reference: " << m_peer.first.first << ":" << m_peer.first.second << " " << m_peer.second;
             }
         }
         while (!message.empty());
@@ -414,14 +465,14 @@ public:
     }
 };
 
-std::shared_ptr<mediator> create_email_mediator(const std::string& smtp,
+std::shared_ptr<mediator> create_email_mediator(const std::string& host_id,
+                                                const std::string& peer_id,
+                                                const std::string& smtp,
                                                 const std::string& imap,
                                                 const std::string& login,
                                                 const std::string& passwd,
                                                 const std::string& from,
                                                 const std::string& to,
-                                                const std::string& subj_from,
-                                                const std::string& subj_to,
                                                 const std::string& cert,
                                                 const std::string& key,
                                                 const std::string& ca,
@@ -449,7 +500,7 @@ std::shared_ptr<mediator> create_email_mediator(const std::string& smtp,
 
     return std::make_shared<email_mediator>(config{
         smtp_ep, imap_ep, login, passwd,
-        from, to, subj_from, subj_to,
+        from, to, host_id, peer_id,
         cert, key, ca,
         { smime_peer, smime_cert, smime_key, smime_ca }});
 }

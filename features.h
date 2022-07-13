@@ -11,22 +11,23 @@ struct incomplete_error : public std::runtime_error { incomplete_error() : std::
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
 
-typedef std::pair<plexus::network::endpoint, /* puzzle */ uint64_t> identity;
+typedef std::pair<plexus::network::endpoint, /* puzzle */ uint64_t> reference;
 
 struct mediator
 {
     virtual ~mediator() {}
-    virtual identity exchange(const identity& host) noexcept(false) = 0;
+    virtual void accept() noexcept(false) = 0;
+    virtual reference exchange(const reference& host) noexcept(false) = 0;
 };
 
-std::shared_ptr<mediator> create_email_mediator(const std::string& smtp,
+std::shared_ptr<mediator> create_email_mediator(const std::string& host_id,
+                                                const std::string& peer_id,
+                                                const std::string& smtp,
                                                 const std::string& imap,
                                                 const std::string& login,
                                                 const std::string& passwd,
                                                 const std::string& from,
                                                 const std::string& to,
-                                                const std::string& subj_from,
-                                                const std::string& subj_to,
                                                 const std::string& cert = "",
                                                 const std::string& key = "",
                                                 const std::string& ca = "",

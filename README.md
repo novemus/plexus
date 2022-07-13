@@ -19,14 +19,16 @@ cmake --build ./build --target install
 
 To run the example below you need to install `openvpn`. Launch following commands with your arguments from the project directory on each machines. Script `exec.sh` will try to establish point-to-point vpn connection.
 
+Command for remote machine:
+```console
+plexus --accept --email-smtps=smtp.peermailer.com:xxx --email-imaps=imap.peermailer.com:xxx --email-login=peerlogin --email-passwd=peerpassword --email-from=peerhost@peermailer.com --email-to=yourhost@yourmailer.com --email-subj-from=remote --email-subj-to=local --stun-ip=stun.someserver.com --bind-port=xxxx --bind-ip=xxx.xxx.xxx.xxx --exec-command=~/plexus/exec.sh
+```
+
+`--accept` key tells the app to accept punching initiations from other side infinitely. It can only be set for one side.
+
 Command for local machine:
 ```console
 plexus --email-smtps=smtp.yourmailer.com:xxx --email-imaps=imap.yourmailer.com:xxx --email-login=yourlogin --email-passwd=yourpassword --email-from=yourhost@yourmailer.com --email-to=peerhost@peermailer.com --email-subj-from=local --email-subj-to=remote --stun-ip=stun.someserver.com --bind-port=xxxx --bind-ip=xxx.xxx.xxx.xxx --exec-command=~/plexus/exec.sh
-```
-
-Command for remote machine:
-```console
-plexus --email-smtps=smtp.peermailer.com:xxx --email-imaps=imap.peermailer.com:xxx --email-login=peerlogin --email-passwd=peerpassword --email-from=peerhost@peermailer.com --email-to=yourhost@yourmailer.com --email-subj-from=remote --email-subj-to=local --stun-ip=stun.someserver.com --bind-port=xxxx --bind-ip=xxx.xxx.xxx.xxx --exec-command=~/plexus/exec.sh
 ```
 
 As soon as both app instanses receive the messages with connection data, they will start punching the UDP holes to each other. After that, the command specified by `--exec-command` will be started. It gets the following parameters:
