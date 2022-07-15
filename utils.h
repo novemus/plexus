@@ -30,6 +30,5 @@ std::string smime_verify(const std::string& msg, const std::string& cert, const 
 std::string smime_encrypt(const std::string& msg, const std::string& cert);
 std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key);
 uint64_t random();
-uint64_t puzzle();
 
 }}

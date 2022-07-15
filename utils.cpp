@@ -186,21 +186,4 @@ uint64_t random()
 	return gen();
 }
 
-uint64_t puzzle()
-{
-    static const uint64_t CHANGE_PERIOD = 86400;
-
-    static uint64_t s_puzzle = 0;
-    static std::time_t s_time = 0;
-
-    std::time_t now = std::time(0);
-    if (now - s_time > CHANGE_PERIOD)
-    {
-        s_puzzle = random();
-        s_time = now;
-    }
-
-    return s_puzzle;
-}
-
 }}

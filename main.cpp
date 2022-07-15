@@ -101,11 +101,13 @@ int main(int argc, char** argv)
             if (accept)
                 mediator->accept();
 
+            uint64_t puzzle = plexus::utils::random();
+
             do
             {
                 try
                 {
-                    plexus::reference host = std::make_pair(puncher->punch_udp_hole(), plexus::utils::puzzle());
+                    plexus::reference host(puncher->punch_udp_hole(), puzzle);
                     plexus::reference peer = mediator->exchange(host);
 
                     puncher->punch_hole_to_peer(peer.first, host.second ^ peer.second, vm["punch-timeout"].as<int64_t>() * 1000);
