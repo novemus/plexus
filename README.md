@@ -57,4 +57,8 @@ Feel free to [report](https://github.com/novemus/plexus/issues) bugs and [sugges
 
 ## License
 
-Copyright © 2022 Novemus Band
+Plexus is licensed under the Apache License 2.0, which means that you are free to get and use it for commercial and non-commercial purposes as long as you fulfill its conditions. See the LICENSE.txt file for more details.
+
+## Copyright
+
+Copyright © 2022 Novemus Band. All Rights Reserved.
