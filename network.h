@@ -12,41 +12,48 @@
 
 #include <string>
 #include <vector>
-#include <memory>
-#include <future>
+#include "icmp.h"
 
-namespace plexus { namespace network
+namespace plexus { namespace network {
+
+struct ssl
 {
-    typedef std::pair<std::string, uint16_t> endpoint;
+    virtual ~ssl() {}
+    virtual void connect() noexcept(false) = 0;
+    virtual void shutdown() noexcept(true) = 0;
+    virtual size_t read(uint8_t* buffer, size_t len) noexcept(false) = 0;
+    virtual size_t write(const uint8_t* buffer, size_t len) noexcept(false) = 0;
+};
 
-    struct ssl
+std::shared_ptr<ssl> create_ssl_client(const endpoint& remote, const std::string& cert = "", const std::string& key = "", const std::string& ca = "", int64_t timeout_sec = 10);
+
+struct udp
+{
+    struct transfer
     {
-        virtual ~ssl() {}
-        virtual void connect() noexcept(false) = 0;
-        virtual void shutdown() noexcept(true) = 0;
-        virtual size_t read(uint8_t* buffer, size_t len) noexcept(false) = 0;
-        virtual size_t write(const uint8_t* buffer, size_t len) noexcept(false) = 0;
+        endpoint remote;
+        std::vector<uint8_t> buffer;
+
+        transfer(size_t b) : buffer(b, 0) {}
+        transfer(const endpoint& r, size_t b = 0) : remote(r), buffer(b, 0) {}
+        transfer(const endpoint& r, const std::vector<uint8_t>& b) : remote(r), buffer(b) {}
+        transfer(const endpoint& r, std::initializer_list<uint8_t> b) : remote(r), buffer(b) {}
     };
 
-    std::shared_ptr<ssl> create_ssl_client(const endpoint& address, const std::string& cert = "", const std::string& key = "", const std::string& ca = "", int64_t timeout_sec = 10);
+    virtual ~udp() {}
+    virtual size_t send(std::shared_ptr<transfer> tran, int64_t timeout_ms = 1600, uint8_t hops = 64) noexcept(false) = 0;
+    virtual size_t receive(std::shared_ptr<transfer> tran, int64_t timeout_ms = 1600) noexcept(false) = 0;
+};
 
-    struct udp
-    {
-        struct transfer
-        {
-             endpoint remote;
-             std::vector<uint8_t> buffer;
+std::shared_ptr<udp> create_udp_channel(const endpoint& local);
 
-             transfer(size_t b) : buffer(b, 0) {}
-             transfer(const endpoint& r, size_t b = 0) : remote(r), buffer(b, 0) {}
-             transfer(const endpoint& r, const std::vector<uint8_t>& b) : remote(r), buffer(b) {}
-             transfer(const endpoint& r, std::initializer_list<uint8_t> b) : remote(r), buffer(b) {}
-        };
+struct icmp
+{
+    virtual ~icmp() {}
+    virtual void send(std::shared_ptr<icmp_packet> pack, int64_t timeout_ms = 1600, uint8_t hops = 64) noexcept(false) = 0;
+    virtual void receive(std::shared_ptr<ip_packet> pack, int64_t timeout_ms = 1600) noexcept(false) = 0;
+};
 
-        virtual ~udp() {}
-        virtual size_t send(std::shared_ptr<transfer> data, int64_t timeout_ms = 1600) noexcept(false) = 0;
-        virtual size_t receive(std::shared_ptr<transfer> data, int64_t timeout_ms = 1600) noexcept(false) = 0;
-    };
+std::shared_ptr<icmp> create_icmp_channel(const address& local);
 
-    std::shared_ptr<udp> create_udp_channel(const endpoint& address);
 }}

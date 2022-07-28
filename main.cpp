@@ -10,6 +10,7 @@
  */
 
 #include <regex>
+#include <thread>
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
 #include "features.h"

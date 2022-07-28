@@ -336,12 +336,12 @@ class session
 
     struct dummy_udp : udp
     {
-        virtual size_t send(std::shared_ptr<udp::transfer> data, int64_t timeout_ms) noexcept(false) override
+        virtual size_t send(std::shared_ptr<transfer> tran, int64_t timeout_ms, uint8_t hops) noexcept(false) override
         {
             throw std::runtime_error("upd client is closed");
         }
 
-        virtual size_t receive(std::shared_ptr<udp::transfer> data, int64_t timeout_ms) noexcept(false) override
+        virtual size_t receive(std::shared_ptr<transfer> tran, int64_t timeout_ms) noexcept(false) override
         {
             throw std::runtime_error("upd client is closed");
         }
@@ -462,10 +462,6 @@ public:
     }
 };
 
-}
-
-using namespace stun;
-
 std::ostream& operator<<(std::ostream& stream, const binding& bind)
 {
     switch (bind)
@@ -482,7 +478,7 @@ std::ostream& operator<<(std::ostream& stream, const binding& bind)
     return stream;
 }
 
-class stun_puncher : public puncher
+class udp_puncher : public puncher
 {
     endpoint m_stun;
     endpoint m_local;
@@ -491,7 +487,7 @@ class stun_puncher : public puncher
 
 public:
 
-    stun_puncher(const endpoint& stun, const endpoint& local)
+    udp_puncher(const endpoint& stun, const endpoint& local)
         : m_stun(stun)
         , m_local(local)
         , m_session(local)
@@ -599,9 +595,11 @@ public:
     }
 };
 
+}
+
 std::shared_ptr<puncher> create_stun_puncher(const endpoint& stun, const endpoint& local)
 {
-    return std::make_shared<stun_puncher>(stun, local);
+    return std::make_shared<stun::udp_puncher>(stun, local);
 }
 
 }

@@ -128,18 +128,18 @@ public:
         }
     }
 
-    size_t receive(std::shared_ptr<transfer> data, int64_t timeout) noexcept(false) override
+    size_t receive(std::shared_ptr<transfer> tran, int64_t timeout) noexcept(false) override
     {
         boost::asio::ip::udp::endpoint endpoint;
         size_t size = exec([&](const async_io_callback_t& callback)
         {
-            m_socket.async_receive_from(boost::asio::buffer(data->buffer), endpoint, callback);
+            m_socket.async_receive_from(boost::asio::buffer(tran->buffer), endpoint, callback);
         }, timeout);
 
-        data->remote.first = endpoint.address().to_string();
-        data->remote.second = endpoint.port();
+        tran->remote.first = endpoint.address().to_string();
+        tran->remote.second = endpoint.port();
 
-        _trc_ << data->remote.first << ":" << data->remote.second << " >>>>> " << utils::to_hexadecimal(data->buffer.data(), size);
+        _trc_ << tran->remote.first << ":" << tran->remote.second << " >>>>> " << utils::to_hexadecimal(tran->buffer.data(), size);
 
         if (size == 0)
             throw std::runtime_error("can't receive message");
@@ -147,21 +147,22 @@ public:
         return size;
     }
 
-    size_t send(std::shared_ptr<transfer> data, int64_t timeout) noexcept(false) override
+    size_t send(std::shared_ptr<transfer> tran, int64_t timeout, uint8_t hops) noexcept(false) override
     {
         auto endpoint = resolve_endpoint(
-            data->remote.first,
-            std::to_string(data->remote.second)
+            tran->remote.first,
+            std::to_string(tran->remote.second)
             );
 
         size_t size = exec([&](const async_io_callback_t& callback)
         {
-            m_socket.async_send_to(boost::asio::buffer(data->buffer), endpoint, callback);
+            m_socket.set_option(boost::asio::ip::unicast::hops(hops));
+            m_socket.async_send_to(boost::asio::buffer(tran->buffer), endpoint, callback);
         }, timeout);
 
-        _trc_ << data->remote.first << ":" << data->remote.second << " <<<<< " << utils::to_hexadecimal(data->buffer.data(), size);
+        _trc_ << tran->remote.first << ":" << tran->remote.second << " <<<<< " << utils::to_hexadecimal(tran->buffer.data(), size);
 
-        if (size < data->buffer.size())
+        if (size < tran->buffer.size())
             throw std::runtime_error("can't send message");
 
         return size;

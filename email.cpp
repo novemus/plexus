@@ -16,6 +16,7 @@
 #include <memory>
 #include <regex>
 #include <functional>
+#include <thread>
 #include "features.h"
 #include "network.h"
 #include "utils.h"
