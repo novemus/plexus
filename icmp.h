@@ -20,13 +20,13 @@ typedef std::string address;
 typedef uint16_t port;
 typedef std::pair<address, port> endpoint;
 
-class packet
+class buffer
 {
     boost::shared_array<uint8_t> m_buffer;
     std::vector<size_t> m_slices;
     size_t m_length;
 
-    packet(boost::shared_array<uint8_t> buffer, size_t length, const std::vector<size_t>& slices) 
+    buffer(boost::shared_array<uint8_t> buffer, size_t length, const std::vector<size_t>& slices) 
         : m_buffer(buffer)
         , m_slices(slices)
         , m_length(length)
@@ -37,19 +37,28 @@ class packet
 
 public:
 
-    packet(size_t length)
+    buffer(size_t length)
         : m_buffer(new uint8_t[length])
         , m_length(length)
     {
         std::memset(m_buffer.get(), 0, length);
     }
 
-    packet(const packet& other)
+    buffer(const std::string& data)
+        : m_buffer(new uint8_t[data.size()])
+        , m_length(data.size())
+    {
+        std::memcpy(m_buffer.get(), data.data(), data.size());
+    }
+
+    buffer(const buffer& other)
         : m_buffer(other.m_buffer)
         , m_slices(other.m_slices)
         , m_length(other.m_length)
     {
     }
+
+    virtual ~buffer() {}
 
     uint8_t* data()
     {
@@ -66,7 +75,16 @@ public:
         return m_length - head();
     }
 
-    uint8_t byte(size_t p) const
+    void set_byte(size_t p, uint8_t val)
+    {
+        size_t pos = head() + p;
+        if (pos >= m_length)
+            throw std::out_of_range("position is out of range");
+
+        m_buffer[pos] = val;
+    }
+
+    uint8_t get_byte(size_t p) const
     {
         size_t pos = head() + p;
         if (pos >= m_length)
@@ -75,7 +93,7 @@ public:
         return m_buffer[pos];
     }
 
-    uint16_t word(uint8_t u, uint8_t l) const
+    uint16_t get_word(uint8_t u, uint8_t l) const
     {
         size_t upos = head() + u;
         size_t lpos = head() + l;
@@ -86,7 +104,19 @@ public:
         return uint16_t(m_buffer[upos] << 8) + m_buffer[lpos];
     }
 
-    packet pop_head(size_t size) const
+    void set_word(int8_t u, uint8_t l, uint16_t val) const
+    {
+        size_t upos = head() + u;
+        size_t lpos = head() + l;
+
+        if (upos >= m_length || lpos >= m_length)
+            throw std::out_of_range("position is out of range");
+
+        m_buffer[upos] = val >> 8;
+        m_buffer[lpos] = val & 0xF;
+    }
+
+    buffer pop_head(size_t size) const
     {
         size_t slice = head() + size;
         if (slice >= m_length)
@@ -94,42 +124,42 @@ public:
 
         std::vector<size_t> slices = m_slices;
         slices.push_back(slice);
-        return packet(m_buffer, m_length, slices);
+        return buffer(m_buffer, m_length, slices);
     }
 
-    packet push_head() const
+    buffer push_head() const
     {
         if (m_slices.empty())
             throw std::runtime_error("no slice to make cover");
 
         std::vector<size_t> slices = m_slices;
         slices.pop_back();
-        return packet(m_buffer, m_length, slices);
+        return buffer(m_buffer, m_length, slices);
     }
 };
 
-struct ip_packet : public packet
+struct ip_packet : public buffer
 {
-    ip_packet(const packet& pack) : packet(pack) { }
+    ip_packet(const buffer& buf) : buffer(buf) { }
 
-    uint8_t version() const { return (byte(0) >> 4) & 0xF; }
-    uint16_t header_length() const { return (byte(0) & 0xF) * 4; }
-    uint8_t type_of_service() const { return byte(1); }
-    uint16_t total_length() const { return word(2, 3); }
-    uint16_t identification() const { return word(4, 5);  }
-    uint16_t fragment_offset() const { return word(6, 7) & 0x1FFF; }
-    uint8_t time_to_live() const { return byte(8); }
-    uint8_t protocol() const { return byte(9); }
-    uint16_t header_checksum() const { return word(10, 11); }
-    bool dont_fragment() const { return (byte(6) & 0x40) != 0; }
-    bool more_fragments() const { return (byte(6) & 0x20) != 0; }
-    boost::asio::ip::address_v4 source_address() const { return boost::asio::ip::address_v4({byte(12), byte(13), byte(14), byte(15)}); }
-    boost::asio::ip::address_v4 destination_address() const { return boost::asio::ip::address_v4({byte(16), byte(17), byte(18), byte(19)}); }
-    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(packet::push_head()); }
-    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(packet::pop_head(header_length())); }
+    uint8_t version() const { return (get_byte(0) >> 4) & 0xF; }
+    uint16_t header_length() const { return (get_byte(0) & 0xF) * 4; }
+    uint8_t type_of_service() const { return get_byte(1); }
+    uint16_t total_length() const { return get_word(2, 3); }
+    uint16_t identification() const { return get_word(4, 5);  }
+    uint16_t fragment_offset() const { return get_word(6, 7) & 0x1FFF; }
+    uint8_t time_to_live() const { return get_byte(8); }
+    uint8_t protocol() const { return get_byte(9); }
+    uint16_t header_checksum() const { return get_word(10, 11); }
+    bool dont_fragment() const { return (get_byte(6) & 0x40) != 0; }
+    bool more_fragments() const { return (get_byte(6) & 0x20) != 0; }
+    boost::asio::ip::address_v4 source_address() const { return boost::asio::ip::address_v4({get_byte(12), get_byte(13), get_byte(14), get_byte(15)}); }
+    boost::asio::ip::address_v4 destination_address() const { return boost::asio::ip::address_v4({get_byte(16), get_byte(17), get_byte(18), get_byte(19)}); }
+    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
+    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(header_length())); }
 };
 
-struct icmp_packet : public packet
+struct icmp_packet : public buffer
 {
     enum type
     {
@@ -148,30 +178,32 @@ struct icmp_packet : public packet
         address_reply = 18
     };
 
-    icmp_packet(const packet& pack) : packet(pack) { }
+    icmp_packet(const buffer& buf) : buffer(buf) { }
 
-    uint8_t type() const { return byte(0); }
-    uint8_t code() const { return byte(1); }
-    uint16_t checksum() const { return word(2, 3); }
-    uint16_t identifier() const { return word(4, 5); }
-    uint16_t sequence_number() const { return word(6, 7); }
-    uint8_t pointer() const { return byte(4); }
-    uint16_t mtu() const { return word(6, 7); }
-    boost::asio::ip::address_v4 gateway() const { return boost::asio::ip::address_v4({byte(4), byte(5), byte(6), byte(7)}); }
-    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(packet::push_head()); }
-    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(packet::pop_head(8)); }
+    uint8_t type() const { return get_byte(0); }
+    uint8_t code() const { return get_byte(1); }
+    uint16_t checksum() const { return get_word(2, 3); }
+    uint16_t identifier() const { return get_word(4, 5); }
+    uint16_t sequence_number() const { return get_word(6, 7); }
+    uint8_t pointer() const { return get_byte(4); }
+    uint16_t mtu() const { return get_word(6, 7); }
+    boost::asio::ip::address_v4 gateway() const { return boost::asio::ip::address_v4({get_byte(4), get_byte(5), get_byte(6), get_byte(7)}); }
+    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
+    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(8)); }
+
+    static std::shared_ptr<icmp_packet> make_echo_packet(uint8_t type, uint16_t id, uint16_t seq, std::shared_ptr<buffer> data);
 };
 
-struct udp_packet : public packet
+struct udp_packet : public buffer
 {
-    udp_packet(const packet& pack) : packet(pack) { }
+    udp_packet(const buffer& buf) : buffer(buf) { }
 
-    uint16_t source_port() const { return word(0, 1); }
-    uint16_t dest_port() const { return word(2, 3); }
-    uint16_t length() const { return word(4, 5); }
-    uint16_t checksum() const { return word(6, 7); }
-    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(packet::push_head()); }
-    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(packet::pop_head(8)); }
+    uint16_t source_port() const { return get_word(0, 1); }
+    uint16_t dest_port() const { return get_word(2, 3); }
+    uint16_t length() const { return get_word(4, 5); }
+    uint16_t checksum() const { return get_word(6, 7); }
+    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
+    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(8)); }
 };
 
 }}

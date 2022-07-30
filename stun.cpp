@@ -267,18 +267,9 @@ public:
 
 typedef std::shared_ptr<message> message_ptr;
 
-class handshake : public network::udp::transfer
+struct handshake : public network::udp::transfer
 {
-    uint64_t m_mask = 0;
-
-    inline uint8_t mask_byte(size_t pos) const
-    {
-        return uint8_t(m_mask >> (pos * 8));
-    }
-
-public:
-
-    handshake(const endpoint& peer, uint8_t flag, uint64_t mask) : transfer(peer), m_mask(mask)
+    handshake(const endpoint& peer, uint8_t flag) : transfer(peer)
     {
         buffer = {
             rand_byte(), rand_byte(), rand_byte(), flag,
@@ -287,31 +278,26 @@ public:
 
         for (size_t i = 0; i < 8; ++i)
         {
-            if (i != 7)
+            if (i < 7)
             {
                 buffer[7] ^= buffer[i];
-                buffer[i] ^= mask_byte(i);
             }
         }
-
-        buffer[7] ^= mask_byte(7);
     }
 
-    handshake(uint64_t mask) : transfer(8), m_mask(mask)
-    {
-    }
+    handshake() : transfer(8) { }
 
     bool valid(const endpoint& peer) const
     {
         if (peer == remote)
         {
-            uint8_t hash = buffer[7] ^ mask_byte(7);
+            uint8_t hash = buffer[7];
 
             for (size_t i = 0; i < 8; ++i)
             {
-                if (i != 7)
+                if (i < 7)
                 {
-                    hash ^= buffer[i] ^ mask_byte(i);
+                    hash ^= buffer[i];
                 }
             }
 
@@ -326,34 +312,34 @@ public:
 
     uint8_t flag() const
     {
-        return buffer[3] ^ mask_byte(3);
+        return buffer[3];
     }
 };
 
+bool is_public_ip(const boost::asio::ip::address_v4& ip)
+{
+    auto a = ip.to_uint();
+    return !((a >= 0x0A000000) && (a <= 0x0AFFFFFF)) &&
+           !((a >= 0xAC100000) && (a <= 0xAC1FFFFF)) &&
+           !((a >= 0xC0A80000) && (a <= 0xC0A8FFFF));
+}
+
 class session
 {
+    endpoint m_local;
     std::shared_ptr<udp> m_udp;
-
-    struct dummy_udp : udp
-    {
-        virtual size_t send(std::shared_ptr<transfer> tran, int64_t timeout_ms, uint8_t hops) noexcept(false) override
-        {
-            throw std::runtime_error("upd client is closed");
-        }
-
-        virtual size_t receive(std::shared_ptr<transfer> tran, int64_t timeout_ms) noexcept(false) override
-        {
-            throw std::runtime_error("upd client is closed");
-        }
-    };
+    std::shared_ptr<icmp> m_icmp;
 
 public:
 
-    session(const endpoint& local) : m_udp(create_udp_channel(local))
+    session(const endpoint& local)
+        : m_local(local)
+        , m_udp(create_udp_channel(local))
+        , m_icmp(create_icmp_channel(local.first))
     {
     }
 
-    message_ptr exec_binding_request(const endpoint& stun, uint8_t flags = 0, int64_t deadline = 4600)
+    message_ptr exec_stun_binding(const endpoint& stun, uint8_t flags = 0, int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -414,36 +400,81 @@ public:
         throw plexus::timeout_error();
     }
 
-    void punch_hole_to_peer(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false)
+    void handshake_peer_forward(const endpoint& peer, int64_t deadline) noexcept(false)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        std::shared_ptr<handshake> request = std::make_shared<handshake>(peer, 0, mask);
-        std::shared_ptr<handshake> response = std::make_shared<handshake>(mask);
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, 0);
+        std::shared_ptr<handshake> in = std::make_shared<handshake>();
 
         int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
         while (timer().total_milliseconds() < deadline)
         {
-            m_udp->send(request, timeout);
-
             try
             {
-                if (response->valid(peer) && response->flag() == 1)
+                m_udp->send(out, timeout);
+                
+                if (in->valid(peer))
                 {
-                    _dbg_ << "handshake peer=" << response->remote.first << ":" << response->remote.second;
-                    m_udp = std::make_shared<dummy_udp>();
-                    return;
+                    if (out->flag() == 0)
+                    {
+                        _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
+                        out = std::make_shared<handshake>(peer, 1);
+                    }
+                    else
+                    {
+                        _dbg_ << "handshake peer=" << in->remote.first << ":" << in->remote.second;
+                        return;
+                    }
                 }
 
-                m_udp->receive(response, timeout);
+                m_udp->receive(in, timeout);
+            }
+            catch(const boost::system::system_error& ex)
+            {
+                if (ex.code() != boost::asio::error::operation_aborted)
+                    throw;
 
-                if (response->valid(peer) && request->flag() == 0)
+                _trc_ << ex.what();
+            }
+        }
+
+        throw plexus::timeout_error();
+    }
+
+    void handshake_peer_backward(const endpoint& peer, int64_t deadline) noexcept(false)
+    {
+        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return boost::posix_time::microsec_clock::universal_time() - start;
+        };
+
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, 1);
+        std::shared_ptr<handshake> in = std::make_shared<handshake>();
+
+        int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
+        while (timer().total_milliseconds() < deadline)
+        {
+            try
+            {
+                m_udp->receive(in, timeout);
+
+                if (in->valid(peer))
                 {
-                    _dbg_ << "welcome peer=" << response->remote.first << ":" << response->remote.second;
-                    request = std::make_shared<handshake>(peer, 1, mask);
+                    if (in->flag() == 0)
+                    {
+                        _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
+                    }
+                    else
+                    {
+                        _dbg_ << "handshake peer=" << in->remote.first << ":" << in->remote.second;
+                        return;
+                    }
+
+                    m_udp->send(out, timeout);
                 }
             }
             catch(const boost::system::system_error& ex)
@@ -451,8 +482,68 @@ public:
                 if (ex.code() != boost::asio::error::operation_aborted)
                     throw;
 
-                request = std::make_shared<handshake>(peer, 0, mask);
-                response = std::make_shared<handshake>(mask);
+                _trc_ << ex.what();
+            }
+        }
+
+        throw plexus::timeout_error();
+    }
+
+    void punch_hole_to_peer(const endpoint& peer, int64_t deadline = 60000) noexcept(false)
+    {
+        auto clock = [start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return boost::posix_time::microsec_clock::universal_time() - start;
+        };
+
+        uint8_t hops = 2;
+        int64_t timeout = deadline / 30;
+
+        while (clock().total_milliseconds() < deadline)
+        {
+            std::shared_ptr<udp::transfer> punch = std::make_shared<udp::transfer>(peer, std::vector<uint8_t>{
+                rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+                rand_byte(), rand_byte(), rand_byte(), rand_byte()
+            });
+
+            m_udp->send(punch, timeout, hops);
+            m_udp->send(punch, timeout, hops++);
+
+            try
+            {
+                auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+                {
+                    return boost::posix_time::microsec_clock::universal_time() - start;
+                };
+
+                do {
+                    auto envelope = std::make_shared<ip_packet>(buffer(4096));
+
+                    m_icmp->receive(std::make_shared<icmp::transfer>(peer.first, envelope), timeout);
+
+                    auto icmp = envelope->payload<icmp_packet>();
+                    if (icmp->type() == icmp_packet::time_exceeded)
+                    {
+                        auto ip = icmp->payload<ip_packet>();
+                        if (ip->protocol() == IPPROTO_UDP)
+                        {
+                            auto udp = ip->payload<udp_packet>();
+                            if (udp->source_port() == m_local.second)
+                            {
+                                if (is_public_ip(envelope->source_address()))
+                                    return;
+                                else
+                                    break;
+                            }
+                        }
+                    }
+                }
+                while (timer().total_milliseconds() < timeout);
+            }
+            catch(const boost::system::system_error& ex)
+            {
+                if (ex.code() != boost::asio::error::operation_aborted)
+                    throw;
 
                 _trc_ << ex.what();
             }
@@ -482,24 +573,22 @@ class udp_puncher : public puncher
 {
     endpoint m_stun;
     endpoint m_local;
-    endpoint m_mapped;
-    session  m_session;
 
 public:
 
     udp_puncher(const endpoint& stun, const endpoint& local)
         : m_stun(stun)
         , m_local(local)
-        , m_session(local)
     {
     }
 
     traverse explore_network() noexcept(false) override
     {
         traverse state = {0};
+        auto mapper = std::make_shared<session>(m_local);
 
         _dbg_ << "nat test...";
-        message_ptr response = m_session.exec_binding_request(m_stun);
+        message_ptr response = mapper->exec_stun_binding(m_stun);
 
         endpoint mapped = response->mapped_endpoint();
         endpoint source = response->source_endpoint();
@@ -511,7 +600,7 @@ public:
             state.random_port = mapped.second != m_local.second ? 1 : 0;
             
             _dbg_ << "first mapping test...";
-            endpoint fst_mapped = m_session.exec_binding_request(changed)->mapped_endpoint();
+            endpoint fst_mapped = mapper->exec_stun_binding(changed)->mapped_endpoint();
 
             state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
 
@@ -522,7 +611,7 @@ public:
             else
             {
                 _dbg_ << "second mapping test...";
-                endpoint snd_mapped = m_session.exec_binding_request(endpoint{changed.first, source.second})->mapped_endpoint();
+                endpoint snd_mapped = mapper->exec_stun_binding(endpoint{changed.first, source.second})->mapped_endpoint();
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }
@@ -537,16 +626,16 @@ public:
         try
         {
             _dbg_ << "hairpin test...";
-            m_session.exec_binding_request(mapped, 0, 1400);
+            mapper->exec_stun_binding(mapped, 0, 1400);
             state.hairpin = 1;
         }
         catch(const plexus::timeout_error&) { }
 
-        session filtering(endpoint(m_local.first, m_local.second + 1));
+        auto filterer = std::make_shared<session>(endpoint(m_local.first, m_local.second + 1));
         try
         {
             _dbg_ << "first filtering test...";
-            filtering.exec_binding_request(m_stun, flag::change_address | flag::change_port, 1400);
+            filterer->exec_stun_binding(m_stun, flag::change_address | flag::change_port, 1400);
             state.filtering = binding::independent;
         }
         catch(const plexus::timeout_error&)
@@ -554,7 +643,7 @@ public:
             try
             {
                 _dbg_ << "second filtering test...";
-                filtering.exec_binding_request(m_stun, flag::change_port, 1400);
+                filterer->exec_stun_binding(m_stun, flag::change_port, 1400);
                 state.filtering = binding::address_dependent;
             }
             catch(const plexus::timeout_error&)
@@ -577,21 +666,30 @@ public:
     endpoint punch_udp_hole() noexcept(false) override
     {
         _dbg_ << "punching udp hole...";
-        
-        m_mapped = m_session.exec_binding_request(m_stun)->mapped_endpoint();
-        return m_mapped;
+
+        auto puncher = std::make_shared<session>(m_local);
+        return puncher->exec_stun_binding(m_stun)->mapped_endpoint();
     }
 
-    void punch_hole_to_peer(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false)
+    endpoint punch_udp_hole_to_peer(const endpoint& peer) noexcept(false) override
     {
-        _dbg_ << "reaching peer...";
+        _dbg_ << "punching udp hole to peer...";
 
-        endpoint mapped = m_session.exec_binding_request(m_stun)->mapped_endpoint();
+        auto puncher = std::make_shared<session>(m_local);
+        puncher->punch_hole_to_peer(peer);
+        return puncher->exec_stun_binding(m_stun)->mapped_endpoint();
+    }
 
-        if (mapped != m_mapped)
-            throw plexus::handshake_error();
+    void reach_peer(const endpoint& peer) noexcept(false) override
+    {
+        auto reacher = std::make_shared<session>(m_local);
+        reacher->handshake_peer_forward(peer, 60000);
+    }
 
-        m_session.punch_hole_to_peer(peer, mask, deadline);
+    void await_peer(const endpoint& peer) noexcept(false) override
+    {
+        auto acceptor = std::make_shared<session>(m_local);
+        acceptor->handshake_peer_backward(peer, 60000);
     }
 };
 

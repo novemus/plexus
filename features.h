@@ -17,17 +17,16 @@ namespace plexus {
 
 struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
 struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
-struct incomplete_error : public std::runtime_error { incomplete_error() : std::runtime_error("incomplete error") {} };
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
-
-typedef std::pair<plexus::network::endpoint, /* puzzle */ uint64_t> reference;
 
 struct mediator
 {
     virtual ~mediator() {}
-    virtual void accept() noexcept(false) = 0;
-    virtual reference exchange(const reference& host) noexcept(false) = 0;
+    virtual plexus::network::endpoint receive_request() noexcept(false) = 0;
+    virtual plexus::network::endpoint receive_response() noexcept(false) = 0;
+    virtual void dispatch_response(const plexus::network::endpoint& hole) noexcept(false) = 0;
+    virtual void dispatch_request(const plexus::network::endpoint& hole) noexcept(false) = 0;
 };
 
 std::shared_ptr<mediator> create_email_mediator(const std::string& host_id,
@@ -73,7 +72,9 @@ struct puncher
     virtual ~puncher() {}
     virtual traverse explore_network() noexcept(false) = 0;
     virtual endpoint punch_udp_hole() noexcept(false) = 0;
-    virtual void punch_hole_to_peer(const endpoint& peer, uint64_t secret, int64_t timeout_ms = 120000) noexcept(false) = 0;
+    virtual endpoint punch_udp_hole_to_peer(const endpoint& peer) noexcept(false) = 0;
+    virtual void reach_peer(const endpoint& peer) noexcept(false) = 0;
+    virtual void await_peer(const endpoint& peer) noexcept(false) = 0;
 };
 
 std::shared_ptr<puncher> create_stun_puncher(const endpoint& stun, const endpoint& local);

@@ -403,8 +403,39 @@ class email_mediator : public mediator
 {
     smtp m_smtp;
     imap m_imap;
-    reference m_host;
-    reference m_peer;
+
+    plexus::network::endpoint receive(const std::regex& pattern, int64_t deadline = std::numeric_limits<int64_t>::max())
+    {
+        int64_t timeout = std::min<int64_t>(5, std::max<int64_t>(30, deadline / 12));
+
+        auto clock = [start = boost::posix_time::second_clock::universal_time()]()
+        {
+            return boost::posix_time::second_clock::universal_time() - start;
+        };
+
+        plexus::network::endpoint peer;
+        do
+        {
+            std::string message = m_imap.pull();
+            
+            while (!message.empty())
+            {
+                std::smatch match;
+                if (std::regex_search(message, match, pattern))
+                {
+                    peer = std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str()));
+                }
+            }
+
+            if (!peer.first.empty())
+                return peer;
+
+            std::this_thread::sleep_for(std::chrono::seconds(timeout));
+        }
+        while (clock().total_seconds() < deadline);
+
+        throw plexus::timeout_error();
+    }
 
 public:
 
@@ -414,65 +445,32 @@ public:
     {
     }
     
-    void accept() noexcept(false)
+    plexus::network::endpoint receive_request() noexcept(false)
     {
-        do
-        {
-            std::string message = m_imap.pull();
-            
-            std::smatch match;
-            if (std::regex_search(message, match, std::regex("^PLEXUS\\s+1\\.0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$")))
-            {
-                m_peer = { 
-                    std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str())),
-                    boost::lexical_cast<uint64_t>(match[3].str())
-                };
+        plexus::network::endpoint peer = receive(std::regex("^PLEXUS\\s+2.0\\s+request\\s+(\\S+)\\s+(\\d+)$"));
 
-                _dbg_ << "accept peer reference: " << m_peer.first.first << ":" << m_peer.first.second << " " << m_peer.second;
-
-                return;
-            }
-
-            if (message.empty())
-                std::this_thread::sleep_for(std::chrono::seconds(20));
-        }
-        while (true);
+        _dbg_ << "received request from peer " << peer.first << ":" << peer.second;
+        return peer;
     }
 
-    reference exchange(const reference& host) noexcept(false) override
+    plexus::network::endpoint receive_response() noexcept(false)
     {
-        _dbg_ << "exchange of references...";
+        plexus::network::endpoint peer = receive(std::regex("^PLEXUS\\s+2.0\\s+response\\s+(\\S+)\\s+(\\d+)$"), 60);
 
-        if (m_host != host)
-        {
-            m_smtp.push(plexus::utils::format("PLEXUS 1.0 %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
-            m_host = host;
+        _dbg_ << "received response from " << peer.first << ":" << peer.second;
+        return peer;
+    }
 
-            _dbg_ << "send host reference: " << m_host.first.first << ":" << m_host.first.second << " " << m_host.second;
-        }
+    void dispatch_request(const plexus::network::endpoint& hole) noexcept(false) override
+    {
+        m_smtp.push(plexus::utils::format("PLEXUS 2.0 request %s %u", hole.first.c_str(), hole.second));
+        _dbg_ << "sent request for " << hole.first << ":" << hole.second;
+    }
 
-        std::string message;
-        do
-        {
-            message = m_imap.pull();
-            
-            std::smatch match;
-            if (std::regex_search(message, match, std::regex("^PLEXUS\\s+1\\.0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$")))
-            {
-                m_peer = { 
-                    std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str())),
-                    boost::lexical_cast<uint64_t>(match[3].str())
-                };
-
-                _dbg_ << "received peer reference: " << m_peer.first.first << ":" << m_peer.first.second << " " << m_peer.second;
-            }
-        }
-        while (!message.empty());
-
-        if (m_peer.first.first.empty())
-            throw plexus::incomplete_error();
-
-        return m_peer;
+    void dispatch_response(const plexus::network::endpoint& hole) noexcept(false) override
+    {
+        m_smtp.push(plexus::utils::format("PLEXUS 2.0 response %s %u", hole.first.c_str(), hole.second));
+        _dbg_ << "sent response for " << hole.first << ":" << hole.second;
     }
 };
 

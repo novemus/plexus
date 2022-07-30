@@ -41,13 +41,10 @@ int main(int argc, char** argv)
         ("stun-port", boost::program_options::value<uint16_t>()->default_value(3478u), "port of stun server")
         ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch a udp hole")
         ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch a udp hole")
-        ("punch-timeout", boost::program_options::value<int64_t>()->default_value(60), "timeout (seconds) to punch udp hole to a peer")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command to execute after the udp hole to a peer is punched")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
-        ("retry-timeout", boost::program_options::value<int64_t>()->default_value(20), "timeout (seconds) for retrying to reach a peer")
-        ("retry-count", boost::program_options::value<uint64_t>()->default_value(3), "number of attempts to reach a peer")
-        ("accept", "accept punching initiations from a peer infinitely")
+        ("accept", "accept or invite peer for punching initiations")
         ("log-level", boost::program_options::value<int>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warnine, 4 - info, 5 - debug, 6 - trace")
         ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file");
 
@@ -64,6 +61,18 @@ int main(int argc, char** argv)
     try
     {
         plexus::log::set((plexus::log::severity)vm["log-level"].as<int>(), vm["log-file"].as<std::string>());
+        
+        auto puncher = plexus::create_stun_puncher(
+            plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
+            plexus::network::endpoint(vm["bind-ip"].as<std::string>(), vm["bind-port"].as<uint16_t>())
+            );
+
+        plexus::traverse state = puncher->explore_network();
+        if (state.mapping != plexus::independent)
+        {
+            _err_ << "network configuration does not allow to establish peer connection";
+            return -1;
+        }
 
         auto mediator = plexus::create_email_mediator(
             vm["host-id"].as<std::string>(),
@@ -83,77 +92,60 @@ int main(int argc, char** argv)
             vm["smime-ca"].as<std::string>()
             );
 
-        auto puncher = plexus::create_stun_puncher(
-            plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
-            plexus::network::endpoint(vm["bind-ip"].as<std::string>(), vm["bind-port"].as<uint16_t>())
-            );
-
-        plexus::traverse state = puncher->explore_network();
-        if (state.mapping != plexus::independent)
-        {
-            _err_ << "network configuration does not allow to establish peer connection";
-            return -1;
-        }
-
-        uint64_t tries = vm["retry-count"].as<uint64_t>();
-        int64_t delay = vm["retry-timeout"].as<int64_t>();
         bool accept = vm.count("accept") > 0;
+
+        auto executor = [&](const plexus::network::endpoint& hole, const plexus::network::endpoint& peer)
+        {
+            std::string args = plexus::utils::format("%s %d %s %d %s %d",
+                vm["bind-ip"].as<std::string>().c_str(),
+                vm["bind-port"].as<uint16_t>(),
+                hole.first.c_str(),
+                hole.second,
+                peer.first.c_str(),
+                peer.second
+                );
+
+            plexus::exec(
+                vm["exec-command"].as<std::string>(),
+                args,
+                vm["exec-pwd"].as<std::string>(),
+                vm["exec-log-file"].as<std::string>()
+                );
+        };
 
         do
         {
-            if (accept)
-                mediator->accept();
-
-            uint64_t puzzle = plexus::utils::random();
-
-            do
+            try
             {
-                try
+                if (accept)
                 {
-                    plexus::reference host(puncher->punch_udp_hole(), puzzle);
-                    plexus::reference peer = mediator->exchange(host);
+                    plexus::network::endpoint peer = mediator->receive_request();
+                    plexus::network::endpoint hole = puncher->punch_udp_hole_to_peer(peer);
+                    mediator->dispatch_response(hole);
+                    puncher->await_peer(peer);
 
-                    puncher->punch_hole_to_peer(peer.first, host.second ^ peer.second, vm["punch-timeout"].as<int64_t>() * 1000);
-
-                    std::string args = plexus::utils::format("%s %d %s %d %s %d",
-                        vm["bind-ip"].as<std::string>().c_str(),
-                        vm["bind-port"].as<uint16_t>(),
-                        host.first.first.c_str(),
-                        host.first.second,
-                        peer.first.first.c_str(),
-                        peer.first.second
-                        );
-
-                    plexus::exec(
-                        vm["exec-command"].as<std::string>(),
-                        args,
-                        vm["exec-pwd"].as<std::string>(),
-                        vm["exec-log-file"].as<std::string>()
-                        );
-
-                    if (accept)
-                        break;
-
-                    return 0;
+                    executor(hole, peer);
                 }
-                catch(const plexus::timeout_error& ex)
+                else
                 {
-                    _err_ << ex.what();
-                }
-                catch(const plexus::handshake_error& ex)
-                {
-                    _err_ << ex.what();
-                }
-                catch(const plexus::incomplete_error& ex)
-                {
-                    _err_ << ex.what();
-                }
+                    plexus::network::endpoint hole = puncher->punch_udp_hole();
+                    mediator->dispatch_request(hole);
+                    plexus::network::endpoint peer = mediator->receive_response();
+                    puncher->reach_peer(peer);
 
-                std::this_thread::sleep_for(std::chrono::seconds(delay));
+                    executor(hole, peer);
+                }
             }
-            while (--tries > 0);
-
-        } while (accept);
+            catch (const plexus::timeout_error& ex)
+            {
+                _err_ << ex.what();
+            }
+            catch (const plexus::handshake_error& ex)
+            {
+                _err_ << ex.what();
+            }
+        } 
+        while (accept);
     }
     catch(const std::exception& e)
     {

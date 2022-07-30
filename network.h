@@ -49,9 +49,17 @@ std::shared_ptr<udp> create_udp_channel(const endpoint& local);
 
 struct icmp
 {
+    struct transfer
+    {
+        address remote;
+        std::shared_ptr<buffer> packet; // ip_packet on receive or icmp_packet on send
+
+        transfer(const address& ip, std::shared_ptr<buffer> pack) : remote(ip), packet(pack) {}
+    };
+
     virtual ~icmp() {}
-    virtual void send(std::shared_ptr<icmp_packet> pack, int64_t timeout_ms = 1600, uint8_t hops = 64) noexcept(false) = 0;
-    virtual void receive(std::shared_ptr<ip_packet> pack, int64_t timeout_ms = 1600) noexcept(false) = 0;
+    virtual void send(std::shared_ptr<transfer> tran, int64_t timeout_ms = 1600, uint8_t hops = 64) noexcept(false) = 0;
+    virtual void receive(std::shared_ptr<transfer> tran, int64_t timeout_ms = 1600) noexcept(false) = 0;
 };
 
 std::shared_ptr<icmp> create_icmp_channel(const address& local);
