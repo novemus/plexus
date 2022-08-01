@@ -517,9 +517,9 @@ public:
                 };
 
                 do {
-                    auto envelope = std::make_shared<ip_packet>(buffer(4096));
+                    auto envelope = std::make_shared<ip_packet>(4096);
 
-                    m_icmp->receive(std::make_shared<icmp::transfer>(peer.first, envelope), timeout);
+                    m_icmp->receive(std::make_shared<icmp::transfer>(envelope), timeout);
 
                     auto icmp = envelope->payload<icmp_packet>();
                     if (icmp->type() == icmp_packet::time_exceeded)

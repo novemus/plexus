@@ -113,7 +113,7 @@ public:
             throw std::out_of_range("position is out of range");
 
         m_buffer[upos] = val >> 8;
-        m_buffer[lpos] = val & 0xF;
+        m_buffer[lpos] = val & 0xFF;
     }
 
     buffer pop_head(size_t size) const
@@ -140,6 +140,7 @@ public:
 
 struct ip_packet : public buffer
 {
+    ip_packet(size_t len) : buffer(len) { }
     ip_packet(const buffer& buf) : buffer(buf) { }
 
     uint8_t version() const { return (get_byte(0) >> 4) & 0xF; }
@@ -178,6 +179,7 @@ struct icmp_packet : public buffer
         address_reply = 18
     };
 
+    icmp_packet(size_t len) : buffer(len) { }
     icmp_packet(const buffer& buf) : buffer(buf) { }
 
     uint8_t type() const { return get_byte(0); }
@@ -191,7 +193,7 @@ struct icmp_packet : public buffer
     template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
     template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(8)); }
 
-    static std::shared_ptr<icmp_packet> make_echo_packet(uint8_t type, uint16_t id, uint16_t seq, std::shared_ptr<buffer> data);
+    static std::shared_ptr<icmp_packet> make_ping_packet(uint16_t id, uint16_t seq, const std::string& data = "plexus");
 };
 
 struct udp_packet : public buffer

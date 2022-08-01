@@ -100,14 +100,15 @@ class asio_icmp_channel : public icmp, public std::enable_shared_from_this<asio_
 public:
 
     asio_icmp_channel(const address& local)
-        : m_socket(m_io)
+        : m_socket(m_io, boost::asio::ip::icmp::v4())
         , m_timer(m_io)
     {
-        boost::asio::ip::icmp::endpoint endpoint = resolve_endpoint(local);
-
-        m_socket.open(endpoint.protocol());
         m_socket.non_blocking(true);
-        m_socket.bind(endpoint);
+
+        if (!local.empty())
+        {
+            m_socket.bind(resolve_endpoint(local));
+        }
     }
 
     ~asio_icmp_channel()
@@ -125,10 +126,12 @@ public:
         std::shared_ptr<ip_packet> pack = std::dynamic_pointer_cast<ip_packet>(tran->packet);
         size_t size = exec([&](const async_io_callback_t& callback)
         {
-            m_socket.async_receive(boost::asio::buffer(pack->data(), pack->total_length()), callback);
+            m_socket.async_receive(boost::asio::buffer(pack->data(), pack->size()), callback);
         }, timeout);
 
-        _trc_ << pack->source_address().to_string() << ":icmp >>>>> " << utils::to_hexadecimal(pack->data(), size);
+        tran->remote = pack->source_address().to_string();
+
+        _trc_ << tran->remote << ":icmp >>>>> " << utils::to_hexadecimal(pack->data(), size);
 
         if (pack->total_length() > size)
             throw std::runtime_error("received part of ip packet");
@@ -157,31 +160,34 @@ std::shared_ptr<icmp> create_icmp_channel(const address& local)
     return std::make_shared<asio_icmp_channel>(local);
 }
 
-std::shared_ptr<icmp_packet> make_echo_packet(uint8_t type, uint16_t id, uint16_t seq, std::shared_ptr<buffer> data)
+std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t seq, const std::string& data)
 {
-    std::shared_ptr<icmp_packet> echo = std::make_shared<icmp_packet>(buffer(8 + data->size()));
+    std::shared_ptr<icmp_packet> echo = std::make_shared<icmp_packet>(8 + data.size());
 
-    echo->set_byte(0, type);
+    echo->set_byte(0, icmp_packet::echo_request);
     echo->set_byte(1, 0);
     echo->set_word(4, 5, id);
     echo->set_word(6, 7, seq);
 
-    unsigned int sum = (echo->type() << 8) + echo->code() + echo->identifier() + echo->sequence_number();
+    uint32_t sum = (echo->type() << 8) + echo->code() + echo->identifier() + echo->sequence_number();
 
-    uint8_t* src = data->data();
     uint8_t* dst = echo->data() + 8;
 
-    for (size_t i = 0; i < data->size(); i += 2)
+    for (size_t i = 0; i < data.size(); ++i)
     {
-        dst[i] = src[i];
-        dst[i + 1] = src[i + 1];
-        sum += dst[i] << 8;
-        sum += dst[i + 1];
+        dst[i] = static_cast<uint8_t>(data[i]);
+
+        if (i % 2 == 0)
+            sum += dst[i] << 8;
+        else
+            sum += dst[i];
     }
 
     sum = (sum >> 16) + (sum & 0xFFFF);
     sum += (sum >> 16);
-    echo->set_word(2, 3, sum);
+    echo->set_word(2, 3, static_cast<uint16_t>(~sum));
+
+    return echo;
 }
 
 }}

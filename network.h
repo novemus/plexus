@@ -55,6 +55,7 @@ struct icmp
         std::shared_ptr<buffer> packet; // ip_packet on receive or icmp_packet on send
 
         transfer(const address& ip, std::shared_ptr<buffer> pack) : remote(ip), packet(pack) {}
+        transfer(std::shared_ptr<buffer> pack) : packet(pack) {}
     };
 
     virtual ~icmp() {}
@@ -62,6 +63,6 @@ struct icmp
     virtual void receive(std::shared_ptr<transfer> tran, int64_t timeout_ms = 1600) noexcept(false) = 0;
 };
 
-std::shared_ptr<icmp> create_icmp_channel(const address& local);
+std::shared_ptr<icmp> create_icmp_channel(const address& local = "");
 
 }}
