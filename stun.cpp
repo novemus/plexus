@@ -68,7 +68,25 @@ FILERING_TEST_2: SA, SP, AF=0, PF=1
     otherwise there is address and port dependent filtering
 */
 
-namespace plexus { namespace stun {
+namespace plexus {
+
+std::ostream& operator<<(std::ostream& stream, const binding& bind)
+{
+    switch (bind)
+    {
+        case binding::independent:
+            return stream << "independent";
+        case binding::address_dependent:
+            return stream << "address dependent";
+        case binding::address_and_port_dependent:
+            return stream << "address and port dependent";
+        default:
+            return stream << "unknown";
+    }
+    return stream;
+}
+
+namespace stun {
 
 typedef std::array<uint8_t, 16> transaction_id;
 
@@ -545,6 +563,9 @@ public:
                 if (ex.code() != boost::asio::error::operation_aborted)
                     throw;
 
+                if (hops >= 7)
+                    return;
+                    
                 _trc_ << ex.what();
             }
         }
@@ -552,22 +573,6 @@ public:
         throw plexus::timeout_error();
     }
 };
-
-std::ostream& operator<<(std::ostream& stream, const binding& bind)
-{
-    switch (bind)
-    {
-        case binding::independent:
-            return stream << "independent";
-        case binding::address_dependent:
-            return stream << "address dependent";
-        case binding::address_and_port_dependent:
-            return stream << "address and port dependent";
-        default:
-            return stream << "unknown";
-    }
-    return stream;
-}
 
 class udp_puncher : public puncher
 {
@@ -682,12 +687,16 @@ public:
 
     void reach_peer(const endpoint& peer) noexcept(false) override
     {
+        _dbg_ << "reaching peer...";
+
         auto reacher = std::make_shared<session>(m_local);
         reacher->handshake_peer_forward(peer, 60000);
     }
 
     void await_peer(const endpoint& peer) noexcept(false) override
     {
+        _dbg_ << "awaiting peer...";
+
         auto acceptor = std::make_shared<session>(m_local);
         acceptor->handshake_peer_backward(peer, 60000);
     }

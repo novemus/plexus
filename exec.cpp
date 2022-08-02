@@ -14,6 +14,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include "features.h"
 #include "utils.h"
+#include "log.h"
 
 #ifdef _WIN32
 
@@ -24,6 +25,8 @@ namespace plexus {
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
 {
+    _inf_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
+
 	std::string cmd = "\"\"" + prog + "\" " + args + "\"";
 
 	STARTUPINFO si;
@@ -95,6 +98,8 @@ std::shared_ptr<char*> copy_environment()
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
 {
+    _inf_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
+
     std::string cmd = boost::replace_all_copy(prog, " ", "\\ ");
     cmd += " " + args;
 
