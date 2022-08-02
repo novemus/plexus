@@ -11,7 +11,6 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-#include <cstdlib>
 #include <ctime>
 #include <cstring>
 #include <array>
@@ -507,12 +506,14 @@ public:
         throw plexus::timeout_error();
     }
 
-    void punch_hole_to_peer(const endpoint& peer, int64_t deadline = 60000) noexcept(false)
+    void punch_hole_to_peer(const endpoint& peer, int64_t deadline) noexcept(false)
     {
         auto clock = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
+
+        static const uint8_t MAX_TRACE_HORES = plexus::utils::getenv<uint8_t>("PLEXUS_MAX_TRACE_HORES", 7);
 
         uint8_t hops = 2;
         int64_t timeout = deadline / 30;
@@ -563,7 +564,7 @@ public:
                 if (ex.code() != boost::asio::error::operation_aborted)
                     throw;
 
-                if (hops >= 7)
+                if (hops >= MAX_TRACE_HORES)
                     return;
                     
                 _trc_ << ex.what();
@@ -681,7 +682,7 @@ public:
         _dbg_ << "punching udp hole to peer...";
 
         auto puncher = std::make_shared<session>(m_local);
-        puncher->punch_hole_to_peer(peer);
+        puncher->punch_hole_to_peer(peer, plexus::utils::getenv<int64_t>("PLEXUS_PUNCH_TIMEOUT", 60000));
         return puncher->exec_stun_binding(m_stun)->mapped_endpoint();
     }
 
@@ -690,7 +691,7 @@ public:
         _dbg_ << "reaching peer...";
 
         auto reacher = std::make_shared<session>(m_local);
-        reacher->handshake_peer_forward(peer, 60000);
+        reacher->handshake_peer_forward(peer, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
     }
 
     void await_peer(const endpoint& peer) noexcept(false) override
@@ -698,7 +699,7 @@ public:
         _dbg_ << "awaiting peer...";
 
         auto acceptor = std::make_shared<session>(m_local);
-        acceptor->handshake_peer_backward(peer, 60000);
+        acceptor->handshake_peer_backward(peer, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
     }
 };
 

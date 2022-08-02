@@ -399,6 +399,10 @@ private:
 
 using namespace email;
 
+const int64_t RESPONSE_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
+const int64_t MAX_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
+const int64_t MIN_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 5000);
+
 class email_mediator : public mediator
 {
     smtp m_smtp;
@@ -406,11 +410,11 @@ class email_mediator : public mediator
 
     plexus::network::endpoint receive(const std::regex& pattern, int64_t deadline = std::numeric_limits<int64_t>::max())
     {
-        int64_t timeout = std::max<int64_t>(5, std::min<int64_t>(30, deadline / 12));
+        int64_t timeout = std::max<int64_t>(MIN_POLLING_TIMEOUT, std::min<int64_t>(MAX_POLLING_TIMEOUT, deadline / 12));
 
-        auto clock = [start = boost::posix_time::second_clock::universal_time()]()
+        auto clock = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
-            return boost::posix_time::second_clock::universal_time() - start;
+            return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
         plexus::network::endpoint peer;
@@ -432,9 +436,9 @@ class email_mediator : public mediator
             if (!peer.first.empty())
                 return peer;
 
-            std::this_thread::sleep_for(std::chrono::seconds(timeout));
+            std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
         }
-        while (clock().total_seconds() < deadline);
+        while (clock().total_milliseconds() < deadline);
 
         throw plexus::timeout_error();
     }
@@ -461,7 +465,7 @@ public:
     {
         _inf_ << "waiting plexus response...";
 
-        plexus::network::endpoint peer = receive(std::regex("^PLEXUS\\s+2.0\\s+response\\s+(\\S+)\\s+(\\d+)$"), 60);
+        plexus::network::endpoint peer = receive(std::regex("^PLEXUS\\s+2.0\\s+response\\s+(\\S+)\\s+(\\d+)$"), RESPONSE_TIMEOUT);
 
         _inf_ << "received plexus response " << peer.first << ":" << peer.second;
         return peer;

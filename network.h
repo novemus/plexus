@@ -25,7 +25,7 @@ struct ssl
     virtual size_t write(const uint8_t* buffer, size_t len) noexcept(false) = 0;
 };
 
-std::shared_ptr<ssl> create_ssl_client(const endpoint& remote, const std::string& cert = "", const std::string& key = "", const std::string& ca = "", int64_t timeout_sec = 10);
+std::shared_ptr<ssl> create_ssl_client(const endpoint& remote, const std::string& cert = "", const std::string& key = "", const std::string& ca = "");
 
 struct udp
 {

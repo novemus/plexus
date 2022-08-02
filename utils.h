@@ -10,10 +10,13 @@
 
 #pragma once
 
+#include <cstdlib>
 #include <string>
 #include <iostream>
 #include <chrono>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/lexical_cast.hpp>
+#include "log.h"
 
 namespace plexus { namespace utils {
 
@@ -31,5 +34,20 @@ std::string smime_verify(const std::string& msg, const std::string& cert, const 
 std::string smime_encrypt(const std::string& msg, const std::string& cert);
 std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key);
 uint64_t random();
+
+template<class var_t> var_t getenv(const std::string& name, const var_t& def)
+{
+    try
+    {
+        const char *env = std::getenv(name.c_str());
+        return env ? boost::lexical_cast<var_t>(env) : def;
+    }
+    catch (const boost::bad_lexical_cast& ex)
+    {
+        _err_ << ex.what();
+    }
+
+    return def;
+}
 
 }}

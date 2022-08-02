@@ -33,7 +33,7 @@ class asio_ssl_client : public plexus::network::ssl
     ssl_stream_socket_ptr           m_socket;
     boost::asio::deadline_timer     m_timer;
     boost::asio::ip::tcp::endpoint  m_endpoint;
-    boost::posix_time::seconds      m_timeout;
+    boost::posix_time::milliseconds m_timeout;
 
     size_t exec(const async_io_call_t& async_io_call)
     {
@@ -86,11 +86,11 @@ class asio_ssl_client : public plexus::network::ssl
 
 public:
 
-    asio_ssl_client(const endpoint& address, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+    asio_ssl_client(const endpoint& address, const std::string& cert, const std::string& key, const std::string& ca)
         : m_ssl(boost::asio::ssl::context::sslv23)
         , m_timer(m_io)
         , m_endpoint(resolve_endpoint(address))
-        , m_timeout(timeout)
+        , m_timeout(plexus::utils::getenv<int64_t>("PLEXUS_SSL_TIMEOUT", 10000))
     {
         m_ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::sslv23_client);
         if (!cert.empty() && !key.empty())
@@ -155,9 +155,9 @@ public:
     }
 };
 
-std::shared_ptr<ssl> create_ssl_client(const endpoint& address, const std::string& cert, const std::string& key, const std::string& ca, int64_t timeout)
+std::shared_ptr<ssl> create_ssl_client(const endpoint& address, const std::string& cert, const std::string& key, const std::string& ca)
 {
-    return std::make_shared<asio_ssl_client>(address, cert, key, ca, timeout);
+    return std::make_shared<asio_ssl_client>(address, cert, key, ca);
 }
 
 }}
