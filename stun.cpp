@@ -513,7 +513,7 @@ public:
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        static const uint8_t MAX_TRACE_HORES = plexus::utils::getenv<uint8_t>("PLEXUS_MAX_TRACE_HORES", 7);
+        static const uint8_t PLEXUS_MAX_PUNCH_HORES = plexus::utils::getenv<uint8_t>("PLEXUS_MAX_PUNCH_HORES", 7);
 
         uint8_t hops = 2;
         int64_t timeout = deadline / 30;
@@ -564,7 +564,7 @@ public:
                 if (ex.code() != boost::asio::error::operation_aborted)
                     throw;
 
-                if (hops >= MAX_TRACE_HORES)
+                if (hops >= PLEXUS_MAX_PUNCH_HORES)
                     return;
                     
                 _trc_ << ex.what();

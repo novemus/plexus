@@ -24,20 +24,14 @@ unsigned short get_id()
 #endif
 }
 
-boost::test_tools::assertion_result run_as_root(boost::unit_test::test_unit_id)
+boost::test_tools::assertion_result is_enabled(boost::unit_test::test_unit_id)
 {
-    boost::test_tools::assertion_result res(true);
-#ifndef _WIN32
-    if (getuid() != 0)
-    {
-        res = boost::test_tools::assertion_result(false);
-        res.message() << "root privileges are required";
-    }
-#endif
+    boost::test_tools::assertion_result res(false);
+    res.message() << "test is disabled";
     return res;
 }
 
-BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(run_as_root))
+BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 {
     auto icmp = plexus::network::create_icmp_channel("127.0.0.1");
     auto req = plexus::network::icmp_packet::make_ping_packet(get_id(), 1);
@@ -70,8 +64,10 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(run_as_root))
     BOOST_CHECK_EQUAL_COLLECTIONS(req->data() + 8, req->data() + req->size(), env->data() + env->header_length() + 8, env->data() + env->total_length());
 }
 
-BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(run_as_root))
+BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
 {
+    plexus::log::set(plexus::log::trace);
+
     auto icmp = plexus::network::create_icmp_channel();
     auto req = plexus::network::icmp_packet::make_ping_packet(get_id(), 1);
     
@@ -80,7 +76,7 @@ BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(run_as_root))
     auto env = std::make_shared<plexus::network::ip_packet>(4096);
     auto tran = std::make_shared<plexus::network::icmp::transfer>(env);
     
-    BOOST_REQUIRE_NO_THROW(icmp->receive(tran));
+    icmp->receive(tran);
     BOOST_REQUIRE_EQUAL(env->protocol(), IPPROTO_ICMP);
 
     auto rep = env->payload<plexus::network::icmp_packet>();

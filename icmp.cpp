@@ -20,6 +20,9 @@
 #include "utils.h"
 #include "log.h"
 
+#ifdef _WIN32
+#include <mstcpip.h>
+#endif
 
 namespace plexus { namespace network {
 
@@ -104,11 +107,12 @@ public:
         , m_timer(m_io)
     {
         m_socket.non_blocking(true);
+        m_socket.bind(resolve_endpoint(local));
 
-        if (!local.empty())
-        {
-            m_socket.bind(resolve_endpoint(local));
-        }
+#ifdef _WIN32
+        unsigned long flag = 1;
+        ioctlsocket(m_socket.native_handle(), SIO_RCVALL, &flag);
+#endif
     }
 
     ~asio_icmp_channel()
