@@ -21,10 +21,11 @@ To run the example below you need to install `openvpn`. Launch following command
 
 Command for remote machine:
 ```console
-plexus --accept --email-smtps=smtp.peermailer.com:xxx --email-imaps=imap.peermailer.com:xxx --email-login=peerlogin --email-passwd=peerpassword --email-from=peerhost@peermailer.com --email-to=yourhost@yourmailer.com --host-id=remote --peer-id=local --stun-ip=stun.someserver.com --bind-port=xxxx --bind-ip=xxx.xxx.xxx.xxx --exec-command=~/plexus/exec.sh
+plexus --accept --punch-hops=7 --email-smtps=smtp.peermailer.com:xxx --email-imaps=imap.peermailer.com:xxx --email-login=peerlogin --email-passwd=peerpassword --email-from=peerhost@peermailer.com --email-to=yourhost@yourmailer.com --host-id=remote --peer-id=local --stun-ip=stun.someserver.com --bind-port=xxxx --bind-ip=xxx.xxx.xxx.xxx --exec-command=~/plexus/exec.sh
 ```
 
-`--accept` key tells the app to accept punching initiations from other side infinitely. It can only be set for one side.
+`--accept` key tells the app to accept punching initiations from other side. It can only be set for one side.
+`--punch-hops` key sets time-to-live parameter for punching packets. It is necessary to set such a value that the punching packets go beyond the host NAT, but do not reach the peer NAT.
 
 Command for local machine:
 ```console

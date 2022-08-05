@@ -39,10 +39,10 @@ int main(int argc, char** argv)
         ("smime-key", boost::program_options::value<std::string>()->default_value(""), "path to smime Private Key of the host")
         ("smime-ca", boost::program_options::value<std::string>()->default_value(""), "path to smime Certification Authority")
         ("stun-ip", boost::program_options::value<std::string>()->required(), "ip address of stun server")
-        ("stun-port", boost::program_options::value<uint16_t>()->default_value(3478u), "port of stun server")
+        ("stun-port", boost::program_options::value<int>()->default_value(3478), "port of stun server")
         ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch a hole in NAT")
-        ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch a hole in NAT")
-        ("punch-hops", boost::program_options::value<uint8_t>()->default_value(7), "time-to-live parameter for punch packets")
+        ("bind-port", boost::program_options::value<int>()->required(), "local port from which to punch a hole in NAT")
+        ("punch-hops", boost::program_options::value<int>()->default_value(7), "time-to-live parameter for punch packets")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
@@ -56,6 +56,17 @@ int main(int argc, char** argv)
     {
         std::cout << desc;
         return 0;
+    }
+
+    try
+    {
+        boost::program_options::notify(vm);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << e.what() << std::endl;
+        std::cout << desc;
+        return 1;
     }
 
     boost::program_options::notify(vm);
