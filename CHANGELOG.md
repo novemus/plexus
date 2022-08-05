@@ -6,4 +6,4 @@
 
 ## 2.0.0 (August 4, 2022)
 
-- Modified UDP hole punching technique and changed plexus message format.
+- Altered the procedure for punching a *passage* between peers and changed the format of plexus messages.

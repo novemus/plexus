@@ -90,7 +90,7 @@ public:
         : m_ssl(boost::asio::ssl::context::sslv23)
         , m_timer(m_io)
         , m_endpoint(resolve_endpoint(address))
-        , m_timeout(plexus::utils::getenv<int64_t>("PLEXUS_SSL_TIMEOUT", 10000))
+        , m_timeout(plexus::utils::getenv<int64_t>("PLEXUS_SSL_TIMEOUT", 5000))
     {
         m_ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::sslv23_client);
         if (!cert.empty() && !key.empty())

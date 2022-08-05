@@ -284,9 +284,18 @@ public:
 
 typedef std::shared_ptr<message> message_ptr;
 
-struct handshake : public network::udp::transfer
+class handshake : public network::udp::transfer
 {
-    handshake(const endpoint& peer, uint8_t flag) : transfer(peer)
+    uint64_t m_mask = 0;
+
+    inline uint8_t mask_byte(size_t pos) const
+    {
+        return uint8_t(m_mask >> (pos * 8));
+    }
+
+public:
+
+    handshake(const endpoint& peer, uint8_t flag, uint64_t mask) : transfer(peer), m_mask(mask)
     {
         buffer = {
             rand_byte(), rand_byte(), rand_byte(), flag,
@@ -295,26 +304,31 @@ struct handshake : public network::udp::transfer
 
         for (size_t i = 0; i < 8; ++i)
         {
-            if (i < 7)
+            if (i != 7)
             {
                 buffer[7] ^= buffer[i];
+                buffer[i] ^= mask_byte(i);
             }
         }
+
+        buffer[7] ^= mask_byte(7);
     }
 
-    handshake() : transfer(8) { }
+    handshake(uint64_t mask) : transfer(8), m_mask(mask)
+    {
+    }
 
     bool valid(const endpoint& peer) const
     {
         if (peer == remote)
         {
-            uint8_t hash = buffer[7];
+            uint8_t hash = buffer[7] ^ mask_byte(7);
 
             for (size_t i = 0; i < 8; ++i)
             {
-                if (i < 7)
+                if (i != 7)
                 {
-                    hash ^= buffer[i];
+                    hash ^= buffer[i] ^ mask_byte(i);
                 }
             }
 
@@ -329,17 +343,9 @@ struct handshake : public network::udp::transfer
 
     uint8_t flag() const
     {
-        return buffer[3];
+        return buffer[3] ^ mask_byte(3);
     }
 };
-
-bool is_public_ip(const boost::asio::ip::address_v4& ip)
-{
-    auto a = ip.to_uint();
-    return !((a >= 0x0A000000) && (a <= 0x0AFFFFFF)) &&
-           !((a >= 0xAC100000) && (a <= 0xAC1FFFFF)) &&
-           !((a >= 0xC0A80000) && (a <= 0xC0A8FFFF));
-}
 
 class session
 {
@@ -417,15 +423,15 @@ public:
         throw plexus::timeout_error();
     }
 
-    void handshake_peer_forward(const endpoint& peer, int64_t deadline) noexcept(false)
+    void handshake_peer_forward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, 0);
-        std::shared_ptr<handshake> in = std::make_shared<handshake>();
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, mask, 0);
+        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask);
 
         int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
         while (timer().total_milliseconds() < deadline)
@@ -439,7 +445,7 @@ public:
                     if (out->flag() == 0)
                     {
                         _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
-                        out = std::make_shared<handshake>(peer, 1);
+                        out = std::make_shared<handshake>(peer, mask, 1);
                     }
                     else
                     {
@@ -462,15 +468,15 @@ public:
         throw plexus::timeout_error();
     }
 
-    void handshake_peer_backward(const endpoint& peer, int64_t deadline) noexcept(false)
+    void handshake_peer_backward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, 1);
-        std::shared_ptr<handshake> in = std::make_shared<handshake>();
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, mask, 1);
+        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask);
 
         int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
         while (timer().total_milliseconds() < deadline)
@@ -625,24 +631,25 @@ public:
         _dbg_ << "punching udp hole to peer...";
 
         auto puncher = std::make_shared<session>(m_local);
+        auto endpoint = puncher->exec_stun_binding(m_stun)->mapped_endpoint();
         puncher->punch_hole_to_peer(peer, hops);
-        return puncher->exec_stun_binding(m_stun)->mapped_endpoint();
+        return endpoint;
     }
 
-    void reach_peer(const endpoint& peer) noexcept(false) override
+    void reach_peer(const endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "reaching peer...";
 
         auto reacher = std::make_shared<session>(m_local);
-        reacher->handshake_peer_forward(peer, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
+        reacher->handshake_peer_forward(peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
     }
 
-    void await_peer(const endpoint& peer) noexcept(false) override
+    void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "awaiting peer...";
 
         auto acceptor = std::make_shared<session>(m_local);
-        acceptor->handshake_peer_backward(peer, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
+        acceptor->handshake_peer_backward(peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
     }
 };
 

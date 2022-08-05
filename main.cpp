@@ -6,7 +6,6 @@
  * You may obtain a copy of the License at
  * http://www.apache.org/licenses/LICENSE-2.0
  * 
- * 
  */
 
 #include <regex>
@@ -105,13 +104,13 @@ int main(int argc, char** argv)
             vm["smime-ca"].as<std::string>()
             );
 
-        auto executor = [&](const plexus::network::endpoint& hole, const plexus::network::endpoint& peer)
+        auto executor = [&](const plexus::network::endpoint& host, const plexus::network::endpoint& peer)
         {
             std::string args = plexus::utils::format("%s %d %s %d %s %d",
                 vm["bind-ip"].as<std::string>().c_str(),
                 vm["bind-port"].as<uint16_t>(),
-                hole.first.c_str(),
-                hole.second,
+                host.first.c_str(),
+                host.second,
                 peer.first.c_str(),
                 peer.second
                 );
@@ -130,21 +129,27 @@ int main(int argc, char** argv)
             {
                 if (vm.count("accept"))
                 {
-                    plexus::network::endpoint peer = mediator->receive_request();
-                    plexus::network::endpoint hole = puncher->punch_udp_hole_to_peer(peer, vm["punch-hops"].as<uint8_t>());
-                    mediator->dispatch_response(hole);
-                    puncher->await_peer(peer);
+                    plexus::reference peer = mediator->receive_request();
+                    plexus::reference host = std::make_pair(
+                        puncher->punch_udp_hole_to_peer(peer.first, vm["punch-hops"].as<uint8_t>()),
+                        plexus::utils::random()
+                        );
+                    mediator->dispatch_response(host);
+                    puncher->await_peer(peer.first, peer.second ^ host.second);
 
-                    executor(hole, peer);
+                    executor(host.first, peer.first);
                 }
                 else
                 {
-                    plexus::network::endpoint hole = puncher->punch_udp_hole();
-                    mediator->dispatch_request(hole);
-                    plexus::network::endpoint peer = mediator->receive_response();
-                    puncher->reach_peer(peer);
+                    plexus::reference host = std::make_pair(
+                        puncher->punch_udp_hole(),
+                        plexus::utils::random()
+                        );
+                    mediator->dispatch_request(host);
+                    plexus::reference peer = mediator->receive_response();
+                    puncher->reach_peer(peer.first, peer.second ^ host.second);
 
-                    executor(hole, peer);
+                    executor(host.first, peer.first);
                 }
             }
             catch (const plexus::timeout_error& ex)

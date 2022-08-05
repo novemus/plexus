@@ -408,7 +408,7 @@ class email_mediator : public mediator
     smtp m_smtp;
     imap m_imap;
 
-    plexus::network::endpoint receive(const std::regex& pattern, int64_t deadline = std::numeric_limits<int64_t>::max())
+    reference receive(const std::regex& pattern, int64_t deadline = std::numeric_limits<int64_t>::max())
     {
         int64_t timeout = std::max<int64_t>(MIN_POLLING_TIMEOUT, std::min<int64_t>(MAX_POLLING_TIMEOUT, deadline / 12));
 
@@ -417,7 +417,7 @@ class email_mediator : public mediator
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        plexus::network::endpoint peer;
+        reference peer;
         do
         {
             std::string message = m_imap.pull();
@@ -427,13 +427,16 @@ class email_mediator : public mediator
                 std::smatch match;
                 if (std::regex_search(message, match, pattern))
                 {
-                    peer = std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str()));
+                    peer = std::make_pair(
+                        std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str())),
+                        boost::lexical_cast<uint64_t>(match[3].str())
+                    );
                 }
 
                 message = m_imap.pull();
             }
 
-            if (!peer.first.empty())
+            if (!peer.first.first.empty())
                 return peer;
 
             std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
@@ -451,42 +454,42 @@ public:
     {
     }
     
-    plexus::network::endpoint receive_request() noexcept(false)
+    reference receive_request() noexcept(false)
     {
         _inf_ << "waiting plexus request...";
 
-        plexus::network::endpoint peer = receive(std::regex("^PLEXUS\\s+2.0\\s+request\\s+(\\S+)\\s+(\\d+)$"));
+        reference peer = receive(std::regex("^PLEXUS\\s+2.0\\s+request\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"));
 
-        _inf_ << "received plexus request " << peer.first << ":" << peer.second;
+        _inf_ << "received plexus request " << peer.first.first << ":" << peer.first.second << " " << peer.second;
         return peer;
     }
 
-    plexus::network::endpoint receive_response() noexcept(false)
+    reference receive_response() noexcept(false)
     {
         _inf_ << "waiting plexus response...";
 
-        plexus::network::endpoint peer = receive(std::regex("^PLEXUS\\s+2.0\\s+response\\s+(\\S+)\\s+(\\d+)$"), RESPONSE_TIMEOUT);
+        reference peer = receive(std::regex("^PLEXUS\\s+2.0\\s+response\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), RESPONSE_TIMEOUT);
 
-        _inf_ << "received plexus response " << peer.first << ":" << peer.second;
+        _inf_ << "received plexus response " << peer.first.first << ":" << peer.first.second << " " << peer.second;
         return peer;
     }
 
-    void dispatch_request(const plexus::network::endpoint& hole) noexcept(false) override
+    void dispatch_request(const reference& host) noexcept(false) override
     {
         _inf_ << "sending plexus request...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 2.0 request %s %u", hole.first.c_str(), hole.second));
+        m_smtp.push(plexus::utils::format("PLEXUS 2.0 request %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
 
-        _inf_ << "sent plexus request " << hole.first << ":" << hole.second;
+        _inf_ << "sent plexus request " << host.first.first << ":" << host.first.second << " " << host.second;
     }
 
-    void dispatch_response(const plexus::network::endpoint& hole) noexcept(false) override
+    void dispatch_response(const reference& host) noexcept(false) override
     {
         _inf_ << "sending plexus response...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 2.0 response %s %u", hole.first.c_str(), hole.second));
+        m_smtp.push(plexus::utils::format("PLEXUS 2.0 response %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
         
-        _inf_ << "sent plexus response " << hole.first << ":" << hole.second;
+        _inf_ << "sent plexus response " << host.first.first << ":" << host.first.second << " " << host.second;
     }
 };
 
