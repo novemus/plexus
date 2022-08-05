@@ -107,7 +107,10 @@ public:
         , m_timer(m_io)
     {
         m_socket.non_blocking(true);
-        m_socket.bind(resolve_endpoint(local));
+        if (local.empty())
+            m_socket.bind(boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0));
+        else
+            m_socket.bind(resolve_endpoint(local));
 
 #ifdef _WIN32
         unsigned long flag = 1;

@@ -26,67 +26,98 @@ unsigned short get_id()
 
 boost::test_tools::assertion_result is_enabled(boost::unit_test::test_unit_id)
 {
-    boost::test_tools::assertion_result res(false);
-    res.message() << "test is disabled";
+    boost::test_tools::assertion_result res(true);
+#ifndef _WIN32
+    if (getuid() != 0)
+    {
+        res = boost::test_tools::assertion_result(false);
+        res.message() << "root privileges are required";
+    }
+#endif
     return res;
 }
 
 BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 {
-    auto icmp = plexus::network::create_icmp_channel("127.0.0.1");
+    auto icmp = plexus::network::create_icmp_channel();
     auto req = plexus::network::icmp_packet::make_ping_packet(get_id(), 1);
     
-    BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::icmp::transfer>("127.0.0.1", req)));
+    BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::icmp::transfer>("8.8.8.8", req)));
 
-    auto env = std::make_shared<plexus::network::ip_packet>(4096);
-    auto tran = std::make_shared<plexus::network::icmp::transfer>(env);
-    
-    BOOST_REQUIRE_NO_THROW(icmp->receive(tran));
+    int tries = 5;
+    bool success = false;
+    do
+    {
+        try
+        {
+            auto env = std::make_shared<plexus::network::ip_packet>(4096);
+            
+            icmp->receive(std::make_shared<plexus::network::icmp::transfer>(env));
+            
+            auto rep = env->payload<plexus::network::icmp_packet>();
 
-    BOOST_REQUIRE_EQUAL(tran->remote, "127.0.0.1");
-    BOOST_REQUIRE_EQUAL(env->destination_address().to_string(), "127.0.0.1");
-    BOOST_REQUIRE_EQUAL(env->protocol(), IPPROTO_ICMP);
-    BOOST_REQUIRE_EQUAL(env->total_length() - env->header_length(), req->size());
-    BOOST_CHECK_EQUAL_COLLECTIONS(req->data(), req->data() + req->size(), env->data() + env->header_length(), env->data() + env->total_length());
+            BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
 
-    BOOST_REQUIRE_NO_THROW(icmp->receive(tran));
+            success = env->source_address().to_string() == "8.8.8.8"
+                    && env->protocol() == IPPROTO_ICMP
+                    && env->total_length() - env->header_length() == req->size()
+                    && rep->type() == plexus::network::icmp_packet::echo_reply
+                    && rep->code() == 0
+                    && rep->identifier() == req->identifier()
+                    && rep->sequence_number() == req->sequence_number()
+                    && memcmp(rep->data() + 8, req->data() + 8, req->size() - 8) == 0;
+        }
+        catch(const boost::system::system_error& ex) 
+        {
+            BOOST_REQUIRE_EQUAL(ex.code(), boost::asio::error::operation_aborted);
+            break;
+        }
+    } 
+    while (tries > 0 && !success);
 
-    BOOST_REQUIRE_EQUAL(tran->remote, "127.0.0.1");
-    BOOST_REQUIRE_EQUAL(env->destination_address().to_string(), "127.0.0.1");
-    BOOST_REQUIRE_EQUAL(env->protocol(), IPPROTO_ICMP);
-    BOOST_REQUIRE_EQUAL(env->total_length() - env->header_length(), req->size());
-
-    auto rep = env->payload<plexus::network::icmp_packet>();
-    BOOST_REQUIRE_EQUAL(rep->type(), plexus::network::icmp_packet::echo_reply);
-    BOOST_REQUIRE_EQUAL(rep->code(), 0);
-    BOOST_REQUIRE_EQUAL(rep->identifier(), req->identifier());
-    BOOST_REQUIRE_EQUAL(rep->sequence_number(), req->sequence_number());
-    BOOST_CHECK_EQUAL_COLLECTIONS(req->data() + 8, req->data() + req->size(), env->data() + env->header_length() + 8, env->data() + env->total_length());
+    BOOST_CHECK_MESSAGE(success, "no ping reply packet");
 }
 
 BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
 {
-    plexus::log::set(plexus::log::trace);
-
     auto icmp = plexus::network::create_icmp_channel();
     auto req = plexus::network::icmp_packet::make_ping_packet(get_id(), 1);
     
     BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::icmp::transfer>("8.8.8.8", req), 1600, 1));
 
-    auto env = std::make_shared<plexus::network::ip_packet>(4096);
-    auto tran = std::make_shared<plexus::network::icmp::transfer>(env);
-    
-    icmp->receive(tran);
-    BOOST_REQUIRE_EQUAL(env->protocol(), IPPROTO_ICMP);
+    int tries = 5;
+    bool success = false;
+    do
+    {
+        try
+        {
+            auto env = std::make_shared<plexus::network::ip_packet>(4096);
+            
+            icmp->receive(std::make_shared<plexus::network::icmp::transfer>(env));
+            
+            auto rep = env->payload<plexus::network::icmp_packet>();
+            
+            BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
 
-    auto rep = env->payload<plexus::network::icmp_packet>();
-    BOOST_REQUIRE_EQUAL(rep->type(), plexus::network::icmp_packet::time_exceeded);
-    BOOST_REQUIRE_EQUAL(rep->code(), 0);
+            if (env->protocol() == IPPROTO_ICMP && rep->type() == plexus::network::icmp_packet::time_exceeded)
+            {
+                env = rep->payload<plexus::network::ip_packet>();
+                if (env->protocol() == IPPROTO_ICMP)
+                {
+                    rep = env->payload<plexus::network::icmp_packet>();
+                    success = env->destination_address().to_string() == "8.8.8.8"
+                            && env->total_length() - env->header_length() == req->size()
+                            && memcmp(rep->data(), req->data(), req->size()) == 0;
+                }
+            }
+        }
+        catch(const boost::system::system_error& ex) 
+        {
+            BOOST_REQUIRE_EQUAL(ex.code(), boost::asio::error::operation_aborted);
+            break;
+        }
+    } 
+    while (tries > 0 && !success);
 
-    env = rep->payload<plexus::network::ip_packet>();
-    BOOST_REQUIRE_EQUAL(env->protocol(), IPPROTO_ICMP);
-    BOOST_REQUIRE_EQUAL(env->destination_address().to_string(), "8.8.8.8");
-
-    rep = env->payload<plexus::network::icmp_packet>();
-    BOOST_CHECK_EQUAL_COLLECTIONS(req->data(), req->data() + 8, rep->data(), rep->data() + 8);
+    BOOST_CHECK_MESSAGE(success, "no time exceeded packet");
 }
