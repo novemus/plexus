@@ -506,72 +506,15 @@ public:
         throw plexus::timeout_error();
     }
 
-    void punch_hole_to_peer(const endpoint& peer, int64_t deadline) noexcept(false)
+    void punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false)
     {
-        auto clock = [start = boost::posix_time::microsec_clock::universal_time()]()
-        {
-            return boost::posix_time::microsec_clock::universal_time() - start;
-        };
+        std::shared_ptr<udp::transfer> punch = std::make_shared<udp::transfer>(peer, std::vector<uint8_t>{
+            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+            rand_byte(), rand_byte(), rand_byte(), rand_byte()
+        });
 
-        static const uint8_t PLEXUS_MAX_PUNCH_HORES = plexus::utils::getenv<uint8_t>("PLEXUS_MAX_PUNCH_HORES", 7);
-
-        uint8_t hops = 2;
-        int64_t timeout = deadline / 30;
-
-        while (clock().total_milliseconds() < deadline)
-        {
-            std::shared_ptr<udp::transfer> punch = std::make_shared<udp::transfer>(peer, std::vector<uint8_t>{
-                rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-                rand_byte(), rand_byte(), rand_byte(), rand_byte()
-            });
-
-            m_udp->send(punch, timeout, hops);
-            m_udp->send(punch, timeout, hops++);
-
-            try
-            {
-                auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
-                {
-                    return boost::posix_time::microsec_clock::universal_time() - start;
-                };
-
-                do {
-                    auto envelope = std::make_shared<ip_packet>(4096);
-
-                    m_icmp->receive(std::make_shared<icmp::transfer>(envelope), timeout);
-
-                    auto icmp = envelope->payload<icmp_packet>();
-                    if (icmp->type() == icmp_packet::time_exceeded)
-                    {
-                        auto ip = icmp->payload<ip_packet>();
-                        if (ip->protocol() == IPPROTO_UDP)
-                        {
-                            auto udp = ip->payload<udp_packet>();
-                            if (udp->source_port() == m_local.second)
-                            {
-                                if (is_public_ip(envelope->source_address()))
-                                    return;
-                                else
-                                    break;
-                            }
-                        }
-                    }
-                }
-                while (timer().total_milliseconds() < timeout);
-            }
-            catch(const boost::system::system_error& ex)
-            {
-                if (ex.code() != boost::asio::error::operation_aborted)
-                    throw;
-
-                if (hops >= PLEXUS_MAX_PUNCH_HORES)
-                    return;
-                    
-                _trc_ << ex.what();
-            }
-        }
-
-        throw plexus::timeout_error();
+        m_udp->send(punch, 1600, hops);
+        m_udp->send(punch, 1600, hops);
     }
 };
 
@@ -677,12 +620,12 @@ public:
         return puncher->exec_stun_binding(m_stun)->mapped_endpoint();
     }
 
-    endpoint punch_udp_hole_to_peer(const endpoint& peer) noexcept(false) override
+    endpoint punch_udp_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) override
     {
         _dbg_ << "punching udp hole to peer...";
 
         auto puncher = std::make_shared<session>(m_local);
-        puncher->punch_hole_to_peer(peer, plexus::utils::getenv<int64_t>("PLEXUS_PUNCH_TIMEOUT", 60000));
+        puncher->punch_hole_to_peer(peer, hops);
         return puncher->exec_stun_binding(m_stun)->mapped_endpoint();
     }
 

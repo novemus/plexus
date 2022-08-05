@@ -22,6 +22,7 @@ int main(int argc, char** argv)
     boost::program_options::options_description desc("plexus options");
     desc.add_options()
         ("help", "produce help message")
+        ("accept", "accept or invite peer for punching initiations")
         ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of host side")
         ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of peer side")
         ("email-smtps", boost::program_options::value<std::string>()->required(), "smtp server used to send reference to a peer")
@@ -39,24 +40,25 @@ int main(int argc, char** argv)
         ("smime-ca", boost::program_options::value<std::string>()->default_value(""), "path to smime Certification Authority")
         ("stun-ip", boost::program_options::value<std::string>()->required(), "ip address of stun server")
         ("stun-port", boost::program_options::value<uint16_t>()->default_value(3478u), "port of stun server")
-        ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch a udp hole")
-        ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch a udp hole")
-        ("exec-command", boost::program_options::value<std::string>()->required(), "command to execute after the udp hole to a peer is punched")
+        ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch a hole in NAT")
+        ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch a hole in NAT")
+        ("punch-hops", boost::program_options::value<uint8_t>()->default_value(7), "time-to-live parameter for punch packets")
+        ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
-        ("accept", "accept or invite peer for punching initiations")
         ("log-level", boost::program_options::value<int>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warnine, 4 - info, 5 - debug, 6 - trace")
         ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file");
 
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
-    boost::program_options::notify(vm);
 
     if(vm.count("help"))
     {
         std::cout << desc;
         return 0;
     }
+
+    boost::program_options::notify(vm);
 
     try
     {
@@ -92,8 +94,6 @@ int main(int argc, char** argv)
             vm["smime-ca"].as<std::string>()
             );
 
-        bool accept = vm.count("accept") > 0;
-
         auto executor = [&](const plexus::network::endpoint& hole, const plexus::network::endpoint& peer)
         {
             std::string args = plexus::utils::format("%s %d %s %d %s %d",
@@ -117,10 +117,10 @@ int main(int argc, char** argv)
         {
             try
             {
-                if (accept)
+                if (vm.count("accept"))
                 {
                     plexus::network::endpoint peer = mediator->receive_request();
-                    plexus::network::endpoint hole = puncher->punch_udp_hole_to_peer(peer);
+                    plexus::network::endpoint hole = puncher->punch_udp_hole_to_peer(peer, vm["punch-hops"].as<uint8_t>());
                     mediator->dispatch_response(hole);
                     puncher->await_peer(peer);
 
@@ -145,7 +145,7 @@ int main(int argc, char** argv)
                 _err_ << ex.what();
             }
         } 
-        while (accept);
+        while (vm.count("accept"));
     }
     catch(const std::exception& e)
     {

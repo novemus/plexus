@@ -72,7 +72,7 @@ struct puncher
     virtual ~puncher() {}
     virtual traverse explore_network() noexcept(false) = 0;
     virtual endpoint punch_udp_hole() noexcept(false) = 0;
-    virtual endpoint punch_udp_hole_to_peer(const endpoint& peer) noexcept(false) = 0;
+    virtual endpoint punch_udp_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) = 0;
     virtual void reach_peer(const endpoint& peer) noexcept(false) = 0;
     virtual void await_peer(const endpoint& peer) noexcept(false) = 0;
 };
