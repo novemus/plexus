@@ -430,7 +430,7 @@ public:
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, mask, 0);
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, 0, mask);
         std::shared_ptr<handshake> in = std::make_shared<handshake>(mask);
 
         int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
@@ -445,7 +445,7 @@ public:
                     if (out->flag() == 0)
                     {
                         _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
-                        out = std::make_shared<handshake>(peer, mask, 1);
+                        out = std::make_shared<handshake>(peer, 1, mask);
                     }
                     else
                     {
@@ -475,7 +475,7 @@ public:
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, mask, 1);
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, 1, mask);
         std::shared_ptr<handshake> in = std::make_shared<handshake>(mask);
 
         int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
