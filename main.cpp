@@ -38,14 +38,14 @@ int main(int argc, char** argv)
         ("smime-key", boost::program_options::value<std::string>()->default_value(""), "path to smime Private Key of the host")
         ("smime-ca", boost::program_options::value<std::string>()->default_value(""), "path to smime Certification Authority")
         ("stun-ip", boost::program_options::value<std::string>()->required(), "ip address of stun server")
-        ("stun-port", boost::program_options::value<int>()->default_value(3478), "port of stun server")
+        ("stun-port", boost::program_options::value<uint16_t>()->default_value(3478), "port of stun server")
         ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch a hole in NAT")
-        ("bind-port", boost::program_options::value<int>()->required(), "local port from which to punch a hole in NAT")
-        ("punch-hops", boost::program_options::value<int>()->default_value(7), "time-to-live parameter for punch packets")
+        ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch a hole in NAT")
+        ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for punch packets")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
-        ("log-level", boost::program_options::value<int>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warnine, 4 - info, 5 - debug, 6 - trace")
+        ("log-level", boost::program_options::value<uint16_t>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warnine, 4 - info, 5 - debug, 6 - trace")
         ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file");
 
     boost::program_options::variables_map vm;
@@ -72,7 +72,7 @@ int main(int argc, char** argv)
 
     try
     {
-        plexus::log::set((plexus::log::severity)vm["log-level"].as<int>(), vm["log-file"].as<std::string>());
+        plexus::log::set((plexus::log::severity)vm["log-level"].as<uint16_t>(), vm["log-file"].as<std::string>());
         
         auto puncher = plexus::create_stun_puncher(
             plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
@@ -131,7 +131,7 @@ int main(int argc, char** argv)
                 {
                     plexus::reference peer = mediator->receive_request();
                     plexus::reference host = std::make_pair(
-                        puncher->punch_udp_hole_to_peer(peer.first, vm["punch-hops"].as<uint8_t>()),
+                        puncher->punch_udp_hole_to_peer(peer.first, (uint8_t)vm["punch-hops"].as<uint16_t>()),
                         plexus::utils::random()
                         );
                     mediator->dispatch_response(host);
