@@ -1,3 +1,5 @@
+@echo off
+
 set argc=0
 for %%x in (%*) do (
    set /a argc+=1
