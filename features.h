@@ -47,8 +47,6 @@ std::shared_ptr<mediator> create_email_mediator(const std::string& host_id,
                                                 const std::string& smime_key = "",
                                                 const std::string& smime_ca = "");
 
-const uint16_t DEFAULT_STUN_PORT = 3478u;
-
 enum binding
 {
     unknown = 0,

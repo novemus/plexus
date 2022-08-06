@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <mutex>
 #include <ostream>
 #include <sstream>
 #include <functional>

@@ -10,7 +10,6 @@
 
 #include <map>
 #include <iostream>
-#include <mutex>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/buffer.hpp>
@@ -34,7 +33,6 @@ class asio_udp_channel : public udp, public std::enable_shared_from_this<asio_ud
     boost::asio::ip::udp::socket m_socket;
     boost::asio::deadline_timer  m_timer;
     endpoint_cache_t             m_remotes;
-    std::mutex                   m_mutex;
 
     size_t exec(const async_io_call_t& async_io_call, int64_t timeout)
     {
@@ -81,19 +79,15 @@ class asio_udp_channel : public udp, public std::enable_shared_from_this<asio_ud
     boost::asio::ip::udp::endpoint resolve_endpoint(const std::string& host, const std::string& service)
     {
         auto key = std::make_pair(host, service);
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
 
-            auto iter = m_remotes.find(key);
-            if (iter != m_remotes.end())
-                return iter->second;
-        }
+        auto iter = m_remotes.find(key);
+        if (iter != m_remotes.end())
+            return iter->second;
 
         boost::asio::ip::udp::resolver resolver(m_io);
         boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), host, service);
         boost::asio::ip::udp::endpoint endpoint = *resolver.resolve(query);
 
-        std::lock_guard<std::mutex> lock(m_mutex);
         m_remotes.insert(std::make_pair(key, endpoint));
 
         return endpoint;

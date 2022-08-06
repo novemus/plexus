@@ -10,7 +10,6 @@
 
 #include <map>
 #include <iostream>
-#include <mutex>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/buffer.hpp>
@@ -36,7 +35,6 @@ class asio_icmp_channel : public icmp, public std::enable_shared_from_this<asio_
     boost::asio::ip::icmp::socket m_socket;
     boost::asio::deadline_timer   m_timer;
     endpoint_cache_t              m_remotes;
-    std::mutex                    m_mutex;
 
     size_t exec(const async_io_call_t& async_io_call, int64_t timeout)
     {
@@ -82,19 +80,14 @@ class asio_icmp_channel : public icmp, public std::enable_shared_from_this<asio_
 
     boost::asio::ip::icmp::endpoint resolve_endpoint(const address& ip)
     {
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            auto iter = m_remotes.find(ip);
-            if (iter != m_remotes.end())
-                return iter->second;
-        }
+        auto iter = m_remotes.find(ip);
+        if (iter != m_remotes.end())
+            return iter->second;
 
         boost::asio::ip::icmp::resolver resolver(m_io);
         boost::asio::ip::icmp::resolver::query query(boost::asio::ip::icmp::v4(), ip, "");
         boost::asio::ip::icmp::endpoint endpoint = *resolver.resolve(query);
 
-        std::lock_guard<std::mutex> lock(m_mutex);
         m_remotes.insert(std::make_pair(ip, endpoint));
 
         return endpoint;
