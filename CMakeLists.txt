@@ -55,7 +55,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     target_link_libraries(${TESTS} ${Boost_LIBRARIES})
 endif()
 
-install(TARGETS ${PROJECT_NAME})
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 
 enable_testing()
 add_test(NAME ${TESTS} COMMAND ${TESTS} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)

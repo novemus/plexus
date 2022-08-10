@@ -440,21 +440,19 @@ public:
             {
                 m_udp->send(out, timeout);
                 
-                if (in->valid(peer))
+                if (out->flag() == 1)
                 {
-                    if (out->flag() == 0)
-                    {
-                        _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
-                        out = std::make_shared<handshake>(peer, 1, mask);
-                    }
-                    else
-                    {
-                        _dbg_ << "handshake peer=" << in->remote.first << ":" << in->remote.second;
-                        return;
-                    }
+                    _dbg_ << "handshake peer=" << in->remote.first << ":" << in->remote.second;
+                    return;
                 }
 
                 m_udp->receive(in, timeout);
+
+                if (in->valid(peer))
+                {
+                    _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
+                    out = std::make_shared<handshake>(peer, 1, mask);
+                }
             }
             catch(const boost::system::system_error& ex)
             {
