@@ -32,8 +32,8 @@ struct config
     std::string passwd;
     std::string from;
     std::string to;
-    std::string subj_from;
-    std::string subj_to;
+    std::string host_id;
+    std::string peer_id;
     std::string cert;
     std::string key;
     std::string ca;
@@ -138,7 +138,7 @@ class smtp
                 SIMPLE_EMAIL,
                 m_config.from.c_str(),
                 m_config.to.c_str(),
-                m_config.subj_to.c_str(),
+                m_config.host_id.c_str(),
                 data.c_str()
                 );
         }
@@ -165,7 +165,7 @@ class smtp
             MULTIPART_EMAIL,
             m_config.from.c_str(),
             m_config.to.c_str(),
-            m_config.subj_to.c_str(),
+            m_config.host_id.c_str(),
             bound.c_str(),
             bound.c_str(),
             content.c_str(),
@@ -362,7 +362,7 @@ public:
                 utils::format("%d-%b-%Y", std::chrono::system_clock::now()).c_str(),
                 get_address(m_config.from).c_str(),
                 get_address(m_config.to).c_str(),
-                m_config.subj_from.c_str()
+                m_config.peer_id.c_str()
              ), search_parser);
         }
 
