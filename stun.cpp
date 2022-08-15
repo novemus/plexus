@@ -563,15 +563,166 @@ public:
 
 class tcp_punch_strategy : public punch_strategy
 {
+    class handshake : public network::tcp::transfer
+    {
+        uint64_t m_mask = 0;
+
+        inline uint8_t mask_byte(size_t pos) const
+        {
+            return uint8_t(m_mask >> (pos * 8));
+        }
+
+    public:
+
+        handshake(uint64_t mask, bool init) : m_mask(mask)
+        {
+            if (init)
+            {
+                buffer = {
+                    rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+                    rand_byte(), rand_byte(), rand_byte(), 0
+                };
+
+                for (size_t i = 0; i < 8; ++i)
+                {
+                    if (i != 7)
+                    {
+                        buffer[7] ^= buffer[i];
+                        buffer[i] ^= mask_byte(i);
+                    }
+                }
+
+                buffer[7] ^= mask_byte(7);
+            }
+            else
+            {
+                buffer = std::initializer_list<uint8_t>{0, 0, 0, 0, 0, 0, 0, 0};
+            }
+        }
+
+        void verify(const handshake& other) const
+        {
+            if (buffer != other.buffer)
+            {
+                uint8_t hash = buffer[7] ^ mask_byte(7);
+
+                for (size_t i = 0; i < 8; ++i)
+                {
+                    if (i != 7)
+                    {
+                        hash ^= buffer[i] ^ mask_byte(i);
+                    }
+                }
+
+                if (hash == 0)
+                    return;
+            }
+
+            throw plexus::handshake_error();
+        }
+
+        void verify() const
+        {
+            uint8_t hash = buffer[7] ^ mask_byte(7);
+
+            for (size_t i = 0; i < 8; ++i)
+            {
+                if (i != 7)
+                {
+                    hash ^= buffer[i] ^ mask_byte(i);
+                }
+            }
+
+            if (hash != 0)
+                throw plexus::handshake_error();
+        }
+    };
+
 public:
 
     tcp_punch_strategy(const endpoint& local) : punch_strategy(local)
     {
     }
 
-    void handshake_peer_forward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) override { }
-    void handshake_peer_backward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) override { }
-    void punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) override { }
+    void handshake_peer_forward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) override
+    {
+        std::shared_ptr<tcp> pin = get_tcp_pin();
+
+        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask, false);
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(mask, true);
+
+        try
+        {
+            pin->connect(peer, deadline / 3);
+
+            _dbg_ << "welcome peer=" << peer.first << ":" << peer.second;
+
+            pin->write(out);
+            pin->read(in);
+            in->verify(*out);
+            pin->shutdown();
+
+            _dbg_ << "handshake peer=" << peer.first << ":" << peer.second;
+        }
+        catch(const boost::system::system_error& ex)
+        {
+            if (ex.code() != boost::asio::error::operation_aborted)
+                throw;
+
+            _trc_ << ex.what();
+        }
+
+        throw plexus::timeout_error();
+    }
+
+    void handshake_peer_backward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) override
+    {
+        std::shared_ptr<tcp> pin = get_tcp_pin();
+
+        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask, false);
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(mask, true);
+
+        try
+        {
+            pin->accept(peer, deadline / 3);
+
+            _dbg_ << "welcome peer=" << peer.first << ":" << peer.second;
+
+            pin->read(in);
+            in->verify();
+            pin->write(out);
+            pin->shutdown();
+
+            _dbg_ << "handshake peer=" << peer.first << ":" << peer.second;
+        }
+        catch(const boost::system::system_error& ex)
+        {
+            if (ex.code() != boost::asio::error::operation_aborted)
+                throw;
+
+            _trc_ << ex.what();
+        }
+
+        throw plexus::timeout_error();
+    }
+    
+    void punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) override
+    { 
+        std::shared_ptr<tcp> pin = get_tcp_pin();
+
+        try
+        {
+            pin->connect(peer, 1000, hops);
+            pin->shutdown();
+        }
+        catch(const boost::system::system_error& ex)
+        {
+            if (ex.code() != boost::asio::error::operation_aborted && ex.code() != boost::asio::error::host_unreachable)
+                throw;
+
+            _trc_ << ex.what();
+        }
+    }
 };
 
 template<class strategy_t> class nat_puncher : public puncher
@@ -590,10 +741,10 @@ public:
     traverse explore_network() noexcept(false) override
     {
         traverse state = {0};
-        auto mapper = std::make_shared<strategy_t>(m_local);
+        auto strategy = std::make_shared<strategy_t>(m_local);
 
         _dbg_ << "nat test...";
-        message_ptr response = mapper->exec_stun_binding(m_stun);
+        message_ptr response = strategy->exec_stun_binding(m_stun);
 
         endpoint mapped = response->mapped_endpoint();
         endpoint source = response->source_endpoint();
@@ -605,7 +756,7 @@ public:
             state.random_port = mapped.second != m_local.second ? 1 : 0;
             
             _dbg_ << "first mapping test...";
-            endpoint fst_mapped = mapper->exec_stun_binding(changed)->mapped_endpoint();
+            endpoint fst_mapped = strategy->exec_stun_binding(changed)->mapped_endpoint();
 
             state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
 
@@ -616,7 +767,7 @@ public:
             else
             {
                 _dbg_ << "second mapping test...";
-                endpoint snd_mapped = mapper->exec_stun_binding(endpoint{changed.first, source.second})->mapped_endpoint();
+                endpoint snd_mapped = strategy->exec_stun_binding(endpoint{changed.first, source.second})->mapped_endpoint();
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }
@@ -631,16 +782,16 @@ public:
         try
         {
             _dbg_ << "hairpin test...";
-            mapper->exec_stun_binding(mapped, 0, 1400);
+            strategy->exec_stun_binding(mapped, 0, 1400);
             state.hairpin = 1;
         }
         catch(const plexus::timeout_error&) { }
 
-        auto filterer = std::make_shared<strategy_t>(endpoint(m_local.first, m_local.second + 1));
+        strategy = std::make_shared<strategy_t>(endpoint(m_local.first, m_local.second + 1));
         try
         {
             _dbg_ << "first filtering test...";
-            filterer->exec_stun_binding(m_stun, flag::change_address | flag::change_port, 1400);
+            strategy->exec_stun_binding(m_stun, flag::change_address | flag::change_port, 1400);
             state.filtering = binding::independent;
         }
         catch(const plexus::timeout_error&)
@@ -648,7 +799,7 @@ public:
             try
             {
                 _dbg_ << "second filtering test...";
-                filterer->exec_stun_binding(m_stun, flag::change_port, 1400);
+                strategy->exec_stun_binding(m_stun, flag::change_port, 1400);
                 state.filtering = binding::address_dependent;
             }
             catch(const plexus::timeout_error&)
@@ -672,17 +823,17 @@ public:
     {
         _dbg_ << "obtaining endpoint...";
 
-        auto puncher = std::make_shared<strategy_t>(m_local);
-        return puncher->exec_stun_binding(m_stun)->mapped_endpoint();
+        auto strategy = std::make_shared<strategy_t>(m_local);
+        return strategy->exec_stun_binding(m_stun)->mapped_endpoint();
     }
 
     endpoint punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) override
     {
         _dbg_ << "punching hole to peer...";
 
-        auto puncher = std::make_shared<strategy_t>(m_local);
-        auto endpoint = puncher->exec_stun_binding(m_stun)->mapped_endpoint();
-        puncher->punch_hole_to_peer(peer, hops);
+        auto strategy = std::make_shared<strategy_t>(m_local);
+        auto endpoint = strategy->exec_stun_binding(m_stun)->mapped_endpoint();
+        strategy->punch_hole_to_peer(peer, hops);
         return endpoint;
     }
 
@@ -690,27 +841,27 @@ public:
     {
         _dbg_ << "reaching peer...";
 
-        auto reacher = std::make_shared<strategy_t>(m_local);
-        reacher->handshake_peer_forward(peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
+        auto strategy = std::make_shared<strategy_t>(m_local);
+        strategy->handshake_peer_forward(peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
     }
 
     void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "awaiting peer...";
 
-        auto acceptor = std::make_shared<strategy_t>(m_local);
-        acceptor->handshake_peer_backward(peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
+        auto strategy = std::make_shared<strategy_t>(m_local);
+        strategy->handshake_peer_backward(peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
     }
 };
 
 }
 
-std::shared_ptr<puncher> create_udp_puncher(const endpoint& stun, const endpoint& local)
+std::shared_ptr<puncher> create_udp_stun_puncher(const endpoint& stun, const endpoint& local)
 {
     return std::make_shared<stun::nat_puncher<stun::udp_punch_strategy>>(stun, local);
 }
 
-std::shared_ptr<puncher> create_tcp_puncher(const endpoint& stun, const endpoint& local)
+std::shared_ptr<puncher> create_tcp_stun_puncher(const endpoint& stun, const endpoint& local)
 {
     return std::make_shared<stun::nat_puncher<stun::tcp_punch_strategy>>(stun, local);
 }

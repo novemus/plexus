@@ -74,7 +74,7 @@ int main(int argc, char** argv)
     {
         plexus::log::set((plexus::log::severity)vm["log-level"].as<uint16_t>(), vm["log-file"].as<std::string>());
         
-        auto puncher = plexus::create_udp_puncher(
+        auto puncher = plexus::create_udp_stun_puncher(
             plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
             plexus::network::endpoint(vm["bind-ip"].as<std::string>(), vm["bind-port"].as<uint16_t>())
             );
