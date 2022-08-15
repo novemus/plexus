@@ -446,7 +446,7 @@ public:
 
                 m_udp->receive(in, timeout);
 
-                if (in->valid(peer))
+                if (in->valid(peer) && in->flag() == 1)
                 {
                     _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
                     out = std::make_shared<handshake>(peer, 1, mask);
@@ -515,7 +515,6 @@ public:
             rand_byte(), rand_byte(), rand_byte(), rand_byte()
         });
 
-        m_udp->send(punch, 1600, hops);
         m_udp->send(punch, 1600, hops);
     }
 };
