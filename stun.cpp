@@ -351,14 +351,12 @@ class session
 {
     endpoint m_local;
     std::shared_ptr<udp> m_udp;
-    std::shared_ptr<icmp> m_icmp;
 
 public:
 
     session(const endpoint& local)
         : m_local(local)
         , m_udp(create_udp_channel(local))
-        , m_icmp(create_icmp_channel(local.first))
     {
     }
 
