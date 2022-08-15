@@ -71,12 +71,13 @@ struct puncher
 {
     virtual ~puncher() {}
     virtual traverse explore_network() noexcept(false) = 0;
-    virtual endpoint punch_udp_hole() noexcept(false) = 0;
-    virtual endpoint punch_udp_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) = 0;
+    virtual endpoint obtain_endpoint() noexcept(false) = 0;
+    virtual endpoint punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) = 0;
     virtual void reach_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
     virtual void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
-std::shared_ptr<puncher> create_stun_puncher(const endpoint& stun, const endpoint& local);
+std::shared_ptr<puncher> create_udp_puncher(const endpoint& stun, const endpoint& local);
+std::shared_ptr<puncher> create_tcp_puncher(const endpoint& stun, const endpoint& local);
 
 }

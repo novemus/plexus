@@ -47,6 +47,25 @@ struct udp
 
 std::shared_ptr<udp> create_udp_channel(const endpoint& local);
 
+struct tcp
+{
+    struct transfer
+    {
+        std::vector<uint8_t> buffer;
+
+        transfer(size_t b) : buffer(b, 0) {}
+        transfer(std::initializer_list<uint8_t> b) : buffer(b) {}
+    };
+
+    virtual ~tcp() {}
+    virtual void accept(const endpoint& remote, int64_t timeout_ms = 10000) noexcept(false) = 0;
+    virtual void connect(const endpoint& remote, int64_t timeout_ms = 10000, uint8_t hops = 64) noexcept(false) = 0;
+    virtual size_t read(std::shared_ptr<transfer> tran) noexcept(false) = 0;
+    virtual size_t write(std::shared_ptr<transfer> tran) noexcept(false) = 0;
+};
+
+std::shared_ptr<tcp> create_tcp_channel(const endpoint& local);
+
 struct icmp
 {
     struct transfer

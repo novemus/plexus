@@ -74,7 +74,7 @@ int main(int argc, char** argv)
     {
         plexus::log::set((plexus::log::severity)vm["log-level"].as<uint16_t>(), vm["log-file"].as<std::string>());
         
-        auto puncher = plexus::create_stun_puncher(
+        auto puncher = plexus::create_udp_puncher(
             plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
             plexus::network::endpoint(vm["bind-ip"].as<std::string>(), vm["bind-port"].as<uint16_t>())
             );
@@ -131,7 +131,7 @@ int main(int argc, char** argv)
                 {
                     plexus::reference peer = mediator->receive_request();
                     plexus::reference host = std::make_pair(
-                        puncher->punch_udp_hole_to_peer(peer.first, (uint8_t)vm["punch-hops"].as<uint16_t>()),
+                        puncher->punch_hole_to_peer(peer.first, (uint8_t)vm["punch-hops"].as<uint16_t>()),
                         plexus::utils::random()
                         );
                     mediator->dispatch_response(host);
@@ -142,7 +142,7 @@ int main(int argc, char** argv)
                 else
                 {
                     plexus::reference host = std::make_pair(
-                        puncher->punch_udp_hole(),
+                        puncher->obtain_endpoint(),
                         plexus::utils::random()
                         );
                     mediator->dispatch_request(host);
