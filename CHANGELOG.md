@@ -7,3 +7,7 @@
 ## 2.0.0 (August 4, 2022)
 
 - Altered the procedure for punching a *passage* between peers and changed the format of plexus messages.
+
+## 2.0.1 (August 15, 2022)
+
+- Accumulated fixes and improvements.
