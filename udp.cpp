@@ -25,7 +25,7 @@ namespace plexus { namespace network {
 
 class asio_udp_channel : public udp, public std::enable_shared_from_this<asio_udp_channel>
 {
-    typedef std::map<std::pair<std::string, std::string>, boost::asio::ip::udp::endpoint> endpoint_cache_t;
+    typedef std::map<plexus::network::endpoint, boost::asio::ip::udp::endpoint> endpoint_cache_t;
     typedef std::function<void(const boost::system::error_code&, size_t)> async_io_callback_t;
     typedef std::function<void(const async_io_callback_t&)> async_io_call_t;
 
@@ -76,30 +76,28 @@ class asio_udp_channel : public udp, public std::enable_shared_from_this<asio_ud
         return length;
     }
 
-    boost::asio::ip::udp::endpoint resolve_endpoint(const std::string& host, const std::string& service)
+    boost::asio::ip::udp::endpoint resolve_endpoint(const endpoint& address)
     {
-        auto key = std::make_pair(host, service);
-
-        auto iter = m_remotes.find(key);
+        auto iter = m_remotes.find(address);
         if (iter != m_remotes.end())
             return iter->second;
 
         boost::asio::ip::udp::resolver resolver(m_io);
-        boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), host, service);
+        boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), address.first, std::to_string(address.second));
         boost::asio::ip::udp::endpoint endpoint = *resolver.resolve(query);
 
-        m_remotes.insert(std::make_pair(key, endpoint));
+        m_remotes.insert(std::make_pair(address, endpoint));
 
         return endpoint;
     }
 
 public:
 
-    asio_udp_channel(const endpoint& address)
+    asio_udp_channel(const endpoint& local)
         : m_socket(m_io)
         , m_timer(m_io)
     {
-        boost::asio::ip::udp::endpoint endpoint = resolve_endpoint(address.first, std::to_string(address.second));
+        boost::asio::ip::udp::endpoint endpoint = resolve_endpoint(local);
 
         m_socket.open(endpoint.protocol());
 
@@ -143,10 +141,7 @@ public:
 
     size_t send(std::shared_ptr<transfer> tran, int64_t timeout, uint8_t hops) noexcept(false) override
     {
-        auto endpoint = resolve_endpoint(
-            tran->remote.first,
-            std::to_string(tran->remote.second)
-            );
+        auto endpoint = resolve_endpoint(tran->remote);
 
         size_t size = exec([&](const async_io_callback_t& callback)
         {
@@ -163,9 +158,9 @@ public:
     }
 };
 
-std::shared_ptr<udp> create_udp_channel(const endpoint& address)
+std::shared_ptr<udp> create_udp_channel(const endpoint& local)
 {
-    return std::make_shared<asio_udp_channel>(address);
+    return std::make_shared<asio_udp_channel>(local);
 }
 
 }}
