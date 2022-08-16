@@ -28,10 +28,10 @@ class asio_tcp_channel : public tcp, public std::enable_shared_from_this<asio_tc
     typedef std::function<void(const boost::system::error_code&, size_t)> async_callback_t;
     typedef std::function<void(const async_callback_t&)> async_call_t;
 
-    boost::asio::ip::tcp::endpoint m_local;
     boost::asio::io_service        m_io;
     boost::asio::ip::tcp::socket   m_socket;
     boost::asio::deadline_timer    m_timer;
+    boost::asio::ip::tcp::endpoint m_local;
     int64_t                        m_timeout = 0;
 
     size_t exec(const async_call_t& async_call)
@@ -90,9 +90,9 @@ class asio_tcp_channel : public tcp, public std::enable_shared_from_this<asio_tc
 public:
 
     asio_tcp_channel(const endpoint& local)
-        : m_local(resolve_endpoint(local))
-        , m_socket(m_io)
+        : m_socket(m_io)
         , m_timer(m_io)
+        , m_local(resolve_endpoint(local))
     {
     }
 
