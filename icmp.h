@@ -93,27 +93,44 @@ public:
         return m_buffer[pos];
     }
 
-    uint16_t get_word(uint8_t u, uint8_t l) const
+    uint16_t get_word(size_t p) const
     {
-        size_t upos = head() + u;
-        size_t lpos = head() + l;
+        size_t pos = head() + p;
 
-        if (upos >= m_length || lpos >= m_length)
+        if (pos + sizeof(uint16_t) >= m_length)
             throw std::out_of_range("position is out of range");
 
-        return uint16_t(m_buffer[upos] << 8) + m_buffer[lpos];
+        return ntohs(*(uint16_t*)(m_buffer.get() + pos));
     }
 
-    void set_word(int8_t u, uint8_t l, uint16_t val) const
+    void set_word(size_t p, uint16_t val)
     {
-        size_t upos = head() + u;
-        size_t lpos = head() + l;
+        size_t pos = head() + p;
 
-        if (upos >= m_length || lpos >= m_length)
+        if (pos + sizeof(uint16_t) >= m_length)
             throw std::out_of_range("position is out of range");
 
-        m_buffer[upos] = val >> 8;
-        m_buffer[lpos] = val & 0xFF;
+        *(uint16_t*)(m_buffer.get() + pos) = htons(val);
+    }
+
+    uint32_t get_dword(size_t p) const
+    {
+        size_t pos = head() + p;
+
+        if (pos + sizeof(uint32_t) >= m_length)
+            throw std::out_of_range("position is out of range");
+
+        return ntohl(*(uint32_t*)(m_buffer.get() + pos));
+    }
+
+    void set_dword(size_t p, uint32_t val)
+    {
+        size_t pos = head() + p;
+
+        if (pos + sizeof(uint32_t) >= m_length)
+            throw std::out_of_range("position is out of range");
+
+        *(uint32_t*)(m_buffer.get() + pos) = htonl(val);
     }
 
     buffer pop_head(size_t size) const
@@ -146,12 +163,12 @@ struct ip_packet : public buffer
     uint8_t version() const { return (get_byte(0) >> 4) & 0xF; }
     uint16_t header_length() const { return (get_byte(0) & 0xF) * 4; }
     uint8_t type_of_service() const { return get_byte(1); }
-    uint16_t total_length() const { return get_word(2, 3); }
-    uint16_t identification() const { return get_word(4, 5);  }
-    uint16_t fragment_offset() const { return get_word(6, 7) & 0x1FFF; }
+    uint16_t total_length() const { return get_word(2); }
+    uint16_t identification() const { return get_word(4);  }
+    uint16_t fragment_offset() const { return get_word(6) & 0x1FFF; }
     uint8_t time_to_live() const { return get_byte(8); }
     uint8_t protocol() const { return get_byte(9); }
-    uint16_t header_checksum() const { return get_word(10, 11); }
+    uint16_t header_checksum() const { return get_word(10); }
     bool dont_fragment() const { return (get_byte(6) & 0x40) != 0; }
     bool more_fragments() const { return (get_byte(6) & 0x20) != 0; }
     boost::asio::ip::address_v4 source_address() const { return boost::asio::ip::address_v4({get_byte(12), get_byte(13), get_byte(14), get_byte(15)}); }
@@ -184,11 +201,11 @@ struct icmp_packet : public buffer
 
     uint8_t type() const { return get_byte(0); }
     uint8_t code() const { return get_byte(1); }
-    uint16_t checksum() const { return get_word(2, 3); }
-    uint16_t identifier() const { return get_word(4, 5); }
-    uint16_t sequence_number() const { return get_word(6, 7); }
+    uint16_t checksum() const { return get_word(2); }
+    uint16_t identifier() const { return get_word(4); }
+    uint16_t sequence_number() const { return get_word(6); }
     uint8_t pointer() const { return get_byte(4); }
-    uint16_t mtu() const { return get_word(6, 7); }
+    uint16_t mtu() const { return get_word(6); }
     boost::asio::ip::address_v4 gateway() const { return boost::asio::ip::address_v4({get_byte(4), get_byte(5), get_byte(6), get_byte(7)}); }
     template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
     template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(8)); }
@@ -200,12 +217,67 @@ struct udp_packet : public buffer
 {
     udp_packet(const buffer& buf) : buffer(buf) { }
 
-    uint16_t source_port() const { return get_word(0, 1); }
-    uint16_t dest_port() const { return get_word(2, 3); }
-    uint16_t length() const { return get_word(4, 5); }
-    uint16_t checksum() const { return get_word(6, 7); }
+    uint16_t source_port() const { return get_word(0); }
+    uint16_t dest_port() const { return get_word(2); }
+    uint16_t length() const { return get_word(4); }
+    uint16_t checksum() const { return get_word(6); }
     template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
     template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(8)); }
+};
+
+struct tcp_packet : public buffer
+{
+    struct option
+    {
+        uint8_t type() const { return m_buffer.size() ? m_buffer.get_byte(0) : 0; }
+        uint8_t length() const { return type() > 0 ? m_buffer.get_byte(1) : 1; }
+        template<class value_t> value_t value() const { return *(m_buffer.data() + 2); }
+
+        option(const buffer& buf) : m_buffer(buf) {}
+
+    private:
+
+        buffer m_buffer;
+    };
+
+    enum flag
+    {
+        fin = 0x01,
+        syn = 0x02,
+        rst = 0x04,
+        push = 0x08,
+        ack = 0x10,
+        urg = 0x20
+    };
+
+    tcp_packet(const buffer& buf) : buffer(buf) { }
+
+    uint16_t source_port() const { return get_word(0); }
+    uint16_t dest_port() const { return get_word(2); }
+    uint32_t seq_number() const { return get_dword(4); }
+    uint32_t ack_number() const { return get_dword(8); }
+    uint8_t data_offset() const { return get_byte(12) >> 4; }
+    uint8_t flags() const { return get_byte(13); }
+    uint16_t window() const { return get_word(14); }
+    uint16_t checksum() const { return get_word(16); }
+    uint16_t urgent_pointer() const { return get_word(18); }
+    option find_option(uint8_t type) const
+    {
+        buffer buf = buffer::pop_head(20);
+        while (buf.data() < data() + data_offset() * 4)
+        {           
+            if (buf.get_byte(0) == type)
+            {
+                return option(buf);
+            }
+
+            buf = buf.pop_head(buf.get_byte(1));
+        }
+        return buffer(0);
+    }
+
+    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
+    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(data_offset() * 4)); }
 };
 
 }}

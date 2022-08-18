@@ -166,8 +166,8 @@ std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t
 
     echo->set_byte(0, icmp_packet::echo_request);
     echo->set_byte(1, 0);
-    echo->set_word(4, 5, id);
-    echo->set_word(6, 7, seq);
+    echo->set_word(4, id);
+    echo->set_word(6, seq);
 
     uint32_t sum = (echo->type() << 8) + echo->code() + echo->identifier() + echo->sequence_number();
 
@@ -185,7 +185,7 @@ std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t
 
     sum = (sum >> 16) + (sum & 0xFFFF);
     sum += (sum >> 16);
-    echo->set_word(2, 3, static_cast<uint16_t>(~sum));
+    echo->set_word(2, static_cast<uint16_t>(~sum));
 
     return echo;
 }
