@@ -37,12 +37,19 @@ boost::test_tools::assertion_result is_enabled(boost::unit_test::test_unit_id)
     return res;
 }
 
+namespace {
+
+const plexus::network::endpoint local = std::make_pair("", 0);
+const plexus::network::endpoint remote = std::make_pair("8.8.8.8", 0);
+
+}
+
 BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 {
-    auto icmp = plexus::network::create_icmp_channel();
-    auto req = plexus::network::icmp_packet::make_ping_packet(get_id(), 1);
+    auto icmp = plexus::network::create_icmp_transport(local);
+    auto req = plexus::network::raw::icmp_packet::make_ping_packet(get_id(), 1);
     
-    BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::icmp::transfer>("8.8.8.8", req)));
+    BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::transport::transfer>(remote, req)));
 
     int tries = 5;
     bool success = false;
@@ -50,18 +57,18 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
     {
         try
         {
-            auto env = std::make_shared<plexus::network::ip_packet>(4096);
+            auto env = std::make_shared<plexus::network::raw::ip_packet>(1500);
             
-            icmp->receive(std::make_shared<plexus::network::icmp::transfer>(env));
+            icmp->receive(std::make_shared<plexus::network::transport::transfer>(env));
             
-            auto rep = env->payload<plexus::network::icmp_packet>();
+            auto rep = env->payload<plexus::network::raw::icmp_packet>();
 
             BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
 
             success = env->source_address().to_string() == "8.8.8.8"
                     && env->protocol() == IPPROTO_ICMP
                     && env->total_length() - env->header_length() == req->size()
-                    && rep->type() == plexus::network::icmp_packet::echo_reply
+                    && rep->type() == plexus::network::raw::icmp_packet::echo_reply
                     && rep->code() == 0
                     && rep->identifier() == req->identifier()
                     && rep->sequence_number() == req->sequence_number()
@@ -80,10 +87,10 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 
 BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
 {
-    auto icmp = plexus::network::create_icmp_channel();
-    auto req = plexus::network::icmp_packet::make_ping_packet(get_id(), 1);
+    auto icmp = plexus::network::create_icmp_transport(local);
+    auto req = plexus::network::raw::icmp_packet::make_ping_packet(get_id(), 1);
     
-    BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::icmp::transfer>("8.8.8.8", req), 1600, 1));
+    BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::transport::transfer>(remote, req), 1600, 1));
 
     int tries = 5;
     bool success = false;
@@ -91,20 +98,20 @@ BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
     {
         try
         {
-            auto env = std::make_shared<plexus::network::ip_packet>(4096);
+            auto env = std::make_shared<plexus::network::raw::ip_packet>(4096);
             
-            icmp->receive(std::make_shared<plexus::network::icmp::transfer>(env));
+            icmp->receive(std::make_shared<plexus::network::transport::transfer>(env));
             
-            auto rep = env->payload<plexus::network::icmp_packet>();
+            auto rep = env->payload<plexus::network::raw::icmp_packet>();
             
             BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
 
-            if (env->protocol() == IPPROTO_ICMP && rep->type() == plexus::network::icmp_packet::time_exceeded)
+            if (env->protocol() == IPPROTO_ICMP && rep->type() == plexus::network::raw::icmp_packet::time_exceeded)
             {
-                env = rep->payload<plexus::network::ip_packet>();
+                env = rep->payload<plexus::network::raw::ip_packet>();
                 if (env->protocol() == IPPROTO_ICMP)
                 {
-                    rep = env->payload<plexus::network::icmp_packet>();
+                    rep = env->payload<plexus::network::raw::icmp_packet>();
                     success = env->destination_address().to_string() == "8.8.8.8"
                             && env->total_length() - env->header_length() == req->size()
                             && memcmp(rep->data(), req->data(), req->size()) == 0;

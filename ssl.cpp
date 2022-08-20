@@ -131,7 +131,7 @@ public:
             m_socket->async_read_some(boost::asio::buffer(buffer, len), callback);
         });
 
-        _trc_ << m_endpoint.address() << ":" << m_endpoint.port() << " >>>>> " << utils::to_hexadecimal(buffer, size);
+        _trc_ << m_endpoint << " >>>>> " << std::make_pair(buffer, size);
 
         if (size == 0)
             throw std::runtime_error("can't read data");
@@ -146,7 +146,7 @@ public:
             m_socket->async_write_some(boost::asio::buffer(buffer, len), callback);
         });
 
-        _trc_ << m_endpoint.address() << ":" << m_endpoint.port() << " <<<<< " << utils::to_hexadecimal(buffer, size);
+        _trc_ << m_endpoint << " <<<<< " << std::make_pair(buffer, size);
 
         if (size < len)
             throw std::runtime_error("can't write data");

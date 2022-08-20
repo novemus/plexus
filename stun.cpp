@@ -91,8 +91,6 @@ typedef std::array<uint8_t, 16> transaction_id;
 
 namespace msg
 {
-    const size_t min_size = 20;
-    const size_t max_size = 548;
     const uint16_t binding_request = 0x0001;
     const uint16_t binding_response = 0x0101;
     const uint16_t binding_error_response = 0x0111;
@@ -122,11 +120,6 @@ inline uint16_t read_short(const uint8_t* array, size_t offset = 0)
     return ntohs(*(uint16_t*)(array + offset));
 }
 
-inline uint8_t rand_byte()
-{
-    return utils::random() % 256;
-}
-
 inline uint8_t high_byte(uint16_t value)
 {
     return uint8_t(value >> 8) & 0xff;
@@ -137,14 +130,14 @@ inline uint8_t low_byte(uint16_t value)
     return uint8_t(value);
 }
 
-class message : public network::udp::transfer
+class message : public plexus::network::transport::transfer
 {
     const uint8_t* fetch_attribute_place(uint16_t type) const
     {
         static const size_t TYPE_LENGTH_PART_SIZE = 4;
 
-        const uint8_t* ptr = &buffer[20];
-        const uint8_t* end = buffer.data() + size();
+        const uint8_t* ptr = packet->data() + 20;
+        const uint8_t* end = packet->data() + size();
 
         while (ptr + TYPE_LENGTH_PART_SIZE < end)
         {
@@ -202,53 +195,51 @@ class message : public network::udp::transfer
 
 public:
 
-    message(const endpoint& stun, uint8_t flags = 0)
-        : transfer(stun)
+    message() : transfer(1500)
     {
-        buffer = {
+    }
+
+    message(const endpoint& host, const endpoint& stun, uint8_t flags = 0)
+        : transfer(stun, plexus::network::raw::udp_packet::make_packet(host.second, stun.second, {
             0x00, 0x01, 0x00, 0x08,
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
+            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
+            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
+            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
+            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             0x00, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, flags
-        };
+        }))
+    {
     }
 
-    message(const endpoint& stun, uint16_t type)
-        : transfer(stun)
-    {
-        buffer = {
+    message(const endpoint& host, const endpoint& stun, uint16_t type)
+        : transfer(stun, plexus::network::raw::udp_packet::make_packet(host.second, stun.second, {
             high_byte(type), low_byte(type), 0x00, 0x00,
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-            rand_byte(), rand_byte(), rand_byte(), rand_byte()
-        };
-    }
-
-    message(size_t size) : transfer(size)
+            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
+            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
+            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
+            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
+        }))
     {
     }
-    
+
     transaction_id transaction() const
     {
         return {
-             buffer[4], buffer[5], buffer[6], buffer[7],
-             buffer[8], buffer[9], buffer[10], buffer[11],
-             buffer[12], buffer[13], buffer[14], buffer[15],
-             buffer[16], buffer[17], buffer[18], buffer[19]
+             packet->get_byte(4), packet->get_byte(5), packet->get_byte(6), packet->get_byte(7),
+             packet->get_byte(8), packet->get_byte(9), packet->get_byte(10), packet->get_byte(11), 
+             packet->get_byte(12), packet->get_byte(13), packet->get_byte(14), packet->get_byte(15),
+             packet->get_byte(16), packet->get_byte(17), packet->get_byte(18), packet->get_byte(19)
          };
     }
 
     uint16_t type() const
     {
-        return read_short(buffer.data());
+        return read_short(packet->data());
     }
 
     uint16_t size() const
     {
-        return 20u + read_short(buffer.data(), 2);
+        return 20u + read_short(packet->data(), 2);
     }
 
     std::string error() const
@@ -284,479 +275,109 @@ public:
 
 typedef std::shared_ptr<message> message_ptr;
 
-class punch_strategy
+class client
 {
-    endpoint m_local;
-    std::shared_ptr<udp> m_udp;
-    std::shared_ptr<tcp> m_tcp;
-
-protected:
-
-    std::shared_ptr<udp> get_udp_pin()
+    class session
     {
-        if (!m_udp)
-        {
-            m_tcp.reset();
-            m_udp = create_udp_channel(m_local);
-        }
-        
-        return m_udp;
-    }
-
-    std::shared_ptr<tcp> get_tcp_pin()
-    {
-        if (!m_tcp)
-        {
-            m_udp.reset();
-            m_tcp = create_tcp_channel(m_local);
-        }
-
-        return m_tcp;
-    }
-
-public:
-
-    punch_strategy(const endpoint& local) : m_local(local)
-    {
-    }
-
-    virtual ~punch_strategy() {}
-
-    message_ptr exec_stun_binding(const endpoint& stun, uint8_t flags = 0, int64_t deadline = 4600)
-    {
-        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
-        {
-            return boost::posix_time::microsec_clock::universal_time() - start;
-        };
-
-        std::shared_ptr<udp> pin = get_udp_pin();
-        message_ptr request = std::make_shared<message>(stun, flags);
-        message_ptr response = std::make_shared<message>(msg::max_size);
-
-        int64_t timeout = 200;
-        while (timer().total_milliseconds() < deadline)
-        {
-            pin->send(request, timeout);
-
-            try
-            {
-                pin->receive(response, timeout);
-
-                if (timer().total_milliseconds() >= deadline)
-                    throw plexus::timeout_error();
-                else if (request->transaction() != response->transaction())
-                    continue;
-
-                switch (response->type())
-                {
-                    case msg::binding_response:
-                    {
-                        endpoint me = response->mapped_endpoint();
-                        endpoint se = response->source_endpoint();
-                        endpoint ce = response->changed_endpoint();
-
-                        _dbg_ << "mapped_endpoint=" << me.first << ":" << me.second
-                              << " source_endpoint=" << se.first << ":" << se.second
-                              << " changed_endpoint=" << ce.first << ":" << ce.second;
-                        break;
-                    }
-                    case msg::binding_request:
-                        break;
-                    case msg::binding_error_response:
-                        throw std::runtime_error("server responded with an error: " + response->error());
-                    default:
-                        throw std::runtime_error("server responded with unexpected message type");
-                }
-
-                return response;
-            }
-            catch(const boost::system::system_error& ex)
-            {
-                if (ex.code() != boost::asio::error::operation_aborted)
-                    throw;
-
-                _trc_ << ex.what();
-
-                timeout = std::min<int64_t>(1600, timeout * 2);
-            }
-        } 
-
-        throw plexus::timeout_error();
-    }
-
-    virtual void handshake_peer_forward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) = 0;
-    virtual void handshake_peer_backward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) = 0;
-    virtual void punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) = 0;
-};
-
-class udp_punch_strategy : public punch_strategy
-{
-    class handshake : public network::udp::transfer
-    {
-        uint64_t m_mask = 0;
-
-        inline uint8_t mask_byte(size_t pos) const
-        {
-            return uint8_t(m_mask >> (pos * 8));
-        }
+        endpoint m_host;
+        std::shared_ptr<plexus::network::transport> m_udp;
 
     public:
 
-        handshake(const endpoint& peer, uint8_t flag, uint64_t mask) : transfer(peer), m_mask(mask)
+        session(const endpoint& host) 
+            : m_host(host)
+            , m_udp(plexus::network::create_udp_transport(host))
+        {}
+
+        message_ptr exec_binding(const endpoint& stun, uint8_t flags = 0, int64_t deadline = 4600)
         {
-            buffer = {
-                rand_byte(), rand_byte(), rand_byte(), flag,
-                rand_byte(), rand_byte(), rand_byte(), 0
+            auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+            {
+                return boost::posix_time::microsec_clock::universal_time() - start;
             };
 
-            for (size_t i = 0; i < 8; ++i)
+            message_ptr request = std::make_shared<message>(m_host, stun, flags);
+            message_ptr response = std::make_shared<message>();
+
+            int64_t timeout = 200;
+            while (timer().total_milliseconds() < deadline)
             {
-                if (i != 7)
+                m_udp->send(request, timeout);
+
+                try
                 {
-                    buffer[7] ^= buffer[i];
-                    buffer[i] ^= mask_byte(i);
-                }
-            }
+                    m_udp->receive(response, timeout);
 
-            buffer[7] ^= mask_byte(7);
-        }
+                    if (timer().total_milliseconds() >= deadline)
+                        throw plexus::timeout_error();
+                    else if (request->transaction() != response->transaction())
+                        continue;
 
-        handshake(uint64_t mask) : transfer(8), m_mask(mask)
-        {
-        }
-
-        bool valid(const endpoint& peer) const
-        {
-            if (peer == remote)
-            {
-                uint8_t hash = buffer[7] ^ mask_byte(7);
-
-                for (size_t i = 0; i < 8; ++i)
-                {
-                    if (i != 7)
+                    switch (response->type())
                     {
-                        hash ^= buffer[i] ^ mask_byte(i);
+                        case msg::binding_response:
+                        {
+                            endpoint me = response->mapped_endpoint();
+                            endpoint se = response->source_endpoint();
+                            endpoint ce = response->changed_endpoint();
+
+                            _dbg_ << "mapped_endpoint=" << me.first << ":" << me.second
+                                << " source_endpoint=" << se.first << ":" << se.second
+                                << " changed_endpoint=" << ce.first << ":" << ce.second;
+                            break;
+                        }
+                        case msg::binding_request:
+                            break;
+                        case msg::binding_error_response:
+                            throw std::runtime_error("server responded with an error: " + response->error());
+                        default:
+                            throw std::runtime_error("server responded with unexpected message type");
                     }
+
+                    return response;
                 }
+                catch(const boost::system::system_error& ex)
+                {
+                    if (ex.code() != boost::asio::error::operation_aborted)
+                        throw;
 
-                if (hash != 0)
-                    throw plexus::handshake_error();
+                    _trc_ << ex.what();
 
-                return true;
-            }
+                    timeout = std::min<int64_t>(1600, timeout * 2);
+                }
+            } 
 
-            return false;
-        }
-
-        uint8_t flag() const
-        {
-            return buffer[3] ^ mask_byte(3);
+            throw plexus::timeout_error();
         }
     };
 
 public:
 
-    udp_punch_strategy(const endpoint& local) : punch_strategy(local)
+    static endpoint obtain_endpoint(const endpoint& host, const endpoint& stun) noexcept(false)
     {
+        auto pin = std::make_shared<session>(host);
+        return pin->exec_binding(stun)->mapped_endpoint();
     }
 
-    void handshake_peer_forward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) override
-    {
-        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
-        {
-            return boost::posix_time::microsec_clock::universal_time() - start;
-        };
-
-        std::shared_ptr<udp> pin = get_udp_pin();
-        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, 0, mask);
-        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask);
-
-        int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
-        while (timer().total_milliseconds() < deadline)
-        {
-            try
-            {
-                pin->send(out, timeout);
-                
-                if (out->flag() == 1)
-                {
-                    _dbg_ << "handshake peer=" << in->remote.first << ":" << in->remote.second;
-                    return;
-                }
-
-                pin->receive(in, timeout);
-
-                if (in->valid(peer) && in->flag() == 1)
-                {
-                    _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
-                    out = std::make_shared<handshake>(peer, 1, mask);
-                }
-            }
-            catch(const boost::system::system_error& ex)
-            {
-                if (ex.code() != boost::asio::error::operation_aborted)
-                    throw;
-
-                _trc_ << ex.what();
-            }
-        }
-
-        throw plexus::timeout_error();
-    }
-
-    void handshake_peer_backward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) override
-    {
-        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
-        {
-            return boost::posix_time::microsec_clock::universal_time() - start;
-        };
-
-        std::shared_ptr<udp> pin = get_udp_pin();
-        std::shared_ptr<handshake> out = std::make_shared<handshake>(peer, 1, mask);
-        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask);
-
-        int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
-        while (timer().total_milliseconds() < deadline)
-        {
-            try
-            {
-                pin->receive(in, timeout);
-
-                if (in->valid(peer))
-                {
-                    if (in->flag() == 0)
-                    {
-                        _dbg_ << "welcome peer=" << in->remote.first << ":" << in->remote.second;
-                    }
-                    else
-                    {
-                        _dbg_ << "handshake peer=" << in->remote.first << ":" << in->remote.second;
-                        return;
-                    }
-
-                    pin->send(out, timeout);
-                }
-            }
-            catch(const boost::system::system_error& ex)
-            {
-                if (ex.code() != boost::asio::error::operation_aborted)
-                    throw;
-
-                _trc_ << ex.what();
-            }
-        }
-
-        throw plexus::timeout_error();
-    }
-
-    void punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) override
-    {
-        std::shared_ptr<udp> pin = get_udp_pin();
-        std::shared_ptr<udp::transfer> punch = std::make_shared<udp::transfer>(peer, std::vector<uint8_t>{
-            rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-            rand_byte(), rand_byte(), rand_byte(), rand_byte()
-        });
-
-        pin->send(punch, 1600, hops);
-    }
-};
-
-class tcp_punch_strategy : public punch_strategy
-{
-    class handshake : public network::tcp::transfer
-    {
-        uint64_t m_mask = 0;
-
-        inline uint8_t mask_byte(size_t pos) const
-        {
-            return uint8_t(m_mask >> (pos * 8));
-        }
-
-    public:
-
-        handshake(uint64_t mask, bool init) : m_mask(mask)
-        {
-            if (init)
-            {
-                buffer = {
-                    rand_byte(), rand_byte(), rand_byte(), rand_byte(),
-                    rand_byte(), rand_byte(), rand_byte(), 0
-                };
-
-                for (size_t i = 0; i < 8; ++i)
-                {
-                    if (i != 7)
-                    {
-                        buffer[7] ^= buffer[i];
-                        buffer[i] ^= mask_byte(i);
-                    }
-                }
-
-                buffer[7] ^= mask_byte(7);
-            }
-            else
-            {
-                buffer = std::initializer_list<uint8_t>{0, 0, 0, 0, 0, 0, 0, 0};
-            }
-        }
-
-        void verify(const handshake& other) const
-        {
-            if (buffer != other.buffer)
-            {
-                uint8_t hash = buffer[7] ^ mask_byte(7);
-
-                for (size_t i = 0; i < 8; ++i)
-                {
-                    if (i != 7)
-                    {
-                        hash ^= buffer[i] ^ mask_byte(i);
-                    }
-                }
-
-                if (hash == 0)
-                    return;
-            }
-
-            throw plexus::handshake_error();
-        }
-
-        void verify() const
-        {
-            uint8_t hash = buffer[7] ^ mask_byte(7);
-
-            for (size_t i = 0; i < 8; ++i)
-            {
-                if (i != 7)
-                {
-                    hash ^= buffer[i] ^ mask_byte(i);
-                }
-            }
-
-            if (hash != 0)
-                throw plexus::handshake_error();
-        }
-    };
-
-public:
-
-    tcp_punch_strategy(const endpoint& local) : punch_strategy(local)
-    {
-    }
-
-    void handshake_peer_forward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) override
-    {
-        std::shared_ptr<tcp> pin = get_tcp_pin();
-
-        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask, false);
-        std::shared_ptr<handshake> out = std::make_shared<handshake>(mask, true);
-
-        try
-        {
-            pin->connect(peer, deadline / 3);
-
-            _dbg_ << "welcome peer=" << peer.first << ":" << peer.second;
-
-            pin->write(out);
-            pin->read(in);
-            in->verify(*out);
-            pin->shutdown();
-
-            _dbg_ << "handshake peer=" << peer.first << ":" << peer.second;
-        }
-        catch(const boost::system::system_error& ex)
-        {
-            if (ex.code() != boost::asio::error::operation_aborted)
-                throw;
-
-            _trc_ << ex.what();
-        }
-
-        throw plexus::timeout_error();
-    }
-
-    void handshake_peer_backward(const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false) override
-    {
-        std::shared_ptr<tcp> pin = get_tcp_pin();
-
-        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask, false);
-        std::shared_ptr<handshake> out = std::make_shared<handshake>(mask, true);
-
-        try
-        {
-            pin->accept(peer, deadline / 3);
-
-            _dbg_ << "welcome peer=" << peer.first << ":" << peer.second;
-
-            pin->read(in);
-            in->verify();
-            pin->write(out);
-            pin->shutdown();
-
-            _dbg_ << "handshake peer=" << peer.first << ":" << peer.second;
-        }
-        catch(const boost::system::system_error& ex)
-        {
-            if (ex.code() != boost::asio::error::operation_aborted)
-                throw;
-
-            _trc_ << ex.what();
-        }
-
-        throw plexus::timeout_error();
-    }
-    
-    void punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) override
-    { 
-        std::shared_ptr<tcp> pin = get_tcp_pin();
-
-        try
-        {
-            pin->connect(peer, 1000, hops);
-            pin->shutdown();
-        }
-        catch(const boost::system::system_error& ex)
-        {
-            if (ex.code() != boost::asio::error::operation_aborted && ex.code() != boost::asio::error::host_unreachable)
-                throw;
-
-            _trc_ << ex.what();
-        }
-    }
-};
-
-template<class strategy_t> class nat_puncher : public puncher
-{
-    endpoint m_stun;
-    endpoint m_local;
-
-public:
-
-    nat_puncher(const endpoint& stun, const endpoint& local)
-        : m_stun(stun)
-        , m_local(local)
-    {
-    }
-
-    traverse explore_network() noexcept(false) override
+    static traverse explore_network(const endpoint& host, const endpoint& stun) noexcept(false)
     {
         traverse state = {0};
-        auto strategy = std::make_shared<strategy_t>(m_local);
+        auto pin = std::make_shared<session>(host);
 
         _dbg_ << "nat test...";
-        message_ptr response = strategy->exec_stun_binding(m_stun);
+        auto response = pin->exec_binding(stun);
 
         endpoint mapped = response->mapped_endpoint();
         endpoint source = response->source_endpoint();
         endpoint changed = response->changed_endpoint();
 
-        if (mapped != m_local)
+        if (mapped != host)
         {
             state.nat = 1;
-            state.random_port = mapped.second != m_local.second ? 1 : 0;
+            state.random_port = mapped.second != host.second ? 1 : 0;
             
             _dbg_ << "first mapping test...";
-            endpoint fst_mapped = strategy->exec_stun_binding(changed)->mapped_endpoint();
+            endpoint fst_mapped = pin->exec_binding(changed)->mapped_endpoint();
 
             state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
 
@@ -767,7 +388,7 @@ public:
             else
             {
                 _dbg_ << "second mapping test...";
-                endpoint snd_mapped = strategy->exec_stun_binding(endpoint{changed.first, source.second})->mapped_endpoint();
+                endpoint snd_mapped = pin->exec_binding(endpoint{changed.first, source.second})->mapped_endpoint();
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }
@@ -782,16 +403,16 @@ public:
         try
         {
             _dbg_ << "hairpin test...";
-            strategy->exec_stun_binding(mapped, 0, 1400);
+            pin->exec_binding(mapped, 0, 1400);
             state.hairpin = 1;
         }
         catch(const plexus::timeout_error&) { }
 
-        strategy = std::make_shared<strategy_t>(endpoint(m_local.first, m_local.second + 1));
+        pin = std::make_shared<session>(endpoint(host.first, host.second + 1));
         try
         {
             _dbg_ << "first filtering test...";
-            strategy->exec_stun_binding(m_stun, flag::change_address | flag::change_port, 1400);
+            pin->exec_binding(stun, flag::change_address | flag::change_port, 1400);
             state.filtering = binding::independent;
         }
         catch(const plexus::timeout_error&)
@@ -799,7 +420,7 @@ public:
             try
             {
                 _dbg_ << "second filtering test...";
-                strategy->exec_stun_binding(m_stun, flag::change_port, 1400);
+                pin->exec_binding(stun, stun::flag::change_port, 1400);
                 state.filtering = binding::address_dependent;
             }
             catch(const plexus::timeout_error&)
@@ -818,52 +439,266 @@ public:
 
         return state;
     }
+};
+
+} // namespace stun
+
+template<int proto> class punch_strategy
+{
+    class handshake : public plexus::network::transport::transfer
+    {
+        uint64_t m_mask = 0;
+
+        inline uint8_t mask_byte(size_t pos) const
+        {
+            return uint8_t(m_mask >> (pos * 8));
+        }
+
+        inline std::shared_ptr<plexus::network::buffer> payload() const
+        {
+            std::shared_ptr<plexus::network::raw::ip_packet> ip = std::dynamic_pointer_cast<plexus::network::raw::ip_packet>(packet);
+
+            if (ip && proto == IPPROTO_UDP && ip->protocol() == IPPROTO_UDP)
+            {
+                return ip->payload<plexus::network::raw::udp_packet>()->payload<plexus::network::buffer>();
+            }
+            else if (ip && proto == IPPROTO_TCP && ip->protocol() == IPPROTO_TCP)
+            {
+                return ip->payload<plexus::network::raw::tcp_packet>()->payload<plexus::network::buffer>();
+            }
+
+            throw std::runtime_error("unexpected proto");
+        }
+
+    public:
+
+        handshake(const endpoint& host, const endpoint& peer, bool seen, uint64_t mask) : transfer(peer), m_mask(mask)
+        {
+            std::vector<uint8_t> data(8);
+
+            uint8_t sum = 0;
+
+            for (size_t i = 0; i < 7; ++i)
+            {
+                uint8_t byte = utils::random<uint8_t>();
+
+                if (i == 0)
+                    byte &= (seen ? 0xff : 0xfe);
+
+                sum ^= byte;
+                data[i] = byte ^ mask_byte(i);
+            }
+
+            data[7] = sum ^ mask_byte(7);
+
+            if (proto == IPPROTO_UDP)
+            {
+                packet = plexus::network::raw::udp_packet::make_packet(host.second, peer.second, data);
+            }
+            else if (proto == IPPROTO_TCP)
+            {
+                packet = plexus::network::raw::tcp_packet::make_syn_packet(host.second, peer.second, data);
+            }
+        }
+
+        handshake(uint64_t mask) : transfer(1500), m_mask(mask)
+        {
+        }
+
+        bool valid(const endpoint& peer) const
+        {
+            if (peer == remote)
+            {
+                auto data = payload();
+                uint8_t hash = data->get_byte(7) ^ mask_byte(7);
+
+                for (size_t i = 0; i < 8; ++i)
+                {
+                    hash ^= data->get_byte(i) ^ mask_byte(i);
+                }
+
+                if (hash != 0)
+                    throw plexus::handshake_error();
+
+                return true;
+            }
+
+            return false;
+        }
+
+        bool seen() const
+        {
+            return payload()->get_byte(0) ^ mask_byte(0) & 0x1;
+        }
+    };
+
+    static std::shared_ptr<plexus::network::transport> get_transport(const endpoint& host)
+    {
+        if (proto == IPPROTO_UDP)
+        {
+            return plexus::network::create_udp_transport(host);
+        }
+        else if (proto == IPPROTO_TCP)
+        {
+            return plexus::network::create_tcp_transport(host);
+        }
+
+        throw std::runtime_error("unsupported proto");
+    }
+
+public:
+
+    static void handshake_peer_forward(const endpoint& host, const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false)
+    {
+        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return boost::posix_time::microsec_clock::universal_time() - start;
+        };
+
+        auto pin = get_transport(host);
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(host, peer, false, mask);
+        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask);
+
+        int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
+        while (timer().total_milliseconds() < deadline)
+        {
+            try
+            {
+                pin->send(out, timeout);
+                
+                if (out->seen())
+                {
+                    _dbg_ << "handshake peer=" << in->remote.first << ":" << in->remote.second;
+                    return;
+                }
+
+                pin->receive(in, timeout);
+
+                if (in->valid(peer) && in->seen())
+                {
+                    out = std::make_shared<handshake>(host, peer, true, mask);
+                }
+            }
+            catch(const boost::system::system_error& ex)
+            {
+                if (ex.code() != boost::asio::error::operation_aborted)
+                    throw;
+
+                _trc_ << ex.what();
+            }
+        }
+
+        throw plexus::timeout_error();
+    }
+
+    static void handshake_peer_backward(const endpoint& host, const endpoint& peer, uint64_t mask, int64_t deadline) noexcept(false)
+    {
+        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return boost::posix_time::microsec_clock::universal_time() - start;
+        };
+
+        auto pin = get_transport(host);
+        std::shared_ptr<handshake> out = std::make_shared<handshake>(host, peer, true, mask);
+        std::shared_ptr<handshake> in = std::make_shared<handshake>(mask);
+
+        int64_t timeout = std::max<int64_t>(2000, std::min<int64_t>(4000, deadline / 8));
+        while (timer().total_milliseconds() < deadline)
+        {
+            try
+            {
+                pin->receive(in, timeout);
+
+                if (in->valid(peer))
+                {
+                    if (!in->seen())
+                    {
+                        pin->send(out, timeout);
+                    }
+                    else
+                    {
+                        _dbg_ << "handshake peer=" << in->remote.first << ":" << in->remote.second;
+                        return;
+                    }
+                }
+            }
+            catch(const boost::system::system_error& ex)
+            {
+                if (ex.code() != boost::asio::error::operation_aborted)
+                    throw;
+
+                _trc_ << ex.what();
+            }
+        }
+
+        throw plexus::timeout_error();
+    }
+
+    static endpoint punch_hole_to_peer(const endpoint& host, const endpoint& peer, uint8_t hops) noexcept(false)
+    {
+        endpoint ep = plexus::stun::client::obtain_endpoint(host, peer);
+
+        auto pin = get_transport(host);
+        pin->send(std::make_shared<handshake>(host, peer, false, 0), 1600, hops);
+
+        return ep;
+    }
+};
+
+template<int proto> class nat_puncher : public puncher
+{
+    typedef plexus::punch_strategy<proto> strategy;
+
+    endpoint m_stun;
+    endpoint m_local;
+
+public:
+
+    nat_puncher(const endpoint& stun, const endpoint& local)
+        : m_stun(stun)
+        , m_local(local)
+    {
+    }
+
+    traverse explore_network() noexcept(false) override
+    {
+        _dbg_ << "testing network...";
+        return plexus::stun::client::explore_network(m_local, m_stun);
+    }
 
     endpoint obtain_endpoint() noexcept(false) override
     {
         _dbg_ << "obtaining endpoint...";
-
-        auto strategy = std::make_shared<strategy_t>(m_local);
-        return strategy->exec_stun_binding(m_stun)->mapped_endpoint();
+        return plexus::stun::client::obtain_endpoint(m_local, m_stun);
     }
 
     endpoint punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) override
     {
         _dbg_ << "punching hole to peer...";
-
-        auto strategy = std::make_shared<strategy_t>(m_local);
-        auto endpoint = strategy->exec_stun_binding(m_stun)->mapped_endpoint();
-        strategy->punch_hole_to_peer(peer, hops);
-        return endpoint;
+        return strategy::punch_hole_to_peer(m_local, peer, hops);
     }
 
     void reach_peer(const endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "reaching peer...";
-
-        auto strategy = std::make_shared<strategy_t>(m_local);
-        strategy->handshake_peer_forward(peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
+        strategy::handshake_peer_forward(m_local, peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
     }
 
     void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "awaiting peer...";
-
-        auto strategy = std::make_shared<strategy_t>(m_local);
-        strategy->handshake_peer_backward(peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
+        strategy::handshake_peer_backward(m_local, peer, mask, plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000));
     }
 };
 
+std::shared_ptr<puncher> create_udp_puncher(const endpoint& stun, const endpoint& local)
+{
+    return std::make_shared<nat_puncher<IPPROTO_UDP>>(stun, local);
 }
 
-std::shared_ptr<puncher> create_udp_stun_puncher(const endpoint& stun, const endpoint& local)
+std::shared_ptr<puncher> create_tcp_puncher(const endpoint& stun, const endpoint& local)
 {
-    return std::make_shared<stun::nat_puncher<stun::udp_punch_strategy>>(stun, local);
-}
-
-std::shared_ptr<puncher> create_tcp_stun_puncher(const endpoint& stun, const endpoint& local)
-{
-    return std::make_shared<stun::nat_puncher<stun::tcp_punch_strategy>>(stun, local);
+    return std::make_shared<nat_puncher<IPPROTO_TCP>>(stun, local);
 }
 
 }

@@ -17,7 +17,6 @@
 #include <openssl/md5.h>
 #include <vector>
 #include <sstream>
-#include <random>
 #include "utils.h"
 
 namespace plexus { namespace utils {
@@ -180,11 +179,16 @@ std::string to_hexadecimal(const uint8_t* data, size_t len)
     return out.str();
 }
 
-uint64_t random()
-{
-	std::random_device dev;
-	std::mt19937_64 gen(dev());
-	return gen();
 }
 
-}}
+std::ostream& operator<<(std::ostream& stream, const std::pair<uint8_t*, size_t>& buf)
+{
+    return stream << utils::to_hexadecimal(buf.first, buf.second);
+}
+
+std::ostream& operator<<(std::ostream& stream, const std::pair<const uint8_t*, size_t>& buf)
+{
+    return stream << utils::to_hexadecimal(buf.first, buf.second);
+}
+
+}

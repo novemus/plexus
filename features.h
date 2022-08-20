@@ -77,7 +77,7 @@ struct puncher
     virtual void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
-std::shared_ptr<puncher> create_udp_stun_puncher(const endpoint& stun, const endpoint& local);
-std::shared_ptr<puncher> create_tcp_stun_puncher(const endpoint& stun, const endpoint& local);
+std::shared_ptr<puncher> create_udp_puncher(const endpoint& stun, const endpoint& local);
+std::shared_ptr<puncher> create_tcp_puncher(const endpoint& stun, const endpoint& local);
 
 }

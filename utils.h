@@ -14,6 +14,7 @@
 #include <string>
 #include <iostream>
 #include <chrono>
+#include <random>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/lexical_cast.hpp>
 #include "log.h"
@@ -33,7 +34,13 @@ std::string smime_sign(const std::string& msg, const std::string& cert, const st
 std::string smime_verify(const std::string& msg, const std::string& cert, const std::string& ca);
 std::string smime_encrypt(const std::string& msg, const std::string& cert);
 std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key);
-uint64_t random();
+
+template<class var_t> var_t random()
+{
+    std::random_device dev;
+    std::mt19937_64 gen(dev());
+    return static_cast<var_t>(gen());
+}
 
 template<class var_t> var_t getenv(const std::string& name, const var_t& def)
 {
@@ -50,4 +57,9 @@ template<class var_t> var_t getenv(const std::string& name, const var_t& def)
     return def;
 }
 
-}}
+}
+
+std::ostream& operator<<(std::ostream& stream, const std::pair<uint8_t*, size_t>& buf);
+std::ostream& operator<<(std::ostream& stream, const std::pair<const uint8_t*, size_t>& buf);
+
+}
