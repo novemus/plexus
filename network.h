@@ -37,7 +37,7 @@ struct transport
         std::shared_ptr<buffer> packet; // ip_packet on receive or icmp_packet|tcp_packet|udp_packet|... on send
 
         transfer(size_t buf) : packet(std::make_shared<buffer>(buf)) {}
-        transfer(std::shared_ptr<buffer> buf) : packet(buf) {}
+        transfer(std::shared_ptr<buffer> buf) : remote("", 0), packet(buf) {}
         transfer(const endpoint& ep) : remote(ep) {}
         transfer(const endpoint& ep, std::shared_ptr<buffer> buf) : remote(ep), packet(buf) {}
     };

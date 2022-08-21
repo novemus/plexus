@@ -58,9 +58,7 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
         try
         {
             auto env = std::make_shared<plexus::network::raw::ip_packet>(1500);
-            
-            icmp->receive(std::make_shared<plexus::network::transport::transfer>(env));
-            
+            icmp->receive(std::make_shared<plexus::network::transport::transfer>(remote, env));
             auto rep = env->payload<plexus::network::raw::icmp_packet>();
 
             BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
@@ -99,11 +97,9 @@ BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
         try
         {
             auto env = std::make_shared<plexus::network::raw::ip_packet>(4096);
-            
             icmp->receive(std::make_shared<plexus::network::transport::transfer>(env));
-            
             auto rep = env->payload<plexus::network::raw::icmp_packet>();
-            
+
             BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
 
             if (env->protocol() == IPPROTO_ICMP && rep->type() == plexus::network::raw::icmp_packet::time_exceeded)
