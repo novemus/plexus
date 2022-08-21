@@ -25,7 +25,7 @@
 
 namespace plexus { namespace network { namespace raw {
 
-template<int proto_id> class asio_raw_transport : public plexus::network::transport
+template<int proto_id> class asio_raw_transport : public transport
 {
     typedef plexus::network::raw::proto<proto_id> proto;
     typedef std::function<void(const boost::system::error_code&, size_t)> async_io_callback_t;
@@ -150,22 +150,22 @@ public:
         }
     }
 
-    void receive(std::shared_ptr<transfer> tran, int64_t timeout) noexcept(false) override
+    void receive(const endpoint& remote, std::shared_ptr<buffer> buffer, int64_t timeout) noexcept(false) override
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        auto match = resolve_endpoint(tran->remote);
+        auto match = resolve_endpoint(remote);
         while (timer().total_milliseconds() < timeout)
         {
             size_t size = exec([&](const async_io_callback_t& callback)
             {
-                m_socket.async_receive(boost::asio::buffer(tran->packet->data(), tran->packet->size()), callback);
+                m_socket.async_receive(boost::asio::buffer(buffer->data(), buffer->size()), callback);
             }, timeout - timer().total_milliseconds());
 
-            std::shared_ptr<ip_packet> ip = std::static_pointer_cast<ip_packet>(tran->packet);
+            std::shared_ptr<ip_packet> ip = std::static_pointer_cast<ip_packet>(buffer);
 
             if (ip->total_length() > size)
                 throw std::runtime_error("received part of ip packet");
@@ -173,7 +173,7 @@ public:
             auto source = get_source_endpoint(ip);
             if (is_matched(source, match))
             {
-                _trc_ << source << " >>>>> " << std::make_pair(tran->packet->data(), size);
+                _trc_ << source << " >>>>> " << std::make_pair(buffer->data(), size);
                 return;
             }
         }
@@ -181,26 +181,26 @@ public:
         throw boost::system::error_code(boost::asio::error::operation_aborted);
     }
 
-    void send(std::shared_ptr<transfer> tran, int64_t timeout, uint8_t hops) noexcept(false) override
+    void send(const endpoint& remote, std::shared_ptr<buffer> buffer, int64_t timeout, uint8_t hops) noexcept(false) override
     {
-        auto dest = resolve_endpoint(tran->remote);
+        auto dest = resolve_endpoint(remote);
 
         size_t size = exec([&](const async_io_callback_t& callback)
         {
             m_socket.set_option(boost::asio::ip::unicast::hops(hops));
-            m_socket.async_send_to(boost::asio::buffer(tran->packet->data(), tran->packet->size()), dest, callback);
+            m_socket.async_send_to(boost::asio::buffer(buffer->data(), buffer->size()), dest, callback);
         }, timeout);
 
-        _trc_ << dest << " <<<<< " << std::make_pair(tran->packet->data(), size);
+        _trc_ << dest << " <<<<< " << std::make_pair(buffer->data(), size);
 
-        if (tran->packet->size() > size)
+        if (buffer->size() > size)
             throw std::runtime_error("sent part of icmp packet");
     }
 };
 
-std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t seq, const std::vector<uint8_t>& data)
+std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t seq, std::shared_ptr<buffer> payload)
 {
-    std::shared_ptr<icmp_packet> echo = std::make_shared<icmp_packet>(8 + data.size());
+    std::shared_ptr<icmp_packet> echo = std::make_shared<icmp_packet>(8 + payload->size());
 
     echo->set_byte(0, icmp_packet::echo_request);
     echo->set_byte(1, 0);
@@ -211,9 +211,9 @@ std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t
 
     uint8_t* dst = echo->data() + 8;
 
-    for (size_t i = 0; i < data.size(); ++i)
+    for (size_t i = 0; i < payload->size(); ++i)
     {
-        dst[i] = data[i];
+        dst[i] = payload->get_byte(i);
 
         if (i % 2 == 0)
             sum += dst[i] << 8;
@@ -228,25 +228,25 @@ std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t
     return echo;
 }
 
-std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(uint16_t src_port, uint16_t dst_port, const std::vector<uint8_t>& data)
+std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(uint16_t src_port, uint16_t dst_port, std::shared_ptr<buffer> payload)
 {
     return 0;
 }
 
-std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t src_port, uint16_t dst_port, const std::vector<uint8_t>& data)
+std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t src_port, uint16_t dst_port, std::shared_ptr<buffer> payload)
 {
-    std::shared_ptr<udp_packet> udp = std::make_shared<udp_packet>(8 + data.size());
+    std::shared_ptr<udp_packet> udp = std::make_shared<udp_packet>(8 + payload->size());
 
     udp->set_word(0, src_port);
     udp->set_word(2, dst_port);
-    udp->set_word(4, 8 + data.size());
+    udp->set_word(4, 8 + payload->size());
 
     uint32_t sum = udp->source_port() + udp->dest_port() + udp->length();
 
     uint8_t* dst = udp->data() + 8;
-    for (size_t i = 0; i < data.size(); ++i)
+    for (size_t i = 0; i < payload->size(); ++i)
     {
-        dst[i] = data[i];
+        dst[i] = payload->get_byte(i);
 
         if (i % 2 == 0)
             sum += dst[i] << 8;
@@ -261,21 +261,19 @@ std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t src_port, uint16_t 
     return udp;
 }
 
-} // namespace raw
-
-std::shared_ptr<plexus::network::transport> create_icmp_transport(const endpoint& local)
+std::shared_ptr<transport> create_icmp_transport(const endpoint& local)
 {
     return std::make_shared<raw::asio_raw_transport<IPPROTO_ICMP>>(local);
 }
 
-std::shared_ptr<plexus::network::transport> create_tcp_transport(const endpoint& local)
+std::shared_ptr<transport> create_tcp_transport(const endpoint& local)
 {
     return std::make_shared<raw::asio_raw_transport<IPPROTO_TCP>>(local);
 }
 
-std::shared_ptr<plexus::network::transport> create_udp_transport(const endpoint& local)
+std::shared_ptr<transport> create_udp_transport(const endpoint& local)
 {
     return std::make_shared<raw::asio_raw_transport<IPPROTO_UDP>>(local);
 }
 
-}}
+}}}

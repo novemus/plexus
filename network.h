@@ -31,24 +31,18 @@ std::shared_ptr<ssl> create_ssl_client(const endpoint& remote, const std::string
 
 struct transport
 {
-    struct transfer
-    {
-        endpoint remote;
-        std::shared_ptr<buffer> packet; // ip_packet on receive or icmp_packet|tcp_packet|udp_packet|... on send
-
-        transfer(size_t buf) : packet(std::make_shared<buffer>(buf)) {}
-        transfer(std::shared_ptr<buffer> buf) : remote("", 0), packet(buf) {}
-        transfer(const endpoint& ep) : remote(ep) {}
-        transfer(const endpoint& ep, std::shared_ptr<buffer> buf) : remote(ep), packet(buf) {}
-    };
-
     virtual ~transport() {}
-    virtual void send(std::shared_ptr<transfer> tran, int64_t timeout_ms = 1600, uint8_t hops = 64) noexcept(false) = 0;
-    virtual void receive(std::shared_ptr<transfer> tran, int64_t timeout_ms = 1600) noexcept(false) = 0;
+    virtual void send(const endpoint& remote, std::shared_ptr<buffer> buf, int64_t timeout_ms = 1600, uint8_t hops = 64) noexcept(false) = 0;
+    virtual void receive(const endpoint& remote, std::shared_ptr<buffer> buf, int64_t timeout_ms = 1600) noexcept(false) = 0;
 };
+
+namespace raw {
 
 std::shared_ptr<transport> create_udp_transport(const endpoint& local);
 std::shared_ptr<transport> create_tcp_transport(const endpoint& local);
 std::shared_ptr<transport> create_icmp_transport(const endpoint& local);
 
-}}
+std::shared_ptr<transport> create_wrapped_udp_transport(const endpoint& local);
+std::shared_ptr<transport> create_wrapped_tcp_transport(const endpoint& local);
+
+}}}

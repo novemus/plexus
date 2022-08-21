@@ -22,25 +22,27 @@ const plexus::network::endpoint rep = std::make_pair("127.0.0.1", 4321);
 
 }
 
-void check(std::shared_ptr<plexus::network::transport::transfer> send, std::shared_ptr<plexus::network::transport::transfer> recv, bool reverse)
+void check(const plexus::network::endpoint& from, const plexus::network::endpoint& to, std::shared_ptr<plexus::network::buffer> send, std::shared_ptr<plexus::network::buffer> recv)
 {
-    std::shared_ptr<plexus::network::raw::ip_packet> in = std::static_pointer_cast<plexus::network::raw::ip_packet>(recv->packet);
-    std::shared_ptr<plexus::network::raw::udp_packet> out = std::dynamic_pointer_cast<plexus::network::raw::udp_packet>(send->packet);
+    std::shared_ptr<plexus::network::raw::ip_packet> in = std::static_pointer_cast<plexus::network::raw::ip_packet>(recv);
+    std::shared_ptr<plexus::network::raw::udp_packet> out = std::dynamic_pointer_cast<plexus::network::raw::udp_packet>(send);
 
     BOOST_REQUIRE_EQUAL(in->protocol(), IPPROTO_UDP);
     BOOST_REQUIRE_EQUAL(out->size(), in->total_length() - in->header_length());
 
     auto udp = in->payload<plexus::network::raw::udp_packet>();
 
-    if (reverse)
+    if (from == to)
     {
-        BOOST_REQUIRE_EQUAL(send->remote.first, in->source_address().to_string());
+        BOOST_REQUIRE_EQUAL(from.first, in->source_address().to_string());
+        BOOST_REQUIRE_EQUAL(to.first, in->destination_address().to_string());
         BOOST_REQUIRE_EQUAL(out->source_port(), udp->dest_port());
         BOOST_REQUIRE_EQUAL(out->dest_port(), udp->source_port());
     }
     else
     {
-        BOOST_REQUIRE_EQUAL(send->remote.first, in->destination_address().to_string());
+        BOOST_REQUIRE_EQUAL(from.first, in->destination_address().to_string());
+        BOOST_REQUIRE_EQUAL(to.first, in->source_address().to_string());
         BOOST_REQUIRE_EQUAL(out->dest_port(), udp->dest_port());
         BOOST_REQUIRE_EQUAL(out->source_port(), udp->source_port());
     }
@@ -56,66 +58,52 @@ void check(std::shared_ptr<plexus::network::transport::transfer> send, std::shar
 
 BOOST_AUTO_TEST_CASE(sync_raw_udp_exchange)
 {
-    const std::initializer_list<uint8_t> payload = { 
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>()
-    };
+    auto lend = plexus::network::raw::create_udp_transport(lep);
+    auto rend = plexus::network::raw::create_udp_transport(rep);
 
-    auto lend = plexus::network::create_udp_transport(lep);
-    auto rend = plexus::network::create_udp_transport(rep);
-
-    auto ls = std::make_shared<plexus::network::transport::transfer>(rep, plexus::network::raw::udp_packet::make_packet(lep.second, rep.second, payload));
-    auto lr = std::make_shared<plexus::network::transport::transfer>(lep, std::make_shared<plexus::network::buffer>(1500));
+    auto send = plexus::network::raw::udp_packet::make_packet(lep.second, rep.second);
+    auto recv = std::make_shared<plexus::network::buffer>(1500);
 
     // send from left to right
-    BOOST_REQUIRE_NO_THROW(lend->send(ls));
-    BOOST_REQUIRE_NO_THROW(rend->receive(lr));
+    BOOST_REQUIRE_NO_THROW(lend->send(rep, send));
+    BOOST_REQUIRE_NO_THROW(rend->receive(lep, recv));
     
-    check(ls, lr, false);
+    check(lep, rep, send, recv);
 
-    auto rs = std::make_shared<plexus::network::transport::transfer>(lep, plexus::network::raw::udp_packet::make_packet(rep.second, lep.second, payload));
-    auto rr = std::make_shared<plexus::network::transport::transfer>(rep, std::make_shared<plexus::network::buffer>(1500));
+    send = plexus::network::raw::udp_packet::make_packet(rep.second, lep.second);
+    recv = std::make_shared<plexus::network::buffer>(1500);
 
     // send from right to left 
-    BOOST_REQUIRE_NO_THROW(rend->send(rs));
-    BOOST_REQUIRE_NO_THROW(lend->receive(rr));
+    BOOST_REQUIRE_NO_THROW(rend->send(lep, send));
+    BOOST_REQUIRE_NO_THROW(lend->receive(rep, recv));
 
-    check(rs, rr, false);
+    check(rep, lep, send, recv);
 
-    BOOST_REQUIRE_THROW(rend->receive(lr), boost::system::system_error);
+    BOOST_REQUIRE_THROW(rend->receive(lep, recv), boost::system::system_error);
 }
 
 BOOST_AUTO_TEST_CASE(async_raw_udp_exchange)
 {
-    const std::initializer_list<uint8_t> payload = { 
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>()
-    };
-
-    auto lend = plexus::network::create_udp_transport(lep);
-    auto rend = plexus::network::create_udp_transport(rep);
+    auto lend = plexus::network::raw::create_udp_transport(lep);
+    auto rend = plexus::network::raw::create_udp_transport(rep);
 
     auto work = [&](std::shared_ptr<plexus::network::transport> udp, const plexus::network::endpoint& s, const plexus::network::endpoint& d)
     {
-        auto send = std::make_shared<plexus::network::transport::transfer>(d, plexus::network::raw::udp_packet::make_packet(s.second, d.second, payload));
-        auto recv = std::make_shared<plexus::network::transport::transfer>(d, std::make_shared<plexus::network::raw::ip_packet>(1500));
+        auto send = plexus::network::raw::udp_packet::make_packet(s.second, d.second);
+        auto recv = std::make_shared<plexus::network::raw::ip_packet>(1500);
 
-        BOOST_REQUIRE_NO_THROW(udp->send(send));
-        BOOST_REQUIRE_NO_THROW(udp->send(send));
-        BOOST_REQUIRE_NO_THROW(udp->send(send));
+        BOOST_REQUIRE_NO_THROW(udp->send(d, send));
+        BOOST_REQUIRE_NO_THROW(udp->send(d, send));
+        BOOST_REQUIRE_NO_THROW(udp->send(d, send));
 
-        BOOST_REQUIRE_NO_THROW(udp->receive(recv));
-        check(send, recv, true);
+        BOOST_REQUIRE_NO_THROW(udp->receive(s, recv));
+        check(s, d, send, recv);
 
-        BOOST_REQUIRE_NO_THROW(udp->receive(recv));
-        check(send, recv, true);
+        BOOST_REQUIRE_NO_THROW(udp->receive(s, recv));
+        check(s, d, send, recv);
 
-        BOOST_REQUIRE_NO_THROW(udp->receive(recv));
-        check(send, recv, true);
+        BOOST_REQUIRE_NO_THROW(udp->receive(s, recv));
+        check(s, d, send, recv);
     };
 
     auto l = std::async(std::launch::async, work, lend, lep, rep);

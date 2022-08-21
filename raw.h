@@ -21,7 +21,6 @@
 namespace plexus { namespace network { 
 
 typedef std::pair<std::string, uint16_t> endpoint;
-
 typedef std::pair<boost::shared_array<uint8_t>, size_t> byte_array;
 
 class buffer
@@ -47,9 +46,9 @@ public:
         std::memset(m_buffer.first.get(), 0, length);
     }
 
-    buffer(const std::string& data) : m_buffer(boost::shared_array<uint8_t>(new uint8_t[data.size()]), data.size())
+    buffer(const char* data) : m_buffer(boost::shared_array<uint8_t>(new uint8_t[std::strlen(data)]), std::strlen(data))
     {
-        std::memcpy(m_buffer.first.get(), data.data(), data.size());
+        std::memcpy(m_buffer.first.get(), data, std::strlen(data));
     }
     
     buffer(const std::vector<uint8_t>& data) : m_buffer(boost::shared_array<uint8_t>(new uint8_t[data.size()]), data.size())
@@ -242,9 +241,6 @@ public:
     }
 };
 
-typedef proto<IPPROTO_UDP> udp;
-typedef proto<IPPROTO_TCP> tcp;
-
 struct ip_packet : public buffer
 {
     ip_packet(size_t len) : buffer(len) { }
@@ -263,8 +259,8 @@ struct ip_packet : public buffer
     bool more_fragments() const { return (get_byte(6) & 0x20) != 0; }
     boost::asio::ip::address_v4 source_address() const { return boost::asio::ip::address_v4({get_byte(12), get_byte(13), get_byte(14), get_byte(15)}); }
     boost::asio::ip::address_v4 destination_address() const { return boost::asio::ip::address_v4({get_byte(16), get_byte(17), get_byte(18), get_byte(19)}); }
-    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
-    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(header_length())); }
+    template<class packet> std::shared_ptr<packet> envelope() const { return std::make_shared<packet>(buffer::push_head()); }
+    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::pop_head(header_length())); }
 };
 
 struct icmp_packet : public buffer
@@ -297,10 +293,10 @@ struct icmp_packet : public buffer
     uint8_t pointer() const { return get_byte(4); }
     uint16_t mtu() const { return get_word(6); }
     boost::asio::ip::address_v4 gateway() const { return boost::asio::ip::address_v4({get_byte(4), get_byte(5), get_byte(6), get_byte(7)}); }
-    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
-    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(8)); }
+    template<class packet> std::shared_ptr<packet> envelope() const { return std::make_shared<packet>(buffer::push_head()); }
+    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::pop_head(8)); }
 
-    static std::shared_ptr<icmp_packet> make_ping_packet(uint16_t id, uint16_t seq, const std::vector<uint8_t>& data = { 'p', 'l', 'e', 'x', 'u', 's' });
+    static std::shared_ptr<icmp_packet> make_ping_packet(uint16_t id, uint16_t seq, std::shared_ptr<buffer> payload = std::make_shared<buffer>("plexus"));
 };
 
 struct udp_packet : public buffer
@@ -311,10 +307,10 @@ struct udp_packet : public buffer
     uint16_t dest_port() const { return get_word(2); }
     uint16_t length() const { return get_word(4); }
     uint16_t checksum() const { return get_word(6); }
-    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
-    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(8)); }
+    template<class packet> std::shared_ptr<packet> envelope() const { return std::make_shared<packet>(buffer::push_head()); }
+    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::pop_head(8)); }
 
-    static std::shared_ptr<udp_packet> make_packet(uint16_t src_port, uint16_t dst_port, const std::vector<uint8_t>& data);
+    static std::shared_ptr<udp_packet> make_packet(uint16_t src_port, uint16_t dst_port, std::shared_ptr<buffer> payload = std::make_shared<buffer>("plexus"));
 };
 
 struct tcp_packet : public buffer
@@ -355,10 +351,10 @@ struct tcp_packet : public buffer
     uint16_t checksum() const { return get_word(16); }
     uint16_t urgent_pointer() const { return get_word(18); }
     option options() const { return option(buffer::pop_tail(data_offset() * 4).pop_head(20)); }
-    template<class packet_t> std::shared_ptr<packet_t> envelope() const { return std::make_shared<packet_t>(buffer::push_head()); }
-    template<class packet_t> std::shared_ptr<packet_t> payload() const { return std::make_shared<packet_t>(buffer::pop_head(data_offset() * 4)); }
+    template<class packet> std::shared_ptr<packet> envelope() const { return std::make_shared<packet>(buffer::push_head()); }
+    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::pop_head(data_offset() * 4)); }
 
-    static std::shared_ptr<tcp_packet> make_syn_packet(uint16_t src_port, uint16_t dst_port, const std::vector<uint8_t>& data);
+    static std::shared_ptr<tcp_packet> make_syn_packet(uint16_t src_port, uint16_t dst_port, std::shared_ptr<buffer> payload = std::make_shared<buffer>("plexus"));
 };
 
 }}}

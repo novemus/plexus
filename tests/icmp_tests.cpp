@@ -39,17 +39,17 @@ boost::test_tools::assertion_result is_enabled(boost::unit_test::test_unit_id)
 
 namespace {
 
-const plexus::network::endpoint local = std::make_pair("", 0);
+const plexus::network::endpoint empty = std::make_pair("", 0);
 const plexus::network::endpoint remote = std::make_pair("8.8.8.8", 0);
 
 }
 
 BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 {
-    auto icmp = plexus::network::create_icmp_transport(local);
+    auto icmp = plexus::network::raw::create_icmp_transport(empty);
     auto req = plexus::network::raw::icmp_packet::make_ping_packet(get_id(), 1);
     
-    BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::transport::transfer>(remote, req)));
+    BOOST_REQUIRE_NO_THROW(icmp->send(remote, req));
 
     int tries = 5;
     bool success = false;
@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
         try
         {
             auto env = std::make_shared<plexus::network::raw::ip_packet>(1500);
-            icmp->receive(std::make_shared<plexus::network::transport::transfer>(remote, env));
+            icmp->receive(remote, env);
             auto rep = env->payload<plexus::network::raw::icmp_packet>();
 
             BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
@@ -85,10 +85,10 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 
 BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
 {
-    auto icmp = plexus::network::create_icmp_transport(local);
+    auto icmp = plexus::network::raw::create_icmp_transport(empty);
     auto req = plexus::network::raw::icmp_packet::make_ping_packet(get_id(), 1);
     
-    BOOST_REQUIRE_NO_THROW(icmp->send(std::make_shared<plexus::network::transport::transfer>(remote, req), 1600, 1));
+    BOOST_REQUIRE_NO_THROW(icmp->send(remote, req, 1600, 1));
 
     int tries = 5;
     bool success = false;
@@ -97,7 +97,7 @@ BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
         try
         {
             auto env = std::make_shared<plexus::network::raw::ip_packet>(4096);
-            icmp->receive(std::make_shared<plexus::network::transport::transfer>(env));
+            icmp->receive(empty, env);
             auto rep = env->payload<plexus::network::raw::icmp_packet>();
 
             BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
