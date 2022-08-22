@@ -460,7 +460,7 @@ public:
             uint8_t byte = utils::random<uint8_t>();
 
             if (i == 0)
-                byte &= flag ? 0xff : 0xfe;
+                byte &= ~flag;
 
             sum ^= byte;
             set_byte(i, byte ^ get_mask_byte(i));
@@ -483,7 +483,7 @@ public:
         if (sum != 0)
             throw plexus::handshake_error();
 
-        return get_byte(0) ^ get_mask_byte(0) & 0x1;
+        return get_byte(0) ^ get_mask_byte(0) & 0x01;
     }
 };
 

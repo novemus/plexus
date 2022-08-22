@@ -132,11 +132,8 @@ public:
         m_socket.bind(resolve_endpoint(local));
 
 #ifdef _WIN32
-        if (proto_id == IPPROTO_ICMP)
-        {
-            unsigned long flag = 1;
-            ioctlsocket(m_socket.native_handle(), SIO_RCVALL, &flag);
-        }
+        unsigned long flag = 1;
+        ioctlsocket(m_socket.native_handle(), SIO_RCVALL, &flag);
 #endif
     }
 
@@ -241,7 +238,7 @@ std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t sport, uint16_t dpo
 
     udp->set_word(0, sport);
     udp->set_word(2, dport);
-    udp->set_word(4, udp->size());
+    udp->set_word(4, (uint32_t)udp->size());
     udp->set_word(6, calc_checksum(udp));
 
     return udp;

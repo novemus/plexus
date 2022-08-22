@@ -349,7 +349,7 @@ struct tcp_packet : public buffer
 
         const void* value() const { return length() > 2 ? m_buffer.begin() + 2 : 0; }
         uint8_t type() const { return m_buffer.size() ? m_buffer.get_byte(0) : 0; }
-        uint8_t length() const { return m_buffer.size() > 1 ? m_buffer.get_byte(1) : m_buffer.size(); }
+        uint8_t length() const { return m_buffer.size() > 1 ? m_buffer.get_byte(1) : (uint8_t)m_buffer.size(); }
         option next() const { return option(m_buffer.pop_head(length())); }
 
     private:
