@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 {
     auto icmp = plexus::network::raw::create_icmp_transport(empty);
     auto req = plexus::network::raw::icmp_packet::make_ping_packet(get_id(), 1);
-    
+
     BOOST_REQUIRE_NO_THROW(icmp->send(remote, req));
 
     int tries = 5;
@@ -63,16 +63,16 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 
             BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->begin(), env->total_length() - env->header_length()).c_str()));
 
-            success = env->source_address().to_string() == "8.8.8.8"
-                    && env->protocol() == IPPROTO_ICMP
-                    && env->total_length() - env->header_length() == req->size()
-                    && rep->type() == plexus::network::raw::icmp_packet::echo_reply
-                    && rep->code() == 0
-                    && rep->identifier() == req->identifier()
-                    && rep->sequence_number() == req->sequence_number()
-                    && memcmp(rep->begin() + 8, req->begin() + 8, req->size() - 8) == 0;
+            success = env->source_address().to_string() == "8.8.8.8" 
+                   && env->protocol() == IPPROTO_ICMP 
+                   && env->total_length() - env->header_length() == req->size() 
+                   && rep->type() == plexus::network::raw::icmp_packet::echo_reply 
+                   && rep->code() == 0 
+                   && rep->identifier() == req->identifier() 
+                   && rep->sequence_number() == req->sequence_number() 
+                   && memcmp(rep->begin() + 8, req->begin() + 8, req->size() - 8) == 0;
         }
-        catch(const boost::system::system_error& ex) 
+        catch (const boost::system::system_error& ex)
         {
             BOOST_REQUIRE_EQUAL(ex.code(), boost::asio::error::operation_aborted);
             break;

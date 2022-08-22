@@ -40,30 +40,32 @@ class buffer
 
 public:
 
-    buffer(size_t size)
-        : m_size(size)
+    buffer(size_t size, size_t padding = 0)
+        : m_size(size + padding)
         , m_buffer(new uint8_t[m_size])
-        , m_beg(m_buffer.get())
+        , m_beg(m_buffer.get() + padding)
         , m_end(m_buffer.get() + m_size)
     {
-        std::memset(m_beg, 0, m_size);
+        std::memset(m_buffer.get(), 0, m_size);
     }
 
     buffer(const char* data, size_t padding = 0) 
         : m_size(std::strlen(data) + padding)
         , m_buffer(new uint8_t[m_size])
-        , m_beg(m_buffer.get() + m_size - std::strlen(data))
+        , m_beg(m_buffer.get() + padding)
         , m_end(m_buffer.get() + m_size)
     {
+        std::memset(m_buffer.get(), 0, m_end - m_beg);
         std::memcpy(m_beg, data, std::strlen(data));
     }
     
     buffer(const std::vector<uint8_t>& data, size_t padding = 0) 
         : m_size(data.size() + padding)
         , m_buffer(new uint8_t[m_size])
-        , m_beg(m_buffer.get() + m_size - data.size())
+        , m_beg(m_buffer.get() + padding)
         , m_end(m_buffer.get() + m_size)
     {
+        std::memset(m_buffer.get(), 0, m_end - m_beg);
         std::memcpy(m_beg, data.data(), data.size());
     }
 
@@ -75,7 +77,7 @@ public:
     {
     }
 
-    virtual ~buffer() {}
+    virtual ~buffer() { }
 
     size_t head() const
     {
@@ -163,7 +165,7 @@ public:
     buffer pop_head(size_t size) const
     {
         uint8_t* ptr = m_beg - size;
-        if (ptr > m_buffer.get())
+        if (ptr < m_buffer.get())
             throw std::out_of_range("pop_head: out of range");
         return buffer(m_buffer, m_size, ptr, m_end);
     }
@@ -323,7 +325,7 @@ struct icmp_packet : public buffer
     boost::asio::ip::address_v4 gateway() const { return boost::asio::ip::address_v4({get_byte(4), get_byte(5), get_byte(6), get_byte(7)}); }
     template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::push_head(8)); }
 
-    static std::shared_ptr<icmp_packet> make_ping_packet(uint16_t id, uint16_t seq, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 8));
+    static std::shared_ptr<icmp_packet> make_ping_packet(uint16_t id, uint16_t seq, std::shared_ptr<buffer> data = std::make_shared<buffer>(8, 8));
 };
 
 struct udp_packet : public buffer
