@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
             icmp->receive(remote, env);
             auto rep = env->payload<plexus::network::raw::icmp_packet>();
 
-            BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
+            BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->begin(), env->total_length() - env->header_length()).c_str()));
 
             success = env->source_address().to_string() == "8.8.8.8"
                     && env->protocol() == IPPROTO_ICMP
@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
                     && rep->code() == 0
                     && rep->identifier() == req->identifier()
                     && rep->sequence_number() == req->sequence_number()
-                    && memcmp(rep->data() + 8, req->data() + 8, req->size() - 8) == 0;
+                    && memcmp(rep->begin() + 8, req->begin() + 8, req->size() - 8) == 0;
         }
         catch(const boost::system::system_error& ex) 
         {
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
             icmp->receive(empty, env);
             auto rep = env->payload<plexus::network::raw::icmp_packet>();
 
-            BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->data(), env->total_length() - env->header_length()).c_str()));
+            BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->begin(), env->total_length() - env->header_length()).c_str()));
 
             if (env->protocol() == IPPROTO_ICMP && rep->type() == plexus::network::raw::icmp_packet::time_exceeded)
             {
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
                     rep = env->payload<plexus::network::raw::icmp_packet>();
                     success = env->destination_address().to_string() == "8.8.8.8"
                             && env->total_length() - env->header_length() == req->size()
-                            && memcmp(rep->data(), req->data(), req->size()) == 0;
+                            && memcmp(rep->begin(), req->begin(), req->size()) == 0;
                 }
             }
         }

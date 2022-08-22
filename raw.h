@@ -21,162 +21,191 @@
 namespace plexus { namespace network { 
 
 typedef std::pair<std::string, uint16_t> endpoint;
-typedef std::pair<boost::shared_array<uint8_t>, size_t> byte_array;
 
 class buffer
 {
-    byte_array m_buffer;
-    std::vector<size_t> m_heads;
-    std::vector<size_t> m_tails;
+    size_t m_size;
+    boost::shared_array<uint8_t> m_buffer;
 
-    buffer(const byte_array& buffer, const std::vector<size_t>& heads, const std::vector<size_t>& tails) 
-        : m_buffer(buffer)
-        , m_heads(heads)
-        , m_tails(tails)
+    uint8_t* m_beg;
+    uint8_t* m_end;
+
+    buffer(boost::shared_array<uint8_t> buffer, size_t size, uint8_t* beg, uint8_t* end)
+        : m_size(size)
+        , m_buffer(buffer)
+        , m_beg(beg)
+        , m_end(end)
     {
     }
-
-    size_t head() const { return m_heads.empty() ? 0 : m_heads.back(); }
-    size_t tail() const { return m_tails.empty() ? m_buffer.second : m_tails.back(); }
 
 public:
 
-    buffer(size_t length) : m_buffer(boost::shared_array<uint8_t>(new uint8_t[length]), length)
+    buffer(size_t size)
+        : m_size(size)
+        , m_buffer(new uint8_t[m_size])
+        , m_beg(m_buffer.get())
+        , m_end(m_buffer.get() + m_size)
     {
-        std::memset(m_buffer.first.get(), 0, length);
+        std::memset(m_beg, 0, m_size);
     }
 
-    buffer(const char* data) : m_buffer(boost::shared_array<uint8_t>(new uint8_t[std::strlen(data)]), std::strlen(data))
+    buffer(const char* data, size_t padding = 0) 
+        : m_size(std::strlen(data) + padding)
+        , m_buffer(new uint8_t[m_size])
+        , m_beg(m_buffer.get() + m_size - std::strlen(data))
+        , m_end(m_buffer.get() + m_size)
     {
-        std::memcpy(m_buffer.first.get(), data, std::strlen(data));
+        std::memcpy(m_beg, data, std::strlen(data));
     }
     
-    buffer(const std::vector<uint8_t>& data) : m_buffer(boost::shared_array<uint8_t>(new uint8_t[data.size()]), data.size())
+    buffer(const std::vector<uint8_t>& data, size_t padding = 0) 
+        : m_size(data.size() + padding)
+        , m_buffer(new uint8_t[m_size])
+        , m_beg(m_buffer.get() + m_size - data.size())
+        , m_end(m_buffer.get() + m_size)
     {
-        std::memcpy(m_buffer.first.get(), data.data(), data.size());
+        std::memcpy(m_beg, data.data(), data.size());
     }
 
     buffer(const buffer& other)
-        : m_buffer(other.m_buffer)
-        , m_heads(other.m_heads)
-        , m_tails(other.m_tails)
+        : m_size(other.m_size)
+        , m_buffer(other.m_buffer)
+        , m_beg(other.m_beg)
+        , m_end(other.m_end)
     {
     }
 
     virtual ~buffer() {}
 
-    uint8_t* data()
+    size_t head() const
     {
-        return m_buffer.first.get() + head();
+        return m_beg - m_buffer.get();
     }
 
-    const uint8_t* data() const
+    size_t tail() const
     {
-        return m_buffer.first.get() + head();
+        return m_buffer.get() + m_size - m_end;
+    }
+
+    uint8_t* begin()
+    {
+        return m_beg;
+    }
+
+    const uint8_t* begin() const
+    {
+        return m_beg;
+    }
+
+    uint8_t* end()
+    {
+        return m_end;
+    }
+
+    const uint8_t* end() const
+    {
+        return m_end;
     }
 
     size_t size() const
     {
-        return tail() - head();
+        return m_end - m_beg;
     }
 
     void set_byte(size_t pos, uint8_t val)
     {
-        size_t p = head() + pos;
-        if (p >= tail())
-            throw std::out_of_range("position is out of range");
-
-        m_buffer.first[p] = val;
+        uint8_t* ptr = m_beg + pos;
+        if (ptr >= m_end)
+            throw std::out_of_range("set_byte: out of range");
+        *ptr = val;
     }
 
     uint8_t get_byte(size_t pos) const
     {
-        size_t p = head() + pos;
-        if (p >= tail())
-            throw std::out_of_range("position is out of range");
-
-        return m_buffer.first[p];
+        uint8_t* ptr = m_beg + pos;
+        if (ptr >= m_end)
+            throw std::out_of_range("get_byte: out of range");
+        return *ptr;
     }
 
     void set_word(size_t pos, uint16_t val)
     {
-        size_t p = head() + pos;
-
-        if (p + sizeof(uint16_t) > tail())
-            throw std::out_of_range("position is out of range");
-
-        *(uint16_t*)(m_buffer.first.get() + p) = htons(val);
+        uint8_t* ptr = m_beg + pos;
+        if (ptr + sizeof(uint16_t) > m_end)
+            throw std::out_of_range("set_word: out of range");
+        *(uint16_t*)(ptr) = htons(val);
     }
 
     uint16_t get_word(size_t pos) const
     {
-        size_t p = head() + pos;
-
-        if (p + sizeof(uint16_t) > tail())
-            throw std::out_of_range("position is out of range");
-
-        return ntohs(*(uint16_t*)(m_buffer.first.get() + p));
+        uint8_t* ptr = m_beg + pos;
+        if (ptr + sizeof(uint16_t) > m_end)
+            throw std::out_of_range("get_word: out of range");
+        return ntohs(*(uint16_t*)ptr);
     }
 
     void set_dword(size_t pos, uint32_t val)
     {
-        size_t p = head() + pos;
-
-        if (p + sizeof(uint32_t) > tail())
-            throw std::out_of_range("position is out of range");
-
-        *(uint32_t*)(m_buffer.first.get() + pos) = htonl(val);
+        uint8_t* ptr = m_beg + pos;
+        if (ptr + sizeof(uint32_t) > m_end)
+            throw std::out_of_range("set_dword: out of range");
+        *(uint32_t*)(ptr) = htonl(val);
     }
 
     uint32_t get_dword(size_t pos) const
     {
-        size_t p = head() + pos;
-
-        if (p + sizeof(uint32_t) > tail())
-            throw std::out_of_range("position is out of range");
-
-        return ntohl(*(uint32_t*)(m_buffer.first.get() + p));
+        uint8_t* ptr = m_beg + pos;
+        if (ptr + sizeof(uint32_t) > m_end)
+            throw std::out_of_range("get_dword: out of range");
+        return ntohl(*(uint32_t*)ptr);
     }
 
     buffer pop_head(size_t size) const
     {
-        size_t h = head() + size;
-        if (h > tail())
-            throw std::out_of_range("offset is out of range");
-
-        std::vector<size_t> heads = m_heads;
-        heads.push_back(h);
-        return buffer(m_buffer, heads, m_tails);
+        uint8_t* ptr = m_beg - size;
+        if (ptr > m_buffer.get())
+            throw std::out_of_range("pop_head: out of range");
+        return buffer(m_buffer, m_size, ptr, m_end);
     }
 
-    buffer push_head() const
+    buffer push_head(size_t size) const
     {
-        if (m_heads.empty())
-            throw std::runtime_error("no head to push");
+        uint8_t* ptr = m_beg + size;
+        if (ptr > m_end)
+            throw std::runtime_error("push_head: out of range");
+        return buffer(m_buffer, m_size, ptr, m_end);
+    }
 
-        std::vector<size_t> heads = m_heads;
-        heads.pop_back();
-        return buffer(m_buffer, heads, m_tails);
+    buffer push_tail(size_t size) const
+    {
+        uint8_t* ptr = m_end + size;
+        if (ptr > m_buffer.get() + m_size)
+            throw std::runtime_error("push_tail: out of range");
+        return buffer(m_buffer, m_size, m_beg, ptr);
     }
 
     buffer pop_tail(size_t size) const
     {
-        if (size > tail())
-            throw std::runtime_error("offset is out of range");
-
-        std::vector<size_t> tails = m_tails;
-        tails.push_back(tail() - size);
-        return buffer(m_buffer, m_heads, tails);
+        uint8_t* ptr = m_end - size;
+        if (ptr < m_beg)
+            throw std::runtime_error("pop_tail: out of range");
+        return buffer(m_buffer, m_size, m_beg, ptr);
     }
 
-    buffer push_tail() const
+    void move_head(size_t size, bool top)
     {
-        if (m_heads.empty())
-            throw std::runtime_error("no tail to push");
+        uint8_t* ptr = top ? m_beg - size : m_beg + size;
+        if (ptr < m_buffer.get() || ptr > m_end)
+            throw std::out_of_range("pop_head: out of range");
+        m_beg = ptr;
+    }
 
-        std::vector<size_t> tails = m_tails;
-        tails.pop_back();
-        return buffer(m_buffer, m_heads, tails);
+    void move_tail(size_t size, bool top)
+    {
+        uint8_t* ptr = top ? m_end - size : m_end + size;
+        if (ptr < m_beg || ptr > m_buffer.get() + m_size)
+            throw std::runtime_error("pop_tail: out of range");
+        m_end = ptr;
     }
 };
 
@@ -246,12 +275,12 @@ struct ip_packet : public buffer
     ip_packet(size_t len) : buffer(len) { }
     ip_packet(const buffer& buf) : buffer(buf) { }
 
-    uint8_t version() const { return (get_byte(0) >> 4) & 0xF; }
-    uint16_t header_length() const { return (get_byte(0) & 0xF) * 4; }
+    uint8_t version() const { return (get_byte(0) >> 4) & 0xf; }
+    uint16_t header_length() const { return (get_byte(0) & 0xf) * 4; }
     uint8_t type_of_service() const { return get_byte(1); }
     uint16_t total_length() const { return get_word(2); }
     uint16_t identification() const { return get_word(4);  }
-    uint16_t fragment_offset() const { return get_word(6) & 0x1FFF; }
+    uint16_t fragment_offset() const { return get_word(6) & 0x1fff; }
     uint8_t time_to_live() const { return get_byte(8); }
     uint8_t protocol() const { return get_byte(9); }
     uint16_t header_checksum() const { return get_word(10); }
@@ -259,8 +288,7 @@ struct ip_packet : public buffer
     bool more_fragments() const { return (get_byte(6) & 0x20) != 0; }
     boost::asio::ip::address_v4 source_address() const { return boost::asio::ip::address_v4({get_byte(12), get_byte(13), get_byte(14), get_byte(15)}); }
     boost::asio::ip::address_v4 destination_address() const { return boost::asio::ip::address_v4({get_byte(16), get_byte(17), get_byte(18), get_byte(19)}); }
-    template<class packet> std::shared_ptr<packet> envelope() const { return std::make_shared<packet>(buffer::push_head()); }
-    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::pop_head(header_length())); }
+    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::push_head(header_length())); }
 };
 
 struct icmp_packet : public buffer
@@ -293,10 +321,9 @@ struct icmp_packet : public buffer
     uint8_t pointer() const { return get_byte(4); }
     uint16_t mtu() const { return get_word(6); }
     boost::asio::ip::address_v4 gateway() const { return boost::asio::ip::address_v4({get_byte(4), get_byte(5), get_byte(6), get_byte(7)}); }
-    template<class packet> std::shared_ptr<packet> envelope() const { return std::make_shared<packet>(buffer::push_head()); }
-    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::pop_head(8)); }
+    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::push_head(8)); }
 
-    static std::shared_ptr<icmp_packet> make_ping_packet(uint16_t id, uint16_t seq, std::shared_ptr<buffer> payload = std::make_shared<buffer>("plexus"));
+    static std::shared_ptr<icmp_packet> make_ping_packet(uint16_t id, uint16_t seq, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 8));
 };
 
 struct udp_packet : public buffer
@@ -307,10 +334,9 @@ struct udp_packet : public buffer
     uint16_t dest_port() const { return get_word(2); }
     uint16_t length() const { return get_word(4); }
     uint16_t checksum() const { return get_word(6); }
-    template<class packet> std::shared_ptr<packet> envelope() const { return std::make_shared<packet>(buffer::push_head()); }
-    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::pop_head(8)); }
+    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::push_head(8)); }
 
-    static std::shared_ptr<udp_packet> make_packet(uint16_t src_port, uint16_t dst_port, std::shared_ptr<buffer> payload = std::make_shared<buffer>("plexus"));
+    static std::shared_ptr<udp_packet> make_packet(uint16_t sport, uint16_t dport, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 8));
 };
 
 struct tcp_packet : public buffer
@@ -319,7 +345,7 @@ struct tcp_packet : public buffer
     {
         option(const buffer& buf) : m_buffer(buf) {}
 
-        const void* value() const { return length() > 2 ? m_buffer.data() + 2 : 0; }
+        const void* value() const { return length() > 2 ? m_buffer.begin() + 2 : 0; }
         uint8_t type() const { return m_buffer.size() ? m_buffer.get_byte(0) : 0; }
         uint8_t length() const { return m_buffer.size() > 1 ? m_buffer.get_byte(1) : m_buffer.size(); }
         option next() const { return option(m_buffer.pop_head(length())); }
@@ -350,11 +376,10 @@ struct tcp_packet : public buffer
     uint16_t window() const { return get_word(14); }
     uint16_t checksum() const { return get_word(16); }
     uint16_t urgent_pointer() const { return get_word(18); }
-    option options() const { return option(buffer::pop_tail(data_offset() * 4).pop_head(20)); }
-    template<class packet> std::shared_ptr<packet> envelope() const { return std::make_shared<packet>(buffer::push_head()); }
-    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::pop_head(data_offset() * 4)); }
+    option options() const { return option(buffer::push_head(20).pop_tail(buffer::size() - data_offset() * 4)); }
+    template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::push_head(data_offset() * 4)); }
 
-    static std::shared_ptr<tcp_packet> make_syn_packet(uint16_t src_port, uint16_t dst_port, std::shared_ptr<buffer> payload = std::make_shared<buffer>("plexus"));
+    static std::shared_ptr<tcp_packet> make_syn_packet(uint16_t sport, uint16_t dport, uint32_t seq, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 60));
 };
 
 }}}

@@ -47,9 +47,10 @@ void check(const plexus::network::endpoint& from, const plexus::network::endpoin
         BOOST_REQUIRE_EQUAL(out->source_port(), tcp->source_port());
     }
 
-    auto data = tcp->payload<plexus::network::buffer>();
+    auto in_data = tcp->push_head(4);
+    auto out_data = out->push_head(4);
 
-    BOOST_REQUIRE_EQUAL(std::memcmp(out->data(), data->data(), out->size()), 0);
+    BOOST_REQUIRE_EQUAL(std::memcmp(in_data.begin(), out_data.begin(), out_data.size()), 0);
 }
 
 BOOST_AUTO_TEST_CASE(sync_udp_exchange)
@@ -64,7 +65,7 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
     auto lend = plexus::network::raw::create_tcp_transport(lep);
     auto rend = plexus::network::raw::create_tcp_transport(rep);
 
-    auto send = plexus::network::raw::tcp_packet::make_syn_packet(lep.second, rep.second);
+    auto send = plexus::network::raw::tcp_packet::make_syn_packet(lep.second, rep.second, 0x00ff00ff);
     auto recv = std::make_shared<plexus::network::buffer>(1500);
 
     // send from left to right
@@ -73,7 +74,7 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
     
     check(lep, rep, send, recv);
 
-    send = plexus::network::raw::tcp_packet::make_syn_packet(rep.second, lep.second);
+    send = plexus::network::raw::tcp_packet::make_syn_packet(rep.second, lep.second, 0x00ff00ff);
     recv = std::make_shared<plexus::network::buffer>(1500);
 
     // send from right to left 
@@ -92,7 +93,7 @@ BOOST_AUTO_TEST_CASE(async_udp_exchange)
 
     auto work = [&](std::shared_ptr<plexus::network::transport> tcp, const plexus::network::endpoint& s, const plexus::network::endpoint& d)
     {
-        auto send = plexus::network::raw::tcp_packet::make_syn_packet(s.second, d.second);
+        auto send = plexus::network::raw::tcp_packet::make_syn_packet(s.second, d.second, 0x00ff00ff);
         auto recv = std::make_shared<plexus::network::raw::ip_packet>(1500);
 
         BOOST_REQUIRE_NO_THROW(tcp->send(d, send));

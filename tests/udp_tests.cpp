@@ -53,7 +53,7 @@ void check(const plexus::network::endpoint& from, const plexus::network::endpoin
     auto in_data = udp->payload<plexus::network::buffer>();
     auto out_data = out->payload<plexus::network::buffer>();
 
-    BOOST_REQUIRE_EQUAL(std::memcmp(in_data->data(), out_data->data(), out_data->size()), 0);
+    BOOST_REQUIRE_EQUAL(std::memcmp(in_data->begin(), out_data->begin(), out_data->size()), 0);
 }
 
 BOOST_AUTO_TEST_CASE(sync_raw_udp_exchange)

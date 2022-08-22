@@ -162,7 +162,7 @@ public:
         {
             size_t size = exec([&](const async_io_callback_t& callback)
             {
-                m_socket.async_receive(boost::asio::buffer(buffer->data(), buffer->size()), callback);
+                m_socket.async_receive(boost::asio::buffer(buffer->begin(), buffer->size()), callback);
             }, timeout - timer().total_milliseconds());
 
             std::shared_ptr<ip_packet> ip = std::static_pointer_cast<ip_packet>(buffer);
@@ -173,7 +173,7 @@ public:
             auto source = get_source_endpoint(ip);
             if (is_matched(source, match))
             {
-                _trc_ << source << " >>>>> " << std::make_pair(buffer->data(), size);
+                _trc_ << source << " >>>>> " << std::make_pair(buffer->begin(), size);
                 return;
             }
         }
@@ -188,75 +188,61 @@ public:
         size_t size = exec([&](const async_io_callback_t& callback)
         {
             m_socket.set_option(boost::asio::ip::unicast::hops(hops));
-            m_socket.async_send_to(boost::asio::buffer(buffer->data(), buffer->size()), dest, callback);
+            m_socket.async_send_to(boost::asio::buffer(buffer->begin(), buffer->size()), dest, callback);
         }, timeout);
 
-        _trc_ << dest << " <<<<< " << std::make_pair(buffer->data(), size);
+        _trc_ << dest << " <<<<< " << std::make_pair(buffer->begin(), size);
 
         if (buffer->size() > size)
             throw std::runtime_error("sent part of icmp packet");
     }
 };
 
-std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t seq, std::shared_ptr<buffer> payload)
+uint16_t calc_checksum(std::shared_ptr<buffer> data)
 {
-    std::shared_ptr<icmp_packet> echo = std::make_shared<icmp_packet>(8 + payload->size());
+    uint32_t sum = 0;
+    uint8_t* dst = data->begin();
+
+    for (size_t i = 0; i < data->size(); ++i)
+    {
+        if (i % 2 == 0)
+            sum += dst[i] << 8;
+        else
+            sum += dst[i];
+    }
+
+    sum = (sum >> 16) + (sum & 0xFFFF);
+    sum += (sum >> 16);
+
+    return static_cast<uint16_t>(~sum);
+}
+
+std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t seq, std::shared_ptr<buffer> data)
+{
+    std::shared_ptr<icmp_packet> echo = std::make_shared<icmp_packet>(data->pop_head(8));
 
     echo->set_byte(0, icmp_packet::echo_request);
     echo->set_byte(1, 0);
     echo->set_word(4, id);
     echo->set_word(6, seq);
-
-    uint32_t sum = (echo->type() << 8) + echo->code() + echo->identifier() + echo->sequence_number();
-
-    uint8_t* dst = echo->data() + 8;
-
-    for (size_t i = 0; i < payload->size(); ++i)
-    {
-        dst[i] = payload->get_byte(i);
-
-        if (i % 2 == 0)
-            sum += dst[i] << 8;
-        else
-            sum += dst[i];
-    }
-
-    sum = (sum >> 16) + (sum & 0xFFFF);
-    sum += (sum >> 16);
-    echo->set_word(2, static_cast<uint16_t>(~sum));
+    echo->set_word(2, calc_checksum(echo));
 
     return echo;
 }
 
-std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(uint16_t src_port, uint16_t dst_port, std::shared_ptr<buffer> payload)
+std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(uint16_t sport, uint16_t dport, uint32_t seq, std::shared_ptr<buffer> data)
 {
     return 0;
 }
 
-std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t src_port, uint16_t dst_port, std::shared_ptr<buffer> payload)
+std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t sport, uint16_t dport, std::shared_ptr<buffer> data)
 {
-    std::shared_ptr<udp_packet> udp = std::make_shared<udp_packet>(8 + payload->size());
+    std::shared_ptr<udp_packet> udp = std::make_shared<udp_packet>(data->pop_head(8));
 
-    udp->set_word(0, src_port);
-    udp->set_word(2, dst_port);
-    udp->set_word(4, 8 + payload->size());
-
-    uint32_t sum = udp->source_port() + udp->dest_port() + udp->length();
-
-    uint8_t* dst = udp->data() + 8;
-    for (size_t i = 0; i < payload->size(); ++i)
-    {
-        dst[i] = payload->get_byte(i);
-
-        if (i % 2 == 0)
-            sum += dst[i] << 8;
-        else
-            sum += dst[i];
-    }
-
-    sum = (sum >> 16) + (sum & 0xFFFF);
-    sum += (sum >> 16);
-    udp->set_word(6, static_cast<uint16_t>(~sum));
+    udp->set_word(0, sport);
+    udp->set_word(2, dport);
+    udp->set_word(4, udp->size());
+    udp->set_word(6, calc_checksum(udp));
 
     return udp;
 }

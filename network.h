@@ -42,7 +42,4 @@ std::shared_ptr<transport> create_udp_transport(const endpoint& local);
 std::shared_ptr<transport> create_tcp_transport(const endpoint& local);
 std::shared_ptr<transport> create_icmp_transport(const endpoint& local);
 
-std::shared_ptr<transport> create_wrapped_udp_transport(const endpoint& local);
-std::shared_ptr<transport> create_wrapped_tcp_transport(const endpoint& local);
-
 }}}
