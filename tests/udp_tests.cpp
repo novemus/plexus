@@ -22,7 +22,7 @@ const plexus::network::endpoint rep = std::make_pair("127.0.0.1", 4321);
 
 }
 
-void check(const plexus::network::endpoint& from, const plexus::network::endpoint& to, std::shared_ptr<plexus::network::buffer> send, std::shared_ptr<plexus::network::buffer> recv)
+void check_udp(const plexus::network::endpoint& from, const plexus::network::endpoint& to, std::shared_ptr<plexus::network::buffer> send, std::shared_ptr<plexus::network::buffer> recv)
 {
     std::shared_ptr<plexus::network::raw::ip_packet> in = std::static_pointer_cast<plexus::network::raw::ip_packet>(recv);
     std::shared_ptr<plexus::network::raw::udp_packet> out = std::dynamic_pointer_cast<plexus::network::raw::udp_packet>(send);
@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(sync_raw_udp_exchange)
     BOOST_REQUIRE_NO_THROW(lend->send(rep, send));
     BOOST_REQUIRE_NO_THROW(rend->receive(lep, recv));
     
-    check(lep, rep, send, recv);
+    check_udp(lep, rep, send, recv);
 
     send = plexus::network::raw::udp_packet::make_packet(rep.second, lep.second);
     recv = std::make_shared<plexus::network::buffer>(1500);
@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(sync_raw_udp_exchange)
     BOOST_REQUIRE_NO_THROW(rend->send(lep, send));
     BOOST_REQUIRE_NO_THROW(lend->receive(rep, recv));
 
-    check(rep, lep, send, recv);
+    check_udp(rep, lep, send, recv);
 
     BOOST_REQUIRE_THROW(rend->receive(lep, recv), boost::system::system_error);
 }
@@ -97,13 +97,13 @@ BOOST_AUTO_TEST_CASE(async_raw_udp_exchange)
         BOOST_REQUIRE_NO_THROW(udp->send(d, send));
 
         BOOST_REQUIRE_NO_THROW(udp->receive(s, recv));
-        check(s, d, send, recv);
+        check_udp(s, d, send, recv);
 
         BOOST_REQUIRE_NO_THROW(udp->receive(s, recv));
-        check(s, d, send, recv);
+        check_udp(s, d, send, recv);
 
         BOOST_REQUIRE_NO_THROW(udp->receive(s, recv));
-        check(s, d, send, recv);
+        check_udp(s, d, send, recv);
     };
 
     auto l = std::async(std::launch::async, work, lend, lep, rep);

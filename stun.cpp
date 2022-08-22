@@ -518,7 +518,7 @@ template<int proto> class punch_strategy
             }
             else if (proto == IPPROTO_TCP)
             {
-                buf = plexus::network::raw::tcp_packet::make_syn_packet(m_host.second, peer.second, utils::random<uint32_t>(), msg);
+                buf = plexus::network::raw::tcp_packet::make_syn_packet(m_host, peer, msg);
             } 
             else
             {

@@ -364,7 +364,9 @@ struct tcp_packet : public buffer
         rst = 0x04,
         push = 0x08,
         ack = 0x10,
-        urg = 0x20
+        urg = 0x20,
+        ecn = 0x40,
+        cwr = 0x80
     };
 
     tcp_packet(const buffer& buf) : buffer(buf) { }
@@ -381,7 +383,7 @@ struct tcp_packet : public buffer
     option options() const { return option(buffer::push_head(20).pop_tail(buffer::size() - data_offset() * 4)); }
     template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::push_head(data_offset() * 4)); }
 
-    static std::shared_ptr<tcp_packet> make_syn_packet(uint16_t sport, uint16_t dport, uint32_t seq, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 60));
+    static std::shared_ptr<tcp_packet> make_syn_packet(const endpoint& src, const endpoint& dst, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 72));
 };
 
 }}}

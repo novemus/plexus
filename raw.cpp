@@ -220,6 +220,7 @@ std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t
 
     echo->set_byte(0, icmp_packet::echo_request);
     echo->set_byte(1, 0);
+    echo->set_word(2, 0);
     echo->set_word(4, id);
     echo->set_word(6, seq);
     echo->set_word(2, calc_checksum(echo));
@@ -227,9 +228,34 @@ std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t
     return echo;
 }
 
-std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(uint16_t sport, uint16_t dport, uint32_t seq, std::shared_ptr<buffer> data)
+std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(const endpoint& src, const endpoint& dst, std::shared_ptr<buffer> data)
 {
-    return 0;
+    std::shared_ptr<tcp_packet> tcp = std::make_shared<tcp_packet>(data->pop_head(20));
+
+    tcp->set_word(0, src.second);
+    tcp->set_word(2, dst.second);
+    tcp->set_dword(4, 0);
+    tcp->set_dword(8, 0);
+    tcp->set_byte(12, 0x50);
+    tcp->set_byte(13, (uint8_t)flag::syn);
+    tcp->set_word(14, 5840);
+    tcp->set_word(16, 0);
+    tcp->set_word(18, 0);
+
+    boost::asio::ip::address_v4 from =  boost::asio::ip::make_address_v4(src.first);
+    boost::asio::ip::address_v4 to = boost::asio::ip::make_address_v4(dst.first);
+
+    std::shared_ptr<buffer> pseudo = std::make_shared<buffer>(tcp->pop_head(12));
+
+    pseudo->set_dword(0, htonl(from.to_uint()));              // source address
+    pseudo->set_dword(4, htonl(to.to_uint()));                // destination address
+    pseudo->set_byte(8, 0);                                   // placeholder
+    pseudo->set_byte(9, IPPROTO_TCP);                         // protocol
+    pseudo->set_word(10, htons(20 + (uint16_t)data->size())); // tcp length
+
+    tcp->set_word(16, calc_checksum(pseudo));
+
+    return tcp;
 }
 
 std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t sport, uint16_t dport, std::shared_ptr<buffer> data)
@@ -238,7 +264,8 @@ std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t sport, uint16_t dpo
 
     udp->set_word(0, sport);
     udp->set_word(2, dport);
-    udp->set_word(4, (uint32_t)udp->size());
+    udp->set_word(4, (uint16_t)udp->size());
+    udp->set_word(6, 0);
     udp->set_word(6, calc_checksum(udp));
 
     return udp;

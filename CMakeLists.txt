@@ -11,6 +11,7 @@ set(TESTS_SOURCES log.cpp smime.cpp ssl.cpp raw.cpp utils.cpp exec.cpp
                  ./tests/log_tests.cpp
                  ./tests/ssl_tests.cpp
                  ./tests/udp_tests.cpp
+                 ./tests/tcp_tests.cpp
                  ./tests/smime_tests.cpp
                  ./tests/exec_tests.cpp
                  ./tests/icmp_tests.cpp)
