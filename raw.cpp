@@ -171,6 +171,8 @@ public:
             if (is_matched(source, match))
             {
                 _trc_ << source << " >>>>> " << std::make_pair(buffer->begin(), size);
+
+                buffer->move_tail(buffer->size() - size, true);
                 return;
             }
         }

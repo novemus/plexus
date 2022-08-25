@@ -67,17 +67,23 @@ struct traverse
 
 using namespace network;
 
-struct puncher
+struct stun_client
 {
-    virtual ~puncher() {}
-    virtual traverse explore_network() noexcept(false) = 0;
+    virtual ~stun_client() {}
     virtual endpoint obtain_endpoint() noexcept(false) = 0;
-    virtual endpoint punch_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) = 0;
+    virtual traverse explore_network() noexcept(false) = 0;
+};
+
+std::shared_ptr<stun_client> create_stun_client(const endpoint& stun, const endpoint& bind);
+
+struct nat_puncher : public stun_client
+{
+    virtual endpoint punch_hole_to_peer(const endpoint& peer) noexcept(false) = 0;
     virtual void reach_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
     virtual void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
-std::shared_ptr<puncher> create_udp_puncher(const endpoint& stun, const endpoint& local);
-std::shared_ptr<puncher> create_tcp_puncher(const endpoint& stun, const endpoint& local);
+std::shared_ptr<nat_puncher> create_udp_puncher(const endpoint& stun, const endpoint& bind, uint8_t hops);
+std::shared_ptr<nat_puncher> create_tcp_puncher(const endpoint& stun, const endpoint& bind, uint8_t hops);
 
 }
