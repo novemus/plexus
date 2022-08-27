@@ -62,7 +62,7 @@ FILERING_TEST_2: SA, SP, AF=0, PF=1
     otherwise there is address and port dependent filtering
 */
 
-namespace plexus { namespace stun {
+namespace plexus { 
 
 std::ostream& operator<<(std::ostream& stream, const binding& bind)
 {
@@ -79,6 +79,8 @@ std::ostream& operator<<(std::ostream& stream, const binding& bind)
     }
     return stream;
 }
+
+namespace stun {
 
 typedef std::array<uint8_t, 16> transaction_id;
 

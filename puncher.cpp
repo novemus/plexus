@@ -28,7 +28,7 @@ class handshake : public plexus::network::buffer
 
 public:
 
-    handshake(uint8_t flag, uint64_t mask) : plexus::network::buffer(68), m_mask(mask)
+    handshake(uint8_t flag, uint64_t mask) : plexus::network::buffer(8, 60), m_mask(mask)
     {
         uint8_t sum = 0;
         for (size_t i = 0; i < 7; ++i)
@@ -36,7 +36,7 @@ public:
             uint8_t byte = utils::random<uint8_t>();
 
             if (i == 0)
-                byte &= ~flag;
+                byte = flag ? (byte | 0x01) : (byte & 0xfe);
 
             sum ^= byte;
             set_byte(i, byte ^ get_mask_byte(i));
@@ -53,13 +53,13 @@ public:
     {
         uint8_t sum = get_byte(7) ^ get_mask_byte(7);
 
-        for (size_t i = 0; i < 8; ++i)
+        for (size_t i = 0; i < 7; ++i)
             sum ^= get_byte(i) ^ get_mask_byte(i);
 
         if (sum != 0)
             throw plexus::handshake_error();
 
-        return get_byte(0) ^ get_mask_byte(0) & 0x01;
+        return (get_byte(0) ^ get_mask_byte(0)) & 0x01;
     }
 };
 
@@ -147,7 +147,7 @@ public:
             try
             {
                 pin->send(peer, out);
-                
+
                 if (out->flag() == 1)
                 {
                     _dbg_ << "handshake peer=" << peer.first << ":" << peer.second;
