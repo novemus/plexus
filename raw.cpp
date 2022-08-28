@@ -149,6 +149,9 @@ public:
 
     void receive(const endpoint& remote, std::shared_ptr<buffer> buffer, int64_t timeout) noexcept(false) override
     {
+        if (buffer->size() < 20)
+            throw std::runtime_error("buffer too small for ip packet");
+
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
@@ -164,12 +167,12 @@ public:
 
             std::shared_ptr<ip_packet> ip = std::static_pointer_cast<ip_packet>(buffer);
 
-            if (ip->total_length() > size)
-                throw std::runtime_error("received part of ip packet");
-
             auto source = get_source_endpoint(ip);
             if (is_matched(source, match))
             {
+                if (ip->total_length() > buffer->size())
+                    throw std::runtime_error("buffer too small for received packet");
+
                 _trc_ << source << " >>>>> " << std::make_pair(buffer->begin(), size);
 
                 buffer->move_tail(buffer->size() - size, true);

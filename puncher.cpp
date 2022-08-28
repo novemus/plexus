@@ -45,7 +45,7 @@ public:
         set_byte(7, sum ^ get_mask_byte(7));
     }
 
-    handshake(uint64_t mask) : plexus::network::buffer(1500), m_mask(mask)
+    handshake(uint64_t mask) : plexus::network::buffer(68), m_mask(mask)
     {
     }
 

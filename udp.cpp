@@ -148,9 +148,6 @@ public:
 
             if (is_matched(source, match))
             {
-                if (size == 0)
-                    throw std::runtime_error("received empty message");
-
                 _trc_ << source << " >>>>> " << utils::to_hexadecimal(buf->begin(), size);
 
                 buf->move_tail(buf->size() - size, true);
