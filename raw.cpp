@@ -235,17 +235,40 @@ std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t
 
 std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(const endpoint& src, const endpoint& dst, std::shared_ptr<buffer> data)
 {
-    std::shared_ptr<tcp_packet> tcp = std::make_shared<tcp_packet>(data->pop_head(20));
+    std::shared_ptr<tcp_packet> tcp = std::make_shared<tcp_packet>(data->pop_head(40));
 
     tcp->set_word(0, src.second);
     tcp->set_word(2, dst.second);
     tcp->set_dword(4, 0);
     tcp->set_dword(8, 0);
-    tcp->set_byte(12, 0x50);
+    tcp->set_byte(12, 0xa0);
     tcp->set_byte(13, (uint8_t)flag::syn);
     tcp->set_word(14, 5840);
     tcp->set_word(16, 0);
     tcp->set_word(18, 0);
+
+    // MSS option
+    tcp->set_byte(20, 2);
+    tcp->set_byte(21, 4);
+    tcp->set_word(22, 1460);
+
+    // SACK option
+    tcp->set_byte(24, 4);
+    tcp->set_byte(25, 2);
+
+    // Timestamps option
+    tcp->set_byte(26, 8);
+    tcp->set_byte(27, 10);
+    tcp->set_dword(28, utils::random<uint32_t>());
+    tcp->set_dword(32, 0);
+
+    // No-Operation option
+    tcp->set_byte(36, 1);
+
+    // Window scale option
+    tcp->set_byte(37, 3);
+    tcp->set_byte(38, 3);
+    tcp->set_byte(39, 7);
 
     boost::asio::ip::address_v4 from =  boost::asio::ip::make_address_v4(src.first);
     boost::asio::ip::address_v4 to = boost::asio::ip::make_address_v4(dst.first);
@@ -256,7 +279,7 @@ std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(const endpoint& src, con
     pseudo->set_dword(4, htonl(to.to_uint()));                // destination address
     pseudo->set_byte(8, 0);                                   // placeholder
     pseudo->set_byte(9, IPPROTO_TCP);                         // protocol
-    pseudo->set_word(10, htons(20 + (uint16_t)data->size())); // tcp length
+    pseudo->set_word(10, htons(40 + (uint16_t)data->size())); // tcp length
 
     tcp->set_word(16, calc_checksum(pseudo));
 
