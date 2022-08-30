@@ -202,16 +202,21 @@ public:
 
 uint16_t calc_checksum(std::shared_ptr<buffer> data)
 {
+    uint16_t* ptr = (uint16_t*)data->begin();
+    size_t count = data->size();
     uint32_t sum = 0;
-    uint8_t* dst = data->begin();
 
-    for (size_t i = 0; i < data->size(); ++i)
+    while (count > 1)  
     {
-        if (i % 2 == 0)
-            sum += dst[i] << 8;
-        else
-            sum += dst[i];
-    }
+        sum += ntohs(*(uint16_t*)ptr++);
+        count -= 2;
+    }  
+
+    if(count > 0)
+    {
+        uint16_t tail = *(uint8_t*)ptr;
+        sum += ntohs(tail);
+    }  
 
     sum = (sum >> 16) + (sum & 0xFFFF);
     sum += (sum >> 16);
@@ -226,8 +231,8 @@ std::shared_ptr<icmp_packet> icmp_packet::make_ping_packet(uint16_t id, uint16_t
     echo->set_byte(0, icmp_packet::echo_request);
     echo->set_byte(1, 0);
     echo->set_word(2, 0);
-    echo->set_word(4, id);
-    echo->set_word(6, seq);
+    echo->set_word(4, htons(id));
+    echo->set_word(6, htons(seq));
     echo->set_word(2, calc_checksum(echo));
 
     return echo;
@@ -275,26 +280,38 @@ std::shared_ptr<tcp_packet> tcp_packet::make_syn_packet(const endpoint& src, con
 
     std::shared_ptr<buffer> pseudo = std::make_shared<buffer>(tcp->pop_head(12));
 
-    pseudo->set_dword(0, htonl(from.to_uint()));              // source address
-    pseudo->set_dword(4, htonl(to.to_uint()));                // destination address
-    pseudo->set_byte(8, 0);                                   // placeholder
-    pseudo->set_byte(9, IPPROTO_TCP);                         // protocol
-    pseudo->set_word(10, htons(40 + (uint16_t)data->size())); // tcp length
+    pseudo->set_dword(0, from.to_uint());              // source address
+    pseudo->set_dword(4, to.to_uint());                // destination address
+    pseudo->set_byte(8, 0);                            // placeholder
+    pseudo->set_byte(9, IPPROTO_TCP);                  // protocol
+    pseudo->set_word(10, 40 + (uint16_t)data->size()); // tcp length
 
     tcp->set_word(16, calc_checksum(pseudo));
 
     return tcp;
 }
 
-std::shared_ptr<udp_packet> udp_packet::make_packet(uint16_t sport, uint16_t dport, std::shared_ptr<buffer> data)
+std::shared_ptr<udp_packet> udp_packet::make_packet(const endpoint& src, const endpoint& dst, std::shared_ptr<buffer> data)
 {
     std::shared_ptr<udp_packet> udp = std::make_shared<udp_packet>(data->pop_head(8));
 
-    udp->set_word(0, sport);
-    udp->set_word(2, dport);
+    udp->set_word(0, src.second);
+    udp->set_word(2, dst.second);
     udp->set_word(4, (uint16_t)udp->size());
     udp->set_word(6, 0);
-    udp->set_word(6, calc_checksum(udp));
+
+    boost::asio::ip::address_v4 from =  boost::asio::ip::make_address_v4(src.first);
+    boost::asio::ip::address_v4 to = boost::asio::ip::make_address_v4(dst.first);
+
+    std::shared_ptr<buffer> pseudo = std::make_shared<buffer>(udp->pop_head(12));
+
+    pseudo->set_dword(0, from.to_uint());              // source address
+    pseudo->set_dword(4, to.to_uint());                // destination address
+    pseudo->set_byte(8, 0);                            // placeholder
+    pseudo->set_byte(9, IPPROTO_UDP);                  // protocol
+    pseudo->set_word(10, 8 + (uint16_t)data->size());  // udp length
+
+    udp->set_word(6, calc_checksum(pseudo));
 
     return udp;
 }

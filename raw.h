@@ -211,6 +211,7 @@ public:
     }
 };
 
+
 namespace raw {
 
 template<int id> class proto
@@ -338,7 +339,7 @@ struct udp_packet : public buffer
     uint16_t checksum() const { return get_word(6); }
     template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::push_head(8)); }
 
-    static std::shared_ptr<udp_packet> make_packet(uint16_t sport, uint16_t dport, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 8));
+    static std::shared_ptr<udp_packet> make_packet(const endpoint& src, const endpoint& dst, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 20));
 };
 
 struct tcp_packet : public buffer
@@ -383,7 +384,7 @@ struct tcp_packet : public buffer
     option options() const { return option(buffer::push_head(20).pop_tail(buffer::size() - data_offset() * 4)); }
     template<class packet> std::shared_ptr<packet> payload() const { return std::make_shared<packet>(buffer::push_head(data_offset() * 4)); }
 
-    static std::shared_ptr<tcp_packet> make_syn_packet(const endpoint& src, const endpoint& dst, std::shared_ptr<buffer> data = std::make_shared<buffer>("plexus", 72));
+    static std::shared_ptr<tcp_packet> make_syn_packet(const endpoint& src, const endpoint& dst, std::shared_ptr<buffer> data = std::make_shared<buffer>(0, 72));
 };
 
 }}}

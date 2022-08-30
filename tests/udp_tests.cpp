@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(sync_raw_udp_exchange)
     auto lend = plexus::network::raw::create_udp_transport(lep);
     auto rend = plexus::network::raw::create_udp_transport(rep);
 
-    auto send = plexus::network::raw::udp_packet::make_packet(lep.second, rep.second);
+    auto send = plexus::network::raw::udp_packet::make_packet(lep, rep);
     auto recv = std::make_shared<plexus::network::buffer>(1500);
 
     // send from left to right
@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(sync_raw_udp_exchange)
     
     check_udp(lep, rep, send, recv);
 
-    send = plexus::network::raw::udp_packet::make_packet(rep.second, lep.second);
+    send = plexus::network::raw::udp_packet::make_packet(rep, lep);
     recv = std::make_shared<plexus::network::buffer>(1500);
 
     // send from right to left 
@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(async_raw_udp_exchange)
 
     auto work = [&](std::shared_ptr<plexus::network::transport> udp, const plexus::network::endpoint& s, const plexus::network::endpoint& d)
     {
-        auto send = plexus::network::raw::udp_packet::make_packet(s.second, d.second);
+        auto send = plexus::network::raw::udp_packet::make_packet(s, d);
         auto recv = std::make_shared<plexus::network::raw::ip_packet>(1500);
 
         BOOST_REQUIRE_NO_THROW(udp->send(d, send));

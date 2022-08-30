@@ -68,20 +68,15 @@ BOOST_AUTO_TEST_CASE(sync_tcp_exchange)
     auto send = plexus::network::raw::tcp_packet::make_syn_packet(lep, rep);
     auto recv = std::make_shared<plexus::network::buffer>(1500);
 
-    // send from left to right
     BOOST_REQUIRE_NO_THROW(lend->send(rep, send));
     BOOST_REQUIRE_NO_THROW(rend->receive(lep, recv));
     
     check_tcp(lep, rep, send, recv);
 
-    send = plexus::network::raw::tcp_packet::make_syn_packet(rep, lep);
-    recv = std::make_shared<plexus::network::buffer>(1500);
+    BOOST_REQUIRE_NO_THROW(lend->send(rep, send));
+    BOOST_REQUIRE_NO_THROW(rend->receive(lep, recv));
 
-    // send from right to left 
-    BOOST_REQUIRE_NO_THROW(rend->send(lep, send));
-    BOOST_REQUIRE_NO_THROW(lend->receive(rep, recv));
-
-    check_tcp(rep, lep, send, recv);
+    check_tcp(lep, rep, send, recv);
 
     BOOST_REQUIRE_THROW(rend->receive(lep, recv), boost::system::system_error);
 }
@@ -91,27 +86,30 @@ BOOST_AUTO_TEST_CASE(async_tcp_exchange)
     auto lend = plexus::network::raw::create_tcp_transport(lep);
     auto rend = plexus::network::raw::create_tcp_transport(rep);
 
-    auto work = [&](std::shared_ptr<plexus::network::transport> tcp, const plexus::network::endpoint& s, const plexus::network::endpoint& d)
+    auto out = plexus::network::raw::tcp_packet::make_syn_packet(lep, rep);
+    auto in = std::make_shared<plexus::network::raw::ip_packet>(1500);
+
+    auto send = [&]()
     {
-        auto send = plexus::network::raw::tcp_packet::make_syn_packet(s, d);
-        auto recv = std::make_shared<plexus::network::raw::ip_packet>(1500);
-
-        BOOST_REQUIRE_NO_THROW(tcp->send(d, send));
-        BOOST_REQUIRE_NO_THROW(tcp->send(d, send));
-        BOOST_REQUIRE_NO_THROW(tcp->send(d, send));
-
-        BOOST_REQUIRE_NO_THROW(tcp->receive(s, recv));
-        check_tcp(s, d, send, recv);
-
-        BOOST_REQUIRE_NO_THROW(tcp->receive(s, recv));
-        check_tcp(s, d, send, recv);
-
-        BOOST_REQUIRE_NO_THROW(tcp->receive(s, recv));
-        check_tcp(s, d, send, recv);
+        BOOST_REQUIRE_NO_THROW(lend->send(rep, out));
+        BOOST_REQUIRE_NO_THROW(lend->send(rep, out));
+        BOOST_REQUIRE_NO_THROW(lend->send(rep, out));
     };
 
-    auto l = std::async(std::launch::async, work, lend, lep, rep);
-    auto r = std::async(std::launch::async, work, rend, rep, lep);
+    auto recv = [&]()
+    {
+        BOOST_REQUIRE_NO_THROW(rend->receive(lep, in));
+        check_tcp(lep, rep, out, in);
+
+        BOOST_REQUIRE_NO_THROW(rend->receive(lep, in));
+        check_tcp(lep, rep, out, in);
+
+        BOOST_REQUIRE_NO_THROW(rend->receive(lep, in));
+        check_tcp(lep, rep, out, in);
+    };
+
+    auto l = std::async(std::launch::async, send);
+    auto r = std::async(std::launch::async, recv);
 
     BOOST_REQUIRE_NO_THROW(l.wait());
     BOOST_REQUIRE_NO_THROW(r.wait());
