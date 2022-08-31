@@ -458,7 +458,7 @@ public:
     {
         _inf_ << "waiting plexus request...";
 
-        reference peer = receive(std::regex("^PLEXUS\\s+2.0\\s+request\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"));
+        reference peer = receive(std::regex("^PLEXUS\\s+2.1\\s+request\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"));
 
         _inf_ << "received plexus request " << peer.first.first << ":" << peer.first.second << " " << peer.second;
         return peer;
@@ -468,7 +468,7 @@ public:
     {
         _inf_ << "waiting plexus response...";
 
-        reference peer = receive(std::regex("^PLEXUS\\s+2.0\\s+response\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), RESPONSE_TIMEOUT);
+        reference peer = receive(std::regex("^PLEXUS\\s+2.1\\s+response\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), RESPONSE_TIMEOUT);
 
         _inf_ << "received plexus response " << peer.first.first << ":" << peer.first.second << " " << peer.second;
         return peer;
@@ -478,7 +478,7 @@ public:
     {
         _inf_ << "sending plexus request...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 2.0 request %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
+        m_smtp.push(plexus::utils::format("PLEXUS 2.1 request %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
 
         _inf_ << "sent plexus request " << host.first.first << ":" << host.first.second << " " << host.second;
     }
@@ -487,7 +487,7 @@ public:
     {
         _inf_ << "sending plexus response...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 2.0 response %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
+        m_smtp.push(plexus::utils::format("PLEXUS 2.1 response %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
         
         _inf_ << "sent plexus response " << host.first.first << ":" << host.first.second << " " << host.second;
     }
