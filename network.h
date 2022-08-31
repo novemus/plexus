@@ -40,12 +40,18 @@ struct transport
     virtual void receive(const endpoint& remote, std::shared_ptr<buffer> buf, int64_t timeout_ms = 1600) noexcept(false) = 0;
 };
 
-std::shared_ptr<transport> create_udp_transport(const endpoint& local);
+typedef transport udp;
+
+std::shared_ptr<udp> create_udp_transport(const endpoint& local);
 
 namespace raw {
 
-std::shared_ptr<transport> create_udp_transport(const endpoint& local);
-std::shared_ptr<transport> create_tcp_transport(const endpoint& local);
-std::shared_ptr<transport> create_icmp_transport(const endpoint& local);
+typedef transport udp;
+typedef transport tcp;
+typedef transport icmp;
+
+std::shared_ptr<udp> create_udp_transport(const endpoint& local);
+std::shared_ptr<tcp> create_tcp_transport(const endpoint& local);
+std::shared_ptr<icmp> create_icmp_transport(const endpoint& local);
 
 }}}

@@ -20,6 +20,8 @@
 #include "../network.h"
 
 
+namespace {
+
 class ssl_echo_session
 {
     enum { max_length = 1024 };
@@ -167,6 +169,8 @@ std::shared_ptr<ssl_echo_server> create_ssl_server(unsigned short port, const st
 
 const uint16_t SSL_PORT = 4433;
 const plexus::network::endpoint SSL_SERVER("127.0.0.1", SSL_PORT);
+
+}
 
 BOOST_AUTO_TEST_CASE(no_check_certs)
 {

@@ -15,10 +15,13 @@
 #include <regex>
 #include "../log.h"
 
+namespace {
+
 std::regex pattern("\\d{4}-\\w{2,3}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{1,6} \\[\\d+\\] INFO: line 1\n"
                    "\\d{4}-\\w{2,3}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{1,6} \\[\\d+\\] WARN: line 2\n"
                    "\\d{4}-\\w{2,3}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{1,6} \\[\\d+\\] ERROR: line 3\n"
                    "\\d{4}-\\w{2,3}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{1,6} \\[\\d+\\] FATAL: line 4\n");
+}
 
 BOOST_AUTO_TEST_CASE(stdlog)
 {

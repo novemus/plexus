@@ -89,6 +89,16 @@ public:
         return m_buffer.get() + m_size - m_end;
     }
 
+    const uint8_t* data() const
+    {
+        return m_beg;
+    }
+
+    uint8_t* data()
+    {
+        return m_beg;
+    }
+
     uint8_t* begin()
     {
         return m_beg;

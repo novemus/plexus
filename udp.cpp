@@ -143,12 +143,12 @@ public:
             boost::asio::ip::udp::endpoint source;
             size_t size = exec([&](const async_io_callback_t& callback)
             {
-                m_socket.async_receive_from(boost::asio::buffer(buf->begin(), buf->size()), source, callback);
+                m_socket.async_receive_from(boost::asio::buffer(buf->data(), buf->size()), source, callback);
             }, timeout);
 
             if (is_matched(source, match))
             {
-                _trc_ << source << " >>>>> " << utils::to_hexadecimal(buf->begin(), size);
+                _trc_ << source << " >>>>> " << utils::to_hexadecimal(buf->data(), size);
 
                 buf->move_tail(buf->size() - size, true);
                 return;
@@ -165,10 +165,10 @@ public:
         size_t size = exec([&](const async_io_callback_t& callback)
         {
             m_socket.set_option(boost::asio::ip::unicast::hops(hops));
-            m_socket.async_send_to(boost::asio::buffer(buf->begin(), buf->size()), endpoint, callback);
+            m_socket.async_send_to(boost::asio::buffer(buf->data(), buf->size()), endpoint, callback);
         }, timeout);
 
-        _trc_ << endpoint << " <<<<< " << utils::to_hexadecimal(buf->begin(), size);
+        _trc_ << endpoint << " <<<<< " << utils::to_hexadecimal(buf->data(), size);
 
         if (size < buf->size())
             throw std::runtime_error("can't send message");

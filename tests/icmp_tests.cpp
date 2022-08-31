@@ -15,6 +15,12 @@
 #include "../network.h"
 #include "../utils.h"
 
+
+namespace {
+
+const plexus::network::endpoint empty = std::make_pair("", 0);
+const plexus::network::endpoint remote = std::make_pair("8.8.8.8", 0);
+
 unsigned short get_id()
 {
 #if defined(BOOST_ASIO_WINDOWS)
@@ -26,21 +32,20 @@ unsigned short get_id()
 
 boost::test_tools::assertion_result is_enabled(boost::unit_test::test_unit_id)
 {
-    boost::test_tools::assertion_result res(true);
-#ifndef _WIN32
+#ifdef _WIN32
+    boost::test_tools::assertion_result res(false);
+    res.message() << "disabled for windows";
+    return res;
+#else
     if (getuid() != 0)
     {
-        res = boost::test_tools::assertion_result(false);
+        boost::test_tools::assertion_result res(false);
         res.message() << "root privileges are required";
+        return res;
     }
+    return boost::test_tools::assertion_result(true);
 #endif
-    return res;
 }
-
-namespace {
-
-const plexus::network::endpoint empty = std::make_pair("", 0);
-const plexus::network::endpoint remote = std::make_pair("8.8.8.8", 0);
 
 }
 
@@ -60,8 +65,6 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
             auto env = std::make_shared<plexus::network::raw::ip_packet>(1500);
             icmp->receive(remote, env);
             auto rep = env->payload<plexus::network::raw::icmp_packet>();
-
-            BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->begin(), env->total_length() - env->header_length()).c_str()));
 
             success = env->source_address().to_string() == "8.8.8.8" 
                    && env->protocol() == IPPROTO_ICMP 
@@ -99,8 +102,6 @@ BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
             auto env = std::make_shared<plexus::network::raw::ip_packet>(4096);
             icmp->receive(empty, env);
             auto rep = env->payload<plexus::network::raw::icmp_packet>();
-
-            BOOST_TEST_MESSAGE(plexus::utils::format("received icmp: %s", plexus::utils::to_hexadecimal(rep->begin(), env->total_length() - env->header_length()).c_str()));
 
             if (env->protocol() == IPPROTO_ICMP && rep->type() == plexus::network::raw::icmp_packet::time_exceeded)
             {

@@ -25,7 +25,7 @@ namespace plexus {
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
 {
-    _inf_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
+    _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
 	std::string cmd = "\"\"" + prog + "\" " + args + "\"";
 
@@ -98,7 +98,7 @@ std::shared_ptr<char*> copy_environment()
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
 {
-    _inf_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
+    _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
     std::string cmd = boost::replace_all_copy(prog, " ", "\\ ");
     cmd += " " + args;

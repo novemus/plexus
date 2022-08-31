@@ -162,7 +162,7 @@ public:
         {
             size_t size = exec([&](const async_io_callback_t& callback)
             {
-                m_socket.async_receive(boost::asio::buffer(buffer->begin(), buffer->size()), callback);
+                m_socket.async_receive(boost::asio::buffer(buffer->data(), buffer->size()), callback);
             }, timeout - timer().total_milliseconds());
 
             std::shared_ptr<ip_packet> ip = std::static_pointer_cast<ip_packet>(buffer);
@@ -173,7 +173,7 @@ public:
                 if (ip->total_length() > buffer->size())
                     throw std::runtime_error("buffer too small for received packet");
 
-                _trc_ << source << " >>>>> " << std::make_pair(buffer->begin(), size);
+                _trc_ << source << " >>>>> " << std::make_pair(buffer->data(), size);
 
                 buffer->move_tail(buffer->size() - size, true);
                 return;
@@ -190,10 +190,10 @@ public:
         size_t size = exec([&](const async_io_callback_t& callback)
         {
             m_socket.set_option(boost::asio::ip::unicast::hops(hops));
-            m_socket.async_send_to(boost::asio::buffer(buffer->begin(), buffer->size()), dest, callback);
+            m_socket.async_send_to(boost::asio::buffer(buffer->data(), buffer->size()), dest, callback);
         }, timeout);
 
-        _trc_ << dest << " <<<<< " << std::make_pair(buffer->begin(), size);
+        _trc_ << dest << " <<<<< " << std::make_pair(buffer->data(), size);
 
         if (buffer->size() > size)
             throw std::runtime_error("sent part of icmp packet");
@@ -202,7 +202,7 @@ public:
 
 uint16_t calc_checksum(std::shared_ptr<buffer> data)
 {
-    uint16_t* ptr = (uint16_t*)data->begin();
+    uint16_t* ptr = (uint16_t*)data->data();
     size_t count = data->size();
     uint32_t sum = 0;
 
