@@ -78,12 +78,12 @@ std::shared_ptr<stun_client> create_stun_client(const endpoint& stun, const endp
 
 struct nat_puncher : public stun_client
 {
-    virtual endpoint punch_hole_to_peer(const endpoint& peer) noexcept(false) = 0;
+    virtual endpoint punch_udp_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) = 0;
     virtual void reach_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
     virtual void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual void trace_tcp_syn_to_peer(const endpoint& peer, uint8_t hops, uint8_t trace) noexcept(false) = 0;
 };
 
-std::shared_ptr<nat_puncher> create_udp_puncher(const endpoint& stun, const endpoint& bind, uint8_t hops);
-std::shared_ptr<nat_puncher> create_tcp_puncher(const endpoint& stun, const endpoint& bind, uint8_t hops);
+std::shared_ptr<nat_puncher> create_nat_puncher(const endpoint& stun, const endpoint& bind);
 
 }

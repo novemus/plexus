@@ -217,12 +217,13 @@ BOOST_AUTO_TEST_CASE(check_certs)
 
 BOOST_AUTO_TEST_CASE(wrong_certs)
 {
-    auto client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
-    BOOST_REQUIRE_THROW(client->connect(), boost::system::system_error);
+    auto failed = plexus::network::create_ssl_client(SSL_SERVER);
+    BOOST_REQUIRE_THROW(failed->connect(), boost::system::system_error);
 
     auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
     server->start();
-    
+
+    auto client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
     client->connect();
 
     char buffer[1024];

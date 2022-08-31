@@ -53,8 +53,8 @@ class channel
 
 public:
 
-    channel(const network::endpoint& address, const std::string& cert, const std::string& key, const std::string& ca)
-        : m_ssl(network::create_ssl_client(address, cert, key, ca))
+    channel(const network::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+        : m_ssl(network::create_ssl_client(remote, cert, key, ca))
     {
     }
 

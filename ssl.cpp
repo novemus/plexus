@@ -24,8 +24,8 @@ namespace plexus { namespace network {
 
 class asio_ssl_client : public plexus::network::ssl
 {
-    typedef std::function<void(const boost::system::error_code&, size_t)> async_io_callback_t;
-    typedef std::function<void(const async_io_callback_t&)> async_io_call_t;
+    typedef std::function<void(const boost::system::error_code&, size_t)> async_callback_t;
+    typedef std::function<void(const async_callback_t&)> async_call_t;
     typedef std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> ssl_stream_socket_ptr;
 
     boost::asio::io_service         m_io;
@@ -35,7 +35,7 @@ class asio_ssl_client : public plexus::network::ssl
     boost::asio::ip::tcp::endpoint  m_endpoint;
     boost::posix_time::milliseconds m_timeout;
 
-    size_t exec(const async_io_call_t& async_io_call)
+    size_t exec(const async_call_t& async_call)
     {
         m_timer.expires_from_now(m_timeout);
         m_timer.async_wait([&](const boost::system::error_code& error) {
@@ -60,7 +60,7 @@ class asio_ssl_client : public plexus::network::ssl
         boost::system::error_code code = boost::asio::error::would_block;
         size_t length = 0;
 
-        async_io_call([&code, &length](const boost::system::error_code& c, size_t l) {
+        async_call([&code, &length](const boost::system::error_code& c, size_t l) {
             code = c;
             length = l;
         });
@@ -86,10 +86,10 @@ class asio_ssl_client : public plexus::network::ssl
 
 public:
 
-    asio_ssl_client(const endpoint& address, const std::string& cert, const std::string& key, const std::string& ca)
+    asio_ssl_client(const endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
         : m_ssl(boost::asio::ssl::context::sslv23)
         , m_timer(m_io)
-        , m_endpoint(resolve_endpoint(address))
+        , m_endpoint(resolve_endpoint(remote))
         , m_timeout(plexus::utils::getenv<int64_t>("PLEXUS_SSL_TIMEOUT", 5000))
     {
         m_ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::sslv23_client);
@@ -110,8 +110,15 @@ public:
 
     void connect() noexcept(false) override
     {
-        m_socket->lowest_layer().connect(m_endpoint);
-        m_socket->handshake(boost::asio::ssl::stream_base::client);
+        exec([&](const async_callback_t& callback)
+        {
+            m_socket->lowest_layer().async_connect(m_endpoint, boost::bind(callback, boost::asio::placeholders::error, 0));
+        });
+
+        exec([&](const async_callback_t& callback)
+        {
+            m_socket->async_handshake(boost::asio::ssl::stream_base::client, boost::bind(callback, boost::asio::placeholders::error, 0));
+        });
     }
 
     void shutdown() noexcept(true) override
@@ -126,12 +133,12 @@ public:
 
     size_t read(uint8_t* buffer, size_t len) noexcept(false) override
     {
-        size_t size = exec([&](const async_io_callback_t& callback)
+        size_t size = exec([&](const async_callback_t& callback)
         {
             m_socket->async_read_some(boost::asio::buffer(buffer, len), callback);
         });
 
-        _trc_ << m_endpoint << " >>>>> " << std::make_pair(buffer, size);
+        _trc_ << m_endpoint.address() << ":" << m_endpoint.port() << " >>>>> " << utils::to_hexadecimal(buffer, size);
 
         if (size == 0)
             throw std::runtime_error("can't read data");
@@ -141,12 +148,12 @@ public:
 
     size_t write(const uint8_t* buffer, size_t len) noexcept(false) override
     {
-        size_t size = exec([&](const async_io_callback_t& callback)
+        size_t size = exec([&](const async_callback_t& callback)
         {
             m_socket->async_write_some(boost::asio::buffer(buffer, len), callback);
         });
 
-        _trc_ << m_endpoint << " <<<<< " << std::make_pair(buffer, size);
+        _trc_ << m_endpoint.address() << ":" << m_endpoint.port() << " <<<<< " << utils::to_hexadecimal(buffer, size);
 
         if (size < len)
             throw std::runtime_error("can't write data");
@@ -155,9 +162,9 @@ public:
     }
 };
 
-std::shared_ptr<ssl> create_ssl_client(const endpoint& address, const std::string& cert, const std::string& key, const std::string& ca)
+std::shared_ptr<ssl> create_ssl_client(const endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
 {
-    return std::make_shared<asio_ssl_client>(address, cert, key, ca);
+    return std::make_shared<asio_ssl_client>(remote, cert, key, ca);
 }
 
 }}

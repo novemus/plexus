@@ -5,8 +5,8 @@ project(${PROJECT_NAME} VERSION 1.0)
 
 set(TESTS tests)
 
-set(SOURCES utils.cpp exec.cpp log.cpp smime.cpp ssl.cpp udp.cpp raw.cpp email.cpp stun.cpp puncher.cpp main.cpp)
-set(TESTS_SOURCES log.cpp smime.cpp ssl.cpp raw.cpp utils.cpp exec.cpp 
+set(SOURCES utils.cpp exec.cpp log.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp email.cpp stun.cpp puncher.cpp main.cpp)
+set(TESTS_SOURCES log.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp utils.cpp exec.cpp 
                  ./tests/utils_tests.cpp
                  ./tests/log_tests.cpp
                  ./tests/ssl_tests.cpp

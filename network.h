@@ -18,16 +18,20 @@
 
 namespace plexus { namespace network {
 
-struct ssl
+struct client
 {
-    virtual ~ssl() {}
+    virtual ~client() {}
     virtual void connect() noexcept(false) = 0;
     virtual void shutdown() noexcept(true) = 0;
     virtual size_t read(uint8_t* buffer, size_t len) noexcept(false) = 0;
     virtual size_t write(const uint8_t* buffer, size_t len) noexcept(false) = 0;
 };
 
+typedef client ssl;
+typedef client tcp;
+
 std::shared_ptr<ssl> create_ssl_client(const endpoint& remote, const std::string& cert = "", const std::string& key = "", const std::string& ca = "");
+std::shared_ptr<tcp> create_tcp_client(const endpoint& remote, const endpoint& local, int64_t timeout_ms = 10000, uint8_t hops = 64);
 
 struct transport
 {

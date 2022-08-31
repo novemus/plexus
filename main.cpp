@@ -22,7 +22,6 @@ int main(int argc, char** argv)
     desc.add_options()
         ("help", "produce help message")
         ("accept", "accept or invite peer for punching initiations")
-        ("strategy", boost::program_options::value<std::string>()->default_value("udp"), "udp or tcp")
         ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of host side")
         ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of peer side")
         ("email-smtps", boost::program_options::value<std::string>()->required(), "smtp server used to send reference to a peer")
@@ -43,6 +42,7 @@ int main(int argc, char** argv)
         ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch a hole in NAT")
         ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch a hole in NAT")
         ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for punch packets")
+        ("tcp-trace", boost::program_options::value<uint16_t>()->default_value(0), "trace to peer by TCP syn packets after handshake with the specified hops increasing")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
@@ -75,16 +75,9 @@ int main(int argc, char** argv)
     {
         plexus::log::set((plexus::log::severity)vm["log-level"].as<uint16_t>(), vm["log-file"].as<std::string>());
         
-        auto puncher = vm["strategy"].as<std::string>() == "udp"
-            ? plexus::create_udp_puncher(
+        auto puncher = plexus::create_nat_puncher(
                 plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
-                plexus::network::endpoint(vm["bind-ip"].as<std::string>(), vm["bind-port"].as<uint16_t>()),
-                (uint8_t)vm["punch-hops"].as<uint16_t>()
-                )
-            : plexus::create_tcp_puncher(
-                plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
-                plexus::network::endpoint(vm["bind-ip"].as<std::string>(), vm["bind-port"].as<uint16_t>()),
-                (uint8_t)vm["punch-hops"].as<uint16_t>()
+                plexus::network::endpoint(vm["bind-ip"].as<std::string>(), vm["bind-port"].as<uint16_t>())
                 );
 
         plexus::traverse state = puncher->explore_network();
@@ -135,15 +128,21 @@ int main(int argc, char** argv)
         {
             try
             {
+                uint8_t hops = vm["punch-hops"].as<uint16_t>();
+                uint8_t trace = vm["tcp-trace"].as<uint16_t>();
+
                 if (vm.count("accept"))
                 {
                     plexus::reference peer = mediator->receive_request();
                     plexus::reference host = std::make_pair(
-                        puncher->punch_hole_to_peer(peer.first),
+                        puncher->punch_udp_hole_to_peer(peer.first, hops),
                         plexus::utils::random<uint64_t>()
                         );
                     mediator->dispatch_response(host);
                     puncher->await_peer(peer.first, peer.second ^ host.second);
+
+                    if (trace > 0)
+                        puncher->trace_tcp_syn_to_peer(peer.first, hops, trace);
 
                     executor(host.first, peer.first);
                 }
@@ -156,6 +155,9 @@ int main(int argc, char** argv)
                     mediator->dispatch_request(host);
                     plexus::reference peer = mediator->receive_response();
                     puncher->reach_peer(peer.first, peer.second ^ host.second);
+
+                    if (trace > 0)
+                        puncher->trace_tcp_syn_to_peer(peer.first, hops, trace);
 
                     executor(host.first, peer.first);
                 }
