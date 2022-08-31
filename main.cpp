@@ -149,7 +149,7 @@ int main(int argc, char** argv)
                 else
                 {
                     plexus::reference host = std::make_pair(
-                        puncher->obtain_endpoint(),
+                        puncher->reflect_endpoint(),
                         plexus::utils::random<uint64_t>()
                         );
                     mediator->dispatch_request(host);

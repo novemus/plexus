@@ -169,7 +169,7 @@ public:
     {
         _dbg_ << "punching udp hole to peer...";
 
-        endpoint ep = obtain_endpoint();
+        endpoint ep = reflect_endpoint();
 
         auto pin = plexus::network::create_udp_transport(m_bind);
         pin->send(peer, std::make_shared<handshake>(0, 0), 2000, hops);
@@ -216,10 +216,10 @@ public:
         _wrn_ << "tcp trace did not reach unresponsive router";
     }
 
-    endpoint obtain_endpoint() noexcept(false) override
+    endpoint reflect_endpoint() noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_stun, m_bind);
-        return stun->obtain_endpoint();
+        return stun->reflect_endpoint();
     }
 
     traverse explore_network() noexcept(false) override

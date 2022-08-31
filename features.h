@@ -70,7 +70,7 @@ using namespace network;
 struct stun_client
 {
     virtual ~stun_client() {}
-    virtual endpoint obtain_endpoint() noexcept(false) = 0;
+    virtual endpoint reflect_endpoint() noexcept(false) = 0;
     virtual traverse explore_network() noexcept(false) = 0;
 };
 

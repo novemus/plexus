@@ -343,9 +343,9 @@ public:
 
 public:
 
-    endpoint obtain_endpoint() noexcept(false) override
+    endpoint reflect_endpoint() noexcept(false) override
     {
-        _dbg_ << "obtaining endpoint...";
+        _dbg_ << "reflecting endpoint...";
 
         return exec_binding(plexus::network::create_udp_transport(m_bind), m_stun)->mapped_endpoint();
     }
