@@ -21,7 +21,7 @@ int main(int argc, char** argv)
     boost::program_options::options_description desc("plexus options");
     desc.add_options()
         ("help", "produce help message")
-        ("accept", "accept or invite peer for punching initiations")
+        ("accept", "accept or invite peer to initiate NAT punching")
         ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of host side")
         ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of peer side")
         ("email-smtps", boost::program_options::value<std::string>()->required(), "smtp server used to send reference to a peer")

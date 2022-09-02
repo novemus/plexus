@@ -11,3 +11,7 @@
 ## 2.0.1 (August 15, 2022)
 
 - Accumulated fixes and improvements.
+
+## 2.1.0 (September 2, 2022)
+
+- Upgraded handshake message format and added the experimental ability to punch TCP hole by SYN packet tracing.
