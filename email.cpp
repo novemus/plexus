@@ -22,7 +22,13 @@
 #include "utils.h"
 #include "log.h"
 
-namespace plexus { namespace email {
+namespace plexus {
+
+const int64_t RESPONSE_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
+const int64_t MAX_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
+const int64_t MIN_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 5000);
+
+namespace email {
 
 struct config
 {
@@ -208,6 +214,8 @@ private:
 class imap
 {
     typedef channel::response_parser_t response_parser_t;
+    
+    struct bad_command : public std::runtime_error { bad_command() : std::runtime_error("bad command") {} };
 
     const response_parser_t connect_checker = [](const std::string& response) -> bool {
             std::smatch match;
@@ -318,6 +326,17 @@ class imap
         return false;
     };
 
+    const response_parser_t idle_parser = [this](const std::string& response) -> bool {
+        std::smatch match;
+        if (std::regex_search(response, match, std::regex("(.*\\r\\n)?x\\s+(NO|BAD)\\s+.*\\r\\n$")))
+        {
+            if (match[1] != "BAD")
+                throw bad_command();
+            throw std::runtime_error(response);
+        }
+        return std::regex_search(response, match, std::regex("^\\+\\s+idling(\\r\\n.*)+\\*\\s+\\d+\\s+EXISTS\\r\\n.*"));
+    };
+
     inline std::string pull_data()
     {
         std::string data;
@@ -343,7 +362,7 @@ public:
         session->request("x FETCH * UID\r\n", uid_parser);
     }
 
-    std::string pull() noexcept(false)
+    std::string pull(bool idle) noexcept(false)
     {
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.imap,
@@ -356,22 +375,34 @@ public:
         session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
         session->request("x SELECT INBOX\r\n", select_parser);
 
-        if (m_unseen.empty())
+        auto time = std::chrono::system_clock::now();
+        do
         {
             session->request(utils::format("x UID SEARCH (SINCE %s) (From %s) (To %s) (Subject \"%s\")\r\n",
-                utils::format("%d-%b-%Y", std::chrono::system_clock::now()).c_str(),
+                utils::format("%d-%b-%Y", time).c_str(),
                 get_address(m_config.from).c_str(),
                 get_address(m_config.to).c_str(),
                 m_config.peer_id.c_str()
-             ), search_parser);
+            ), search_parser);
+
+            if (m_unseen.empty() && idle)
+            {
+                try
+                {
+                    session->request("x IDLE\r\n", idle_parser);
+                    session->request("DONE\r\n", success_checker);
+                }
+                catch (const bad_command&)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(MAX_POLLING_TIMEOUT));
+                }
+            }
         }
+        while (m_unseen.empty() && idle);
 
         std::string data;
-        do
+        while (data.empty() && !m_unseen.empty())
         {
-            if (m_unseen.empty())
-                break;
-
             auto uid = m_unseen.front();
             session->request(
                 utils::format("x UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
@@ -381,7 +412,7 @@ public:
             m_last_seen = uid;
 
             data = pull_data();
-        } while (data.empty());
+        }
 
         return data;
     }
@@ -398,10 +429,6 @@ private:
 }
 
 using namespace email;
-
-const int64_t RESPONSE_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
-const int64_t MAX_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
-const int64_t MIN_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 5000);
 
 class email_mediator : public mediator
 {
@@ -420,7 +447,7 @@ class email_mediator : public mediator
         reference peer;
         do
         {
-            std::string message = m_imap.pull();
+            std::string message = m_imap.pull(deadline == std::numeric_limits<int64_t>::max());
 
             while (!message.empty())
             {
@@ -433,13 +460,14 @@ class email_mediator : public mediator
                     );
                 }
 
-                message = m_imap.pull();
+                message = m_imap.pull(false);
             }
 
             if (!peer.first.first.empty())
                 return peer;
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
+            if (deadline != std::numeric_limits<int64_t>::max())
+                std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
         }
         while (clock().total_milliseconds() < deadline);
 

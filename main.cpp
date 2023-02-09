@@ -24,7 +24,7 @@ int main(int argc, char** argv)
         ("accept", "accept or invite peer to initiate NAT punching")
         ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of host side")
         ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of peer side")
-        ("email-smtps", boost::program_options::value<std::string>()->required(), "smtp server used to send reference to a peer")
+        ("email-smtps", boost::program_options::value<std::string>()->required(), "smtps server used to send reference to a peer")
         ("email-imaps", boost::program_options::value<std::string>()->required(), "imaps server used to receive reference from a peer")
         ("email-login", boost::program_options::value<std::string>()->required(), "login of email account")
         ("email-passwd", boost::program_options::value<std::string>()->required(), "password of email account")
@@ -68,8 +68,6 @@ int main(int argc, char** argv)
         std::cout << desc;
         return 1;
     }
-
-    boost::program_options::notify(vm);
 
     try
     {

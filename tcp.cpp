@@ -134,6 +134,8 @@ public:
 
     size_t read(uint8_t* buffer, size_t len) noexcept(false) override
     {
+        m_socket.wait(boost::asio::ip::tcp::socket::wait_read);
+
         size_t size = exec([&](const async_callback_t& callback)
         {
             m_socket.async_read_some(boost::asio::buffer(buffer, len), callback);
@@ -149,6 +151,8 @@ public:
 
     size_t write(const uint8_t* buffer, size_t len) noexcept(false) override
     {
+        m_socket.wait(boost::asio::ip::tcp::socket::wait_write);
+
         size_t size = exec([&](const async_callback_t& callback)
         {
             m_socket.async_write_some(boost::asio::buffer(buffer, len), callback);
