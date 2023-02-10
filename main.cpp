@@ -8,10 +8,9 @@
  * 
  */
 
-#include <regex>
-#include <thread>
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/regex.hpp>
 #include "features.h"
 #include "utils.h"
 #include "log.h"
@@ -44,6 +43,7 @@ int main(int argc, char** argv)
         ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for punch packets")
         ("tcp-trace", boost::program_options::value<uint16_t>()->default_value(0), "trace to peer by TCP syn packets after handshake with the specified hops increasing")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
+        ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
         ("log-level", boost::program_options::value<uint16_t>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warnine, 4 - info, 5 - debug, 6 - trace")
@@ -103,16 +103,37 @@ int main(int argc, char** argv)
             vm["smime-ca"].as<std::string>()
             );
 
-        auto executor = [&](const plexus::network::endpoint& host, const plexus::network::endpoint& peer)
+        auto executor = [&](const plexus::network::endpoint& host, const plexus::network::endpoint& peer, uint64_t secret)
         {
-            std::string args = plexus::utils::format("%s %d %s %d %s %d",
-                vm["bind-ip"].as<std::string>().c_str(),
-                vm["bind-port"].as<uint16_t>(),
-                host.first.c_str(),
-                host.second,
-                peer.first.c_str(),
-                peer.second
-                );
+            auto args = vm["exec-args"].as<std::string>();
+            if (args.empty())
+            {
+                args = plexus::utils::format("%s %d %s %d %s %d %d",
+                    vm["bind-ip"].as<std::string>().c_str(),
+                    vm["bind-port"].as<uint16_t>(),
+                    host.first.c_str(),
+                    host.second,
+                    peer.first.c_str(),
+                    peer.second,
+                    secret
+                    );
+            }
+            else
+            {
+                args = boost::regex_replace(
+                    args,
+                    boost::regex("(%innerip%)|(%innerport%)|(%outerip%)|(%outerport%)|(%peerip%)|(%peerport%)|(%secret%)"),
+                    plexus::utils::format("(?{1}%s)(?{2}%d)(?{3}%s)(?{4}%d)(?{5}%s)(?{6}%d)(?{7}%d)",
+                        vm["bind-ip"].as<std::string>().c_str(),
+                        vm["bind-port"].as<uint16_t>(),
+                        host.first.c_str(),
+                        host.second,
+                        peer.first.c_str(),
+                        peer.second,
+                        secret),
+                    boost::match_posix | boost::format_all
+                    );
+            }
 
             plexus::exec(
                 vm["exec-command"].as<std::string>(),
@@ -137,12 +158,14 @@ int main(int argc, char** argv)
                         plexus::utils::random<uint64_t>()
                         );
                     mediator->dispatch_response(host);
-                    puncher->await_peer(peer.first, peer.second ^ host.second);
+
+                    uint64_t secret = secret = peer.second ^ host.second;
+                    puncher->await_peer(peer.first, secret);
 
                     if (trace > 0)
                         puncher->trace_tcp_syn_to_peer(peer.first, hops, trace);
 
-                    executor(host.first, peer.first);
+                    executor(host.first, peer.first, secret);
                 }
                 else
                 {
@@ -152,12 +175,14 @@ int main(int argc, char** argv)
                         );
                     mediator->dispatch_request(host);
                     plexus::reference peer = mediator->receive_response();
-                    puncher->reach_peer(peer.first, peer.second ^ host.second);
+
+                    uint64_t secret = peer.second ^ host.second;
+                    puncher->reach_peer(peer.first, secret);
 
                     if (trace > 0)
                         puncher->trace_tcp_syn_to_peer(peer.first, hops, trace);
 
-                    executor(host.first, peer.first);
+                    executor(host.first, peer.first, secret);
                 }
             }
             catch (const plexus::timeout_error& ex)
