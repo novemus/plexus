@@ -2,7 +2,6 @@
 obj/**
 plexus
 plexus.exe
-config.json
 tests/obj/**
 tests/log.txt
 tests/tests
@@ -18,4 +17,4 @@ MinSizeRel/**
 Debug/**
 build/**
 Testing/**
-
+config.ini

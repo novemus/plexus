@@ -20,34 +20,35 @@ int main(int argc, char** argv)
     boost::program_options::options_description desc("plexus options");
     desc.add_options()
         ("help", "produce help message")
-        ("accept", "accept or invite peer to initiate NAT punching")
-        ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of host side")
-        ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of peer side")
-        ("email-smtps", boost::program_options::value<std::string>()->required(), "smtps server used to send reference to a peer")
-        ("email-imaps", boost::program_options::value<std::string>()->required(), "imaps server used to receive reference from a peer")
+        ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate NAT punching")
+        ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of the host")
+        ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of the peer")
+        ("email-smtps", boost::program_options::value<std::string>()->required(), "smtps server used to send reference to the peer")
+        ("email-imaps", boost::program_options::value<std::string>()->required(), "imaps server used to receive reference from the peer")
         ("email-login", boost::program_options::value<std::string>()->required(), "login of email account")
         ("email-passwd", boost::program_options::value<std::string>()->required(), "password of email account")
         ("email-from", boost::program_options::value<std::string>()->required(), "email address used by the host")
-        ("email-to", boost::program_options::value<std::string>()->required(), "email address used by a peer")
+        ("email-to", boost::program_options::value<std::string>()->required(), "email address used by the peer")
         ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to X509 certificate of email client")
         ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to Private Key of email client")
         ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to email Certification Authority")
-        ("smime-peer", boost::program_options::value<std::string>()->default_value(""), "path to smime X509 certificate of a peer")
+        ("smime-peer", boost::program_options::value<std::string>()->default_value(""), "path to smime X509 certificate of the peer")
         ("smime-cert", boost::program_options::value<std::string>()->default_value(""), "path to smime X509 certificate of the host")
         ("smime-key", boost::program_options::value<std::string>()->default_value(""), "path to smime Private Key of the host")
         ("smime-ca", boost::program_options::value<std::string>()->default_value(""), "path to smime Certification Authority")
         ("stun-ip", boost::program_options::value<std::string>()->required(), "ip address of stun server")
         ("stun-port", boost::program_options::value<uint16_t>()->default_value(3478), "port of stun server")
-        ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch a hole in NAT")
-        ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch a hole in NAT")
+        ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch the hole in NAT")
+        ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch the hole in NAT")
         ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for punch packets")
         ("tcp-trace", boost::program_options::value<uint16_t>()->default_value(0), "trace to peer by TCP syn packets after handshake with the specified hops increasing")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
         ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
-        ("log-level", boost::program_options::value<uint16_t>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warnine, 4 - info, 5 - debug, 6 - trace")
-        ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file");
+        ("log-level", boost::program_options::value<uint16_t>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warning, 4 - info, 5 - debug, 6 - trace")
+        ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file")
+        ("config", boost::program_options::value<std::string>(), "path to INI-like configuration file");
 
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
@@ -56,6 +57,21 @@ int main(int argc, char** argv)
     {
         std::cout << desc;
         return 0;
+    }
+
+    if(vm.count("config"))
+    {
+        try 
+        {
+            auto config = vm["config"].as<std::string>();
+            boost::program_options::store(boost::program_options::parse_config_file<char>(config.c_str(), desc), vm);
+        } 
+        catch (const boost::program_options::reading_file& e)
+        {
+            std::cerr << e.what() << std::endl;
+            std::cout << desc;
+            return 1;
+        }
     }
 
     try
@@ -150,7 +166,7 @@ int main(int argc, char** argv)
                 uint8_t hops = vm["punch-hops"].as<uint16_t>();
                 uint8_t trace = vm["tcp-trace"].as<uint16_t>();
 
-                if (vm.count("accept"))
+                if (vm["accept"].as<bool>())
                 {
                     plexus::reference peer = mediator->receive_request();
                     plexus::reference host = std::make_pair(
@@ -193,8 +209,8 @@ int main(int argc, char** argv)
             {
                 _err_ << ex.what();
             }
-        } 
-        while (vm.count("accept"));
+        }
+        while (vm["accept"].as<bool>());
     }
     catch(const std::exception& e)
     {
