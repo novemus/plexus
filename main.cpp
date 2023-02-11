@@ -124,7 +124,7 @@ int main(int argc, char** argv)
             auto args = vm["exec-args"].as<std::string>();
             if (args.empty())
             {
-                args = plexus::utils::format("%s %d %s %d %s %d %d",
+                args = plexus::utils::format("%s %u %s %u %s %u %llu",
                     vm["bind-ip"].as<std::string>().c_str(),
                     vm["bind-port"].as<uint16_t>(),
                     host.first.c_str(),
@@ -139,7 +139,7 @@ int main(int argc, char** argv)
                 args = boost::regex_replace(
                     args,
                     boost::regex("(%innerip%)|(%innerport%)|(%outerip%)|(%outerport%)|(%peerip%)|(%peerport%)|(%secret%)"),
-                    plexus::utils::format("(?{1}%s)(?{2}%d)(?{3}%s)(?{4}%d)(?{5}%s)(?{6}%d)(?{7}%d)",
+                    plexus::utils::format("(?{1}%s)(?{2}%u)(?{3}%s)(?{4}%u)(?{5}%s)(?{6}%u)(?{7}%llu)",
                         vm["bind-ip"].as<std::string>().c_str(),
                         vm["bind-port"].as<uint16_t>(),
                         host.first.c_str(),

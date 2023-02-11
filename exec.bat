@@ -5,7 +5,7 @@ for %%x in (%*) do (
    set /a argc+=1
 )
 
-if not "%argc%" == "6" (
+if %argc% lss 6 (
     echo "not enough arguments"
     goto end
 )
