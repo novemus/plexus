@@ -334,7 +334,7 @@ class imap
                 throw bad_command();
             throw std::runtime_error(response);
         }
-        return std::regex_search(response, match, std::regex("^\\+\\s+idling(\\r\\n.*)+\\*\\s+\\d+\\s+EXISTS\\r\\n.*"));
+        return std::regex_search(response, match, std::regex("^\\+\\s+idling(\\r\\n.*)+\\*\\s+\\d+\\s+EXISTS(\\r\\n.*)*\\r\\n$"));
     };
 
     inline std::string pull_data()
