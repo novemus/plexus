@@ -132,16 +132,17 @@ public:
         });
     }
 
-    size_t read(uint8_t* buffer, size_t len) noexcept(false) override
+    size_t read(uint8_t* buffer, size_t len, bool deferred) noexcept(false) override
     {
-        m_socket.wait(boost::asio::ip::tcp::socket::wait_read);
+        if (deferred)
+            m_socket.wait(boost::asio::ip::tcp::socket::wait_read);
 
         size_t size = exec([&](const async_callback_t& callback)
         {
             m_socket.async_read_some(boost::asio::buffer(buffer, len), callback);
         });
 
-        _trc_ << m_remote.address() << ":" << m_remote.port() << " >>>>> " << utils::to_hexadecimal(buffer, size);
+        _trc_ << m_remote << " >>>>> " << std::make_pair(buffer, size);
 
         if (size == 0)
             throw std::runtime_error("can't read data");
@@ -149,16 +150,17 @@ public:
         return size;
     }
 
-    size_t write(const uint8_t* buffer, size_t len) noexcept(false) override
+    size_t write(const uint8_t* buffer, size_t len, bool deferred) noexcept(false) override
     {
-        m_socket.wait(boost::asio::ip::tcp::socket::wait_write);
+        if (deferred)
+            m_socket.wait(boost::asio::ip::tcp::socket::wait_write);
 
         size_t size = exec([&](const async_callback_t& callback)
         {
             m_socket.async_write_some(boost::asio::buffer(buffer, len), callback);
         });
 
-        _trc_ << m_remote.address() << ":" << m_remote.port() << " <<<<< " << utils::to_hexadecimal(buffer, size);
+        _trc_ << m_remote << " <<<<< " << std::make_pair(buffer, size);
 
         if (size < len)
             throw std::runtime_error("can't write data");

@@ -148,7 +148,7 @@ public:
 
             if (is_matched(source, match))
             {
-                _trc_ << source << " >>>>> " << utils::to_hexadecimal(buf->data(), size);
+                _trc_ << source << " >>>>> " << std::make_pair(buf->data(), size);
 
                 buf->move_tail(buf->size() - size, true);
                 return;
@@ -168,7 +168,7 @@ public:
             m_socket.async_send_to(boost::asio::buffer(buf->data(), buf->size()), endpoint, callback);
         }, timeout);
 
-        _trc_ << endpoint << " <<<<< " << utils::to_hexadecimal(buf->data(), size);
+        _trc_ << endpoint << " <<<<< " << std::make_pair(buf->data(), size);
 
         if (size < buf->size())
             throw std::runtime_error("can't send message");

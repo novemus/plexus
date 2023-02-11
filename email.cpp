@@ -24,6 +24,7 @@
 
 namespace plexus {
 
+const bool ENABLE_IMAP_IDLE = plexus::utils::getenv<int64_t>("ENABLE_IMAP_IDLE", true);
 const int64_t RESPONSE_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
 const int64_t MAX_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
 const int64_t MIN_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 5000);
@@ -79,7 +80,7 @@ public:
         _trc_ << ">>>>>\n" << response << "\n*****";
     }
 
-    void request(const std::string& request, const response_parser_t& parse)
+    void request(const std::string& request, const response_parser_t& parse, bool prolonged = false)
     {
         _trc_ << "<<<<<\n" << request << "\n*****";
 
@@ -90,7 +91,7 @@ public:
 
         std::string response;
         do {
-			size_t read = m_ssl->read(m_buffer, BUFFER_SIZE);
+			size_t read = m_ssl->read(m_buffer, BUFFER_SIZE, prolonged);
             response.append((char*)m_buffer, read);
         } while (!parse(response));
 
@@ -362,7 +363,7 @@ public:
         session->request("x FETCH * UID\r\n", uid_parser);
     }
 
-    std::string pull(bool idle) noexcept(false)
+    std::string pull(bool idle = false) noexcept(false)
     {
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.imap,
@@ -389,7 +390,7 @@ public:
             {
                 try
                 {
-                    session->request("x IDLE\r\n", idle_parser);
+                    session->request("x IDLE\r\n", idle_parser, true);
                     session->request("DONE\r\n", success_checker);
                 }
                 catch (const bad_command&)
@@ -437,6 +438,7 @@ class email_mediator : public mediator
 
     reference receive(const std::regex& pattern, int64_t deadline = std::numeric_limits<int64_t>::max())
     {
+        bool idle = ENABLE_IMAP_IDLE && deadline == std::numeric_limits<int64_t>::max();
         int64_t timeout = std::max<int64_t>(MIN_POLLING_TIMEOUT, std::min<int64_t>(MAX_POLLING_TIMEOUT, deadline / 12));
 
         auto clock = [start = boost::posix_time::microsec_clock::universal_time()]()
@@ -447,7 +449,7 @@ class email_mediator : public mediator
         reference peer;
         do
         {
-            std::string message = m_imap.pull(deadline == std::numeric_limits<int64_t>::max());
+            std::string message = m_imap.pull(idle);
 
             while (!message.empty())
             {
@@ -460,13 +462,13 @@ class email_mediator : public mediator
                     );
                 }
 
-                message = m_imap.pull(false);
+                message = m_imap.pull();
             }
 
             if (!peer.first.first.empty())
                 return peer;
 
-            if (deadline != std::numeric_limits<int64_t>::max())
+            if (!idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
         }
         while (clock().total_milliseconds() < deadline);
