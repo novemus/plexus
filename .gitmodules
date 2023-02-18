@@ -1,0 +1,3 @@
+[submodule "wormhole"]
+	path = wormhole
+	url = git@github.com:novemus/wormhole
