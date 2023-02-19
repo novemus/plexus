@@ -8,6 +8,9 @@
  * 
  */
 
+#include "network.h"
+#include "utils.h"
+#include <logger.h>
 #include <map>
 #include <iostream>
 #include <boost/bind.hpp>
@@ -16,10 +19,6 @@
 #include <boost/asio/ip/udp.hpp>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
-#include "network.h"
-#include "utils.h"
-#include "log.h"
-
 
 namespace plexus { namespace network {
 

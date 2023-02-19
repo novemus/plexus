@@ -77,13 +77,6 @@ void check_raw_tcp(const plexus::network::endpoint& from, const plexus::network:
 
 BOOST_AUTO_TEST_CASE(sync_raw_tcp_exchange, * boost::unit_test::precondition(is_enabled))
 {
-    const std::initializer_list<uint8_t> payload = { 
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>(),
-        plexus::utils::random<uint8_t>()
-    };
-
     auto lend = plexus::network::raw::create_tcp_transport(lep);
     auto rend = plexus::network::raw::create_tcp_transport(rep);
 

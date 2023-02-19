@@ -8,11 +8,11 @@
  * 
  */
 
+#include "utils.h"
 #include <openssl/pem.h>
 #include <openssl/pkcs7.h>
 #include <openssl/err.h>
 #include <openssl/x509v3.h>
-#include "utils.h"
 
 namespace plexus { namespace utils {
     

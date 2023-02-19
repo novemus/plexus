@@ -8,6 +8,10 @@
  * 
  */
 
+#include "features.h"
+#include "network.h"
+#include "utils.h"
+#include <logger.h>
 #include <string>
 #include <list>
 #include <iostream>
@@ -17,10 +21,6 @@
 #include <regex>
 #include <functional>
 #include <thread>
-#include "features.h"
-#include "network.h"
-#include "utils.h"
-#include "log.h"
 
 namespace plexus {
 
@@ -162,7 +162,7 @@ class smtp
             "------%s--\r\n"
             ".\r\n";
 
-        std::string bound = plexus::utils::to_hexadecimal((uint8_t*)m_config.to.data(), m_config.to.size());
+        std::string bound = plexus::utils::to_hexadecimal(m_config.to.data(), m_config.to.size());
         std::string content = plexus::utils::smime_encrypt(
             plexus::utils::smime_sign(data, m_config.smime.cert, m_config.smime.key),
             m_config.smime.peer

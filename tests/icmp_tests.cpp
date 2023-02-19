@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(icmp_ping, * boost::unit_test::precondition(is_enabled))
 
             success = env->source_address().to_string() == "8.8.8.8" 
                    && env->protocol() == IPPROTO_ICMP 
-                   && env->total_length() - env->header_length() == req->size() 
+                   && size_t(env->total_length() - env->header_length()) == req->size() 
                    && rep->type() == plexus::network::raw::icmp_packet::echo_reply 
                    && rep->code() == 0 
                    && rep->identifier() == req->identifier() 
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(icmp_ttl, * boost::unit_test::precondition(is_enabled))
                 {
                     rep = env->payload<plexus::network::raw::icmp_packet>();
                     success = env->destination_address().to_string() == "8.8.8.8"
-                            && env->total_length() - env->header_length() == req->size()
+                            && size_t(env->total_length() - env->header_length()) == req->size()
                             && memcmp(rep->begin(), req->begin(), req->size()) == 0;
                 }
             }

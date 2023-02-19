@@ -8,6 +8,7 @@
  * 
  */
 
+#include "utils.h"
 #include <openssl/err.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
@@ -17,7 +18,6 @@
 #include <openssl/md5.h>
 #include <vector>
 #include <sstream>
-#include "utils.h"
 
 namespace plexus { namespace utils {
 
@@ -169,26 +169,14 @@ std::string format(const std::string& format, const std::chrono::system_clock::t
     return ss.str();
 }
 
-std::string to_hexadecimal(const uint8_t* data, size_t len)
+std::string to_hexadecimal(const void* data, size_t len)
 {
     std::stringstream out;
     for (size_t i = 0; i < len; ++i)
     {
-        out << std::setw(2) << std::setfill('0') << std::hex << (int)data[i];
+        out << std::setw(2) << std::setfill('0') << std::hex << (int)((uint8_t*)data)[i];
     }
     return out.str();
 }
 
-}
-
-std::ostream& operator<<(std::ostream& stream, const std::pair<uint8_t*, size_t>& buf)
-{
-    return stream << utils::to_hexadecimal(buf.first, buf.second);
-}
-
-std::ostream& operator<<(std::ostream& stream, const std::pair<const uint8_t*, size_t>& buf)
-{
-    return stream << utils::to_hexadecimal(buf.first, buf.second);
-}
-
-}
+}}

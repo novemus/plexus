@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include <string>
 #include "network.h"
+#include <string>
 
 namespace plexus {
 

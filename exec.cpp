@@ -8,13 +8,13 @@
  * 
  */
 
+#include "features.h"
+#include "utils.h"
+#include <logger.h>
 #include <fcntl.h>
 #include <memory>
 #include <vector>
 #include <boost/algorithm/string/replace.hpp>
-#include "features.h"
-#include "utils.h"
-#include "log.h"
 
 #ifdef _WIN32
 

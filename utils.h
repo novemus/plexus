@@ -17,11 +17,10 @@
 #include <random>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/lexical_cast.hpp>
-#include "log.h"
 
 namespace plexus { namespace utils {
 
-std::string to_hexadecimal(const uint8_t* data, size_t len);
+std::string to_hexadecimal(const void* data, size_t len);
 std::string to_base64(const void* data, size_t length);
 std::string to_base64_no_nl(const void* data, size_t length);
 std::string to_base64_url(const void* data, size_t length);
@@ -49,17 +48,17 @@ template<class var_t> var_t getenv(const std::string& name, const var_t& def)
         const char *env = std::getenv(name.c_str());
         return env ? boost::lexical_cast<var_t>(env) : def;
     }
-    catch (const boost::bad_lexical_cast& ex)
-    {
-        _err_ << ex.what();
-    }
+    catch (const boost::bad_lexical_cast& ex) {}
 
     return def;
 }
 
 }
 
-std::ostream& operator<<(std::ostream& stream, const std::pair<uint8_t*, size_t>& buf);
-std::ostream& operator<<(std::ostream& stream, const std::pair<const uint8_t*, size_t>& buf);
+template<class type>
+std::ostream& operator<<(std::ostream& stream, const std::pair<type*, size_t>& buf)
+{
+    return stream << plexus::utils::to_hexadecimal(buf.first, sizeof(type) * buf.second);
+}
 
 }

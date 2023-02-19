@@ -8,12 +8,12 @@
  * 
  */
 
+#include "features.h"
+#include "utils.h"
+#include <logger.h>
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
-#include "features.h"
-#include "utils.h"
-#include "log.h"
 
 int main(int argc, char** argv)
 {
@@ -46,7 +46,7 @@ int main(int argc, char** argv)
         ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
-        ("log-level", boost::program_options::value<uint16_t>()->default_value(plexus::log::debug), "0 - none, 1 - fatal, 2 - error, 3 - warning, 4 - info, 5 - debug, 6 - trace")
+        ("log-level", boost::program_options::value<wormhole::log::severity>()->default_value(wormhole::log::debug), "log level: <fatal|error|warning|info|debug|trace>")
         ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file")
         ("config", boost::program_options::value<std::string>(), "path to INI-like configuration file");
 
@@ -61,11 +61,11 @@ int main(int argc, char** argv)
 
     if(vm.count("config"))
     {
-        try 
+        try
         {
             auto config = vm["config"].as<std::string>();
             boost::program_options::store(boost::program_options::parse_config_file<char>(config.c_str(), desc), vm);
-        } 
+        }
         catch (const boost::program_options::reading_file& e)
         {
             std::cerr << e.what() << std::endl;
@@ -87,7 +87,7 @@ int main(int argc, char** argv)
 
     try
     {
-        plexus::log::set((plexus::log::severity)vm["log-level"].as<uint16_t>(), vm["log-file"].as<std::string>());
+        wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), false, vm["log-file"].as<std::string>());
         
         auto puncher = plexus::create_nat_puncher(
             plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
@@ -175,7 +175,7 @@ int main(int argc, char** argv)
                         );
                     mediator->dispatch_response(host);
 
-                    uint64_t secret = secret = peer.second ^ host.second;
+                    uint64_t secret = peer.second ^ host.second;
                     puncher->await_peer(peer.first, secret);
 
                     if (trace > 0)

@@ -3,18 +3,23 @@ cmake_minimum_required(VERSION 3.10)
 project(plexus)
 project(${PROJECT_NAME} VERSION 1.0)
 
-set(TESTS tests)
+set(TESTS ${PROJECT_NAME}_tests)
 
-set(SOURCES utils.cpp exec.cpp log.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp email.cpp stun.cpp puncher.cpp main.cpp)
-set(TESTS_SOURCES log.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp utils.cpp exec.cpp 
+add_subdirectory(wormhole)
+
+set(SOURCES utils.cpp exec.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp email.cpp stun.cpp puncher.cpp main.cpp wormhole/logger.cpp)
+set(TESTS_SOURCES utils.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp exec.cpp wormhole/logger.cpp
                  ./tests/utils_tests.cpp
-                 ./tests/log_tests.cpp
                  ./tests/ssl_tests.cpp
                  ./tests/udp_tests.cpp
                  ./tests/tcp_tests.cpp
                  ./tests/smime_tests.cpp
                  ./tests/exec_tests.cpp
                  ./tests/icmp_tests.cpp)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
+
+add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     add_definitions(
@@ -33,6 +38,7 @@ message(status "** Boost Librariy Dirs: ${Boost_LIBRARY_DIRS}")
 message(status "** Boost Libraries: ${Boost_LIBRARIES}")
 
 include_directories(${Boost_INCLUDE_DIRS})
+include_directories("wormhole")
 link_directories(${Boost_LIBRARY_DIRS})
 
 find_package(OpenSSL REQUIRED)
