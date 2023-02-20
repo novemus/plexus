@@ -15,3 +15,9 @@
 ## 2.1.0 (September 2, 2022)
 
 - Upgraded handshake message format and added the experimental ability to punch TCP hole by SYN packet tracing.
+
+## 2.1.1 (February 20, 2023)
+
+- The `wormhole` tool is integrated to provide the possibility of forwarding a remote TCP service to a local interface.
+- The ability to specify an custom arguments for executable command, including using *plexus* wildcards.
+- Support for ini-like configuration files.
