@@ -8,10 +8,10 @@ Project depends on `boost` and `openssl` libraries. Clone repository and run mak
 
 ```console
 cd ~
-git clone git@github.com:novemus/plexus.git
+git clone --recurse-submodules git@github.com:novemus/plexus.git
 cd ~/plexus
 cmake -B ./build [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
-cmake --build ./build --target plexus
+cmake --build ./build --target plexus [wormhole]
 cmake --build ./build --target install
 ```
 
@@ -52,6 +52,10 @@ As soon as both `plexus` instanses make the *passage* to each other the command 
 `peerport` - port of the peer recieved by email
 
 To learn about additional parameters run tool with `--help` argument.
+
+## Extension
+
+To connect TCP applications, you can [use](https://github.com/novemus/wormhole) the tunneling extension `wormhole` as execution payload.
 
 ## Bugs and improvements
 

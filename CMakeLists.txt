@@ -18,8 +18,6 @@ set(TESTS_SOURCES utils.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp exec.cpp w
                  ./tests/exec_tests.cpp
                  ./tests/icmp_tests.cpp)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
-
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")

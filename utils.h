@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <logger.h>
 #include <cstdlib>
 #include <string>
 #include <iostream>
@@ -48,7 +49,10 @@ template<class var_t> var_t getenv(const std::string& name, const var_t& def)
         const char *env = std::getenv(name.c_str());
         return env ? boost::lexical_cast<var_t>(env) : def;
     }
-    catch (const boost::bad_lexical_cast& ex) {}
+    catch (const boost::bad_lexical_cast& ex)
+    {
+        _err_ << ex.what();
+    }
 
     return def;
 }

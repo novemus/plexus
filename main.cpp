@@ -163,8 +163,8 @@ int main(int argc, char** argv)
         {
             try
             {
-                uint8_t hops = vm["punch-hops"].as<uint16_t>();
-                uint8_t trace = vm["tcp-trace"].as<uint16_t>();
+                uint8_t hops = vm["punch-hops"].as<uint8_t>();
+                uint8_t trace = vm["tcp-trace"].as<uint8_t>();
 
                 if (vm["accept"].as<bool>())
                 {
