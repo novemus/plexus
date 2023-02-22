@@ -29,7 +29,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     )
 endif()
 
-find_package(Boost COMPONENTS system thread program_options regex unit_test_framework REQUIRED)
+find_package(Boost COMPONENTS system thread program_options regex filesystem unit_test_framework REQUIRED)
 
 message(status "** Boost Version: ${Boost_VERSION}")
 message(status "** Boost Include Dirs: ${Boost_INCLUDE_DIRS}")
