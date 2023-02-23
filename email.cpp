@@ -490,7 +490,7 @@ public:
 
         reference peer = receive(std::regex("^PLEXUS\\s+2.1\\s+request\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"));
 
-        _inf_ << "received plexus request " << peer.first.first << ":" << peer.first.second << " " << peer.second;
+        _inf_ << "received plexus request " << peer.first.first << ":" << peer.first.second;
         return peer;
     }
 
@@ -500,7 +500,7 @@ public:
 
         reference peer = receive(std::regex("^PLEXUS\\s+2.1\\s+response\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), RESPONSE_TIMEOUT);
 
-        _inf_ << "received plexus response " << peer.first.first << ":" << peer.first.second << " " << peer.second;
+        _inf_ << "received plexus response " << peer.first.first << ":" << peer.first.second;
         return peer;
     }
 
@@ -510,7 +510,7 @@ public:
 
         m_smtp.push(plexus::utils::format("PLEXUS 2.1 request %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
 
-        _inf_ << "sent plexus request " << host.first.first << ":" << host.first.second << " " << host.second;
+        _inf_ << "sent plexus request " << host.first.first << ":" << host.first.second;
     }
 
     void dispatch_response(const reference& host) noexcept(false) override
@@ -519,7 +519,7 @@ public:
 
         m_smtp.push(plexus::utils::format("PLEXUS 2.1 response %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
         
-        _inf_ << "sent plexus response " << host.first.first << ":" << host.first.second << " " << host.second;
+        _inf_ << "sent plexus response " << host.first.first << ":" << host.first.second;
     }
 };
 
