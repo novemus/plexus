@@ -46,7 +46,7 @@ int main(int argc, char** argv)
         ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
-        ("log-level", boost::program_options::value<wormhole::log::severity>()->default_value(wormhole::log::debug), "log level: <fatal|error|warning|info|debug|trace>")
+        ("log-level", boost::program_options::value<wormhole::log::severity>()->default_value(wormhole::log::info), "log level: <fatal|error|warning|info|debug|trace>")
         ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file")
         ("config", boost::program_options::value<std::string>(), "path to INI-like configuration file");
 
