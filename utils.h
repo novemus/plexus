@@ -62,7 +62,9 @@ template<class var_t> var_t getenv(const std::string& name, const var_t& def)
 template<class type>
 std::ostream& operator<<(std::ostream& stream, const std::pair<type*, size_t>& buf)
 {
-    return stream << plexus::utils::to_hexadecimal(buf.first, sizeof(type) * buf.second);
+    if (stream.rdbuf())
+        return stream << plexus::utils::to_hexadecimal(buf.first, sizeof(type) * buf.second);
+    return stream;
 }
 
 }
