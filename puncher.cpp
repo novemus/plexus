@@ -22,7 +22,7 @@ class puncher : public plexus::nat_puncher
     endpoint m_stun;
     endpoint m_bind;
 
-    class handshake : public plexus::network::buffer
+    class handshake : public wormhole::mutable_buffer
     {
         uint64_t m_mask;
 
@@ -33,7 +33,7 @@ class puncher : public plexus::nat_puncher
 
     public:
 
-        handshake(uint8_t flag, uint64_t mask) : plexus::network::buffer(8, 60), m_mask(mask)
+        handshake(uint8_t flag, uint64_t mask) : mutable_buffer(60), m_mask(mask)
         {
             uint8_t sum = 0;
             for (size_t i = 0; i < 7; ++i)
@@ -44,27 +44,27 @@ class puncher : public plexus::nat_puncher
                     byte = flag ? (byte | 0x01) : (byte & 0xfe);
 
                 sum ^= byte;
-                set_byte(i, byte ^ get_mask_byte(i));
+                set<uint8_t>(i, byte ^ get_mask_byte(i));
             }
 
-            set_byte(7, sum ^ get_mask_byte(7));
+            set<uint8_t>(7, sum ^ get_mask_byte(7));
         }
 
-        handshake(uint64_t mask) : plexus::network::buffer(68), m_mask(mask)
+        handshake(uint64_t mask) : mutable_buffer(60), m_mask(mask)
         {
         }
 
         uint8_t flag() const
         {
-            uint8_t sum = get_byte(7) ^ get_mask_byte(7);
+            uint8_t sum = get<uint8_t>(7) ^ get_mask_byte(7);
 
             for (size_t i = 0; i < 7; ++i)
-                sum ^= get_byte(i) ^ get_mask_byte(i);
+                sum ^= get<uint8_t>(i) ^ get_mask_byte(i);
 
             if (sum != 0)
                 throw plexus::handshake_error();
 
-            return (get_byte(0) ^ get_mask_byte(0)) & 0x01;
+            return (get<uint8_t>(0) ^ get_mask_byte(0)) & 0x01;
         }
     };
 
@@ -88,8 +88,8 @@ public:
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
         auto pin = plexus::network::create_udp_transport(m_bind);
-        auto out = std::make_shared<handshake>(0, mask);
-        auto in = std::make_shared<handshake>(mask);
+        handshake out(0, mask);
+        handshake in(mask);
 
         while (timer().total_milliseconds() < deadline)
         {
@@ -97,17 +97,17 @@ public:
             {
                 pin->send(peer, out);
 
-                if (out->flag() == 1)
+                if (out.flag() == 1)
                 {
                     _dbg_ << "handshake peer=" << peer.first << ":" << peer.second;
                     return;
                 }
 
-                pin->receive(peer, in);
+                in.truncate(pin->receive(peer, in));
 
-                if (in->flag() == 1)
+                if (in.flag() == 1)
                 {
-                    out = std::make_shared<handshake>(1, mask);
+                    out = handshake(1, mask);
                 }
             }
             catch(const boost::system::system_error& ex)
@@ -134,16 +134,16 @@ public:
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
         auto pin = plexus::network::create_udp_transport(m_bind);
-        auto out = std::make_shared<handshake>(1, mask);
-        auto in = std::make_shared<handshake>(mask);
+        handshake out(1, mask);
+        handshake in(mask);
 
         while (timer().total_milliseconds() < deadline)
         {
             try
             {
-                pin->receive(peer, in);
+                in.truncate(pin->receive(peer, in));
 
-                if (in->flag() == 0)
+                if (in.flag() == 0)
                 {
                     pin->send(peer, out);
                 }
@@ -172,7 +172,7 @@ public:
         endpoint ep = reflect_endpoint();
 
         auto pin = plexus::network::create_udp_transport(m_bind);
-        pin->send(peer, std::make_shared<handshake>(0, 0), 2000, hops);
+        pin->send(peer, handshake(0, 0), 2000, hops);
 
         return ep;
     }

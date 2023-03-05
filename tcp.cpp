@@ -20,7 +20,7 @@
 namespace plexus { namespace network {
 
 template<class socket>
-struct asio_tcp_client_base : public client
+struct asio_tcp_client_base : public tcp
 {
     asio_tcp_client_base(const endpoint& remote, int64_t timeout)
         : m_socket(m_io)
@@ -158,7 +158,7 @@ std::shared_ptr<tcp> create_tcp_client(const endpoint& remote, const endpoint& l
     return std::make_shared<asio_tcp_client>(remote, local, timeout, hops);
 }
 
-std::shared_ptr<ssl> create_ssl_client(const endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+std::shared_ptr<tcp> create_ssl_client(const endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
 {
     boost::asio::ssl::context ssl = boost::asio::ssl::context(boost::asio::ssl::context::sslv23);
     

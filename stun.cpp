@@ -127,14 +127,14 @@ inline uint8_t low_byte(uint16_t value)
     return uint8_t(value);
 }
 
-class message : public plexus::network::buffer
+class message : public wormhole::mutable_buffer
 {
     const uint8_t* fetch_attribute_place(uint16_t type) const
     {
         static const size_t TYPE_LENGTH_PART_SIZE = 4;
 
-        const uint8_t* ptr = begin() + 20;
-        const uint8_t* end = begin() + size();
+        const uint8_t* ptr = (uint8_t*)data() + 20;
+        const uint8_t* end = (uint8_t*)data() + size();
 
         while (ptr + TYPE_LENGTH_PART_SIZE < end)
         {
@@ -192,49 +192,49 @@ class message : public plexus::network::buffer
 
 public:
 
-    message() : plexus::network::buffer(msg::max_size + 8)
+    message() : mutable_buffer(msg::max_size)
     {
     }
 
-    message(uint8_t flags) : plexus::network::buffer({
+    message(uint8_t flags) : mutable_buffer(std::vector<uint8_t>{
             0x00, 0x01, 0x00, 0x08,
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             0x00, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, flags
-        }, 8)
+        })
     {
     }
 
-    message(uint16_t type) : plexus::network::buffer({
+    message(uint16_t type) : mutable_buffer(std::vector<uint8_t>{
             high_byte(type), low_byte(type), 0x00, 0x00,
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
-        }, 8)
+        })
     {
     }
 
     transaction_id transaction() const
     {
         return {
-             get_byte(4), get_byte(5), get_byte(6), get_byte(7),
-             get_byte(8), get_byte(9), get_byte(10), get_byte(11), 
-             get_byte(12), get_byte(13), get_byte(14), get_byte(15),
-             get_byte(16), get_byte(17), get_byte(18), get_byte(19)
+             get<uint8_t>(4), get<uint8_t>(5), get<uint8_t>(6), get<uint8_t>(7),
+             get<uint8_t>(8), get<uint8_t>(9), get<uint8_t>(10), get<uint8_t>(11), 
+             get<uint8_t>(12), get<uint8_t>(13), get<uint8_t>(14), get<uint8_t>(15),
+             get<uint8_t>(16), get<uint8_t>(17), get<uint8_t>(18), get<uint8_t>(19)
          };
     }
 
     uint16_t type() const
     {
-        return read_short(begin());
+        return read_short((uint8_t*)data());
     }
 
     uint16_t size() const
     {
-        return 20u + read_short(begin(), 2);
+        return 20u + read_short((uint8_t*)data(), 2);
     }
 
     std::string error() const
@@ -280,15 +280,15 @@ public:
         , m_bind(bind)
     {}
 
-    static std::shared_ptr<message> exec_binding(std::shared_ptr<plexus::network::transport> pin, endpoint stun, uint8_t flags = 0, int64_t deadline = 4600)
+    static message exec_binding(std::shared_ptr<plexus::network::udp> pin, endpoint stun, uint8_t flags = 0, int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        auto recv = std::make_shared<message>(flags);
-        auto resp = std::make_shared<message>();
+        message recv(flags);
+        message resp;
 
         int64_t timeout = 200;
         while (timer().total_milliseconds() < deadline)
@@ -297,20 +297,20 @@ public:
 
             try
             {
-                pin->receive(stun, resp, timeout);
+                resp.truncate(pin->receive(stun, resp, timeout));
 
                 if (timer().total_milliseconds() >= deadline)
                     throw plexus::timeout_error();
-                else if (recv->transaction() != resp->transaction())
+                else if (recv.transaction() != resp.transaction())
                     continue;
 
-                switch (resp->type())
+                switch (resp.type())
                 {
                     case msg::binding_response:
                     {
-                        endpoint me = resp->mapped_endpoint();
-                        endpoint se = resp->source_endpoint();
-                        endpoint ce = resp->changed_endpoint();
+                        endpoint me = resp.mapped_endpoint();
+                        endpoint se = resp.source_endpoint();
+                        endpoint ce = resp.changed_endpoint();
 
                         _dbg_ << "mapped_endpoint=" << me.first << ":" << me.second
                             << " source_endpoint=" << se.first << ":" << se.second
@@ -320,7 +320,7 @@ public:
                     case msg::binding_request:
                         break;
                     case msg::binding_error_response:
-                        throw std::runtime_error("server responded with an error: " + resp->error());
+                        throw std::runtime_error("server responded with an error: " + resp.error());
                     default:
                         throw std::runtime_error("server responded with unexpected message type");
                 }
@@ -347,7 +347,7 @@ public:
     {
         _dbg_ << "reflecting endpoint...";
 
-        return exec_binding(plexus::network::create_udp_transport(m_bind), m_stun)->mapped_endpoint();
+        return exec_binding(plexus::network::create_udp_transport(m_bind), m_stun).mapped_endpoint();
     }
 
     traverse explore_network() noexcept(false) override
@@ -360,9 +360,9 @@ public:
         _dbg_ << "nat test...";
         auto response = exec_binding(pin, m_stun);
 
-        endpoint mapped = response->mapped_endpoint();
-        endpoint source = response->source_endpoint();
-        endpoint changed = response->changed_endpoint();
+        endpoint mapped = response.mapped_endpoint();
+        endpoint source = response.source_endpoint();
+        endpoint changed = response.changed_endpoint();
 
         if (mapped != m_bind)
         {
@@ -370,7 +370,7 @@ public:
             state.random_port = mapped.second != m_bind.second ? 1 : 0;
             
             _dbg_ << "first mapping test...";
-            endpoint fst_mapped = exec_binding(pin, changed)->mapped_endpoint();
+            endpoint fst_mapped = exec_binding(pin, changed).mapped_endpoint();
 
             state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
 
@@ -381,7 +381,7 @@ public:
             else
             {
                 _dbg_ << "second mapping test...";
-                endpoint snd_mapped = exec_binding(pin, endpoint{changed.first, source.second})->mapped_endpoint();
+                endpoint snd_mapped = exec_binding(pin, endpoint{changed.first, source.second}).mapped_endpoint();
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }

@@ -101,7 +101,7 @@ public:
 private:
 
     uint8_t m_buffer[BUFFER_SIZE];
-    std::shared_ptr<network::ssl> m_ssl;
+    std::shared_ptr<network::tcp> m_ssl;
 };
 
 std::string get_address(const std::string& email)

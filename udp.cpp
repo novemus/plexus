@@ -19,7 +19,7 @@
 
 namespace plexus { namespace network {
 
-class asio_udp_channel : public transport
+class asio_udp_channel : public udp
 {
     boost::asio::io_service                            m_io;
     asio_socket<boost::asio::ip::udp::socket>          m_socket;
@@ -78,7 +78,7 @@ public:
         }
     }
 
-    void receive(const endpoint& remote, std::shared_ptr<buffer> buf, int64_t timeout) noexcept(false) override
+    size_t receive(const endpoint& remote, const wormhole::mutable_buffer& buffer, int64_t timeout) noexcept(false) override
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -89,35 +89,35 @@ public:
         while (timer().total_milliseconds() < timeout)
         {
             boost::asio::ip::udp::endpoint source;
-            size_t size = m_socket.receive_from(boost::asio::buffer(buf->data(), buf->size()), source, boost::posix_time::milliseconds(timeout));
+            size_t size = m_socket.receive_from(buffer, source, boost::posix_time::milliseconds(timeout));
 
             if (is_matched(source, match))
             {
-                _trc_ << source << " >>>>> " << std::make_pair(buf->data(), size);
-
-                buf->move_tail(buf->size() - size, true);
-                return;
+                _trc_ << source << " >>>>> " << std::make_pair(buffer.data(), size);
+                return size;
             }
         }
 
         throw boost::system::error_code(boost::asio::error::operation_aborted);
     }
 
-    void send(const endpoint& remote, std::shared_ptr<buffer> buf, int64_t timeout, uint8_t hops) noexcept(false) override
+    size_t send(const endpoint& remote, const wormhole::const_buffer& buffer, int64_t timeout, uint8_t hops) noexcept(false) override
     {
         auto endpoint = resolve_endpoint(remote);
 
         m_socket.set_option(boost::asio::ip::unicast::hops(hops));
-        size_t size = m_socket.send_to(boost::asio::buffer(buf->data(), buf->size()), endpoint, boost::posix_time::milliseconds(timeout));
+        size_t size = m_socket.send_to(buffer, endpoint, boost::posix_time::milliseconds(timeout));
 
-        _trc_ << endpoint << " <<<<< " << std::make_pair(buf->data(), size);
+        _trc_ << endpoint << " <<<<< " << std::make_pair(buffer.data(), size);
 
-        if (size < buf->size())
+        if (size < buffer.size())
             throw std::runtime_error("can't send message");
+
+        return size;
     }
 };
 
-std::shared_ptr<transport> create_udp_transport(const endpoint& bind)
+std::shared_ptr<udp> create_udp_transport(const endpoint& bind)
 {
     return std::make_shared<asio_udp_channel>(bind);
 }
