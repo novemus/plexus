@@ -8,8 +8,8 @@ set(WORMHOLE_DIR wormhole)
 
 add_subdirectory(${WORMHOLE_DIR})
 
-set(SOURCES utils.cpp exec.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp email.cpp stun.cpp puncher.cpp main.cpp wormhole/logger.cpp)
-set(TESTS_SOURCES utils.cpp smime.cpp ssl.cpp udp.cpp tcp.cpp raw.cpp exec.cpp wormhole/logger.cpp
+set(SOURCES utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp raw.cpp email.cpp stun.cpp puncher.cpp main.cpp wormhole/logger.cpp)
+set(TESTS_SOURCES utils.cpp smime.cpp udp.cpp tcp.cpp raw.cpp exec.cpp wormhole/logger.cpp
                  ./tests/utils_tests.cpp
                  ./tests/ssl_tests.cpp
                  ./tests/udp_tests.cpp
