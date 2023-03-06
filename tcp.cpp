@@ -22,17 +22,17 @@ namespace plexus { namespace network {
 template<class socket>
 struct asio_tcp_client_base : public tcp
 {
-    asio_tcp_client_base(const endpoint& remote, int64_t timeout)
+    asio_tcp_client_base(const boost::asio::ip::tcp::endpoint& remote, int64_t timeout)
         : m_socket(m_io)
-        , m_remote(resolve(remote))
+        , m_remote(remote)
         , m_timeout(timeout)
     {
     }
 
     template <typename socket_arg>
-    asio_tcp_client_base(socket_arg& option, const endpoint& remote, int64_t timeout)
+    asio_tcp_client_base(socket_arg& option, const boost::asio::ip::tcp::endpoint& remote, int64_t timeout)
         : m_socket(m_io, option)
-        , m_remote(resolve(remote))
+        , m_remote(remote)
         , m_timeout(timeout)
     {
     }
@@ -40,15 +40,6 @@ struct asio_tcp_client_base : public tcp
     ~asio_tcp_client_base()
     {
         shutdown();
-    }
-
-    boost::asio::ip::tcp::endpoint resolve(const endpoint& address)
-    {
-        boost::asio::ip::tcp::resolver resolver(m_io);
-        boost::asio::ip::tcp::resolver::query query(address.first, std::to_string(address.second));
-        boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(query);
-
-        return endpoint;
     }
 
     void shutdown() noexcept(true) override
@@ -110,7 +101,7 @@ class asio_tcp_client : public asio_tcp_client_base<asio_socket<boost::asio::ip:
 
 public:
 
-    asio_tcp_client(const endpoint& remote, const endpoint& local, int64_t timeout, uint8_t hops)
+    asio_tcp_client(const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, int64_t timeout, uint8_t hops)
         : asio_tcp_client_base(remote, timeout)
     {
         static const size_t SOCKET_BUFFER_SIZE = 1048576;
@@ -123,9 +114,9 @@ public:
         m_socket.set_option(boost::asio::socket_base::receive_buffer_size(SOCKET_BUFFER_SIZE));
         m_socket.set_option(boost::asio::ip::unicast::hops(hops));
 
-        if (!local.first.empty())
+        if (!local.address().is_unspecified())
         {
-            m_socket.bind(resolve(local));
+            m_socket.bind(local);
         }
     }
 };
@@ -136,7 +127,7 @@ class asio_ssl_client : public asio_tcp_client_base<asio_socket<boost::asio::ssl
 
 public:
 
-    asio_ssl_client(const endpoint& remote, boost::asio::ssl::context&& ssl)
+    asio_ssl_client(const boost::asio::ip::tcp::endpoint& remote, boost::asio::ssl::context&& ssl)
         : asio_tcp_client_base(ssl, remote, plexus::utils::getenv<int64_t>("PLEXUS_SSL_TIMEOUT", 5000))
         , m_ssl(std::move(ssl))
     {
@@ -153,12 +144,12 @@ private:
     boost::asio::ssl::context m_ssl;
 };
 
-std::shared_ptr<tcp> create_tcp_client(const endpoint& remote, const endpoint& local, int64_t timeout, uint8_t hops)
+std::shared_ptr<tcp> create_tcp_client(const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, int64_t timeout, uint8_t hops)
 {
     return std::make_shared<asio_tcp_client>(remote, local, timeout, hops);
 }
 
-std::shared_ptr<tcp> create_ssl_client(const endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+std::shared_ptr<tcp> create_ssl_client(const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
 {
     boost::asio::ssl::context ssl = boost::asio::ssl::context(boost::asio::ssl::context::sslv23);
     

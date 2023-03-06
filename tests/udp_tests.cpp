@@ -15,15 +15,11 @@
 #include "../network.h"
 #include "../utils.h"
 
-namespace {
-
-const plexus::network::endpoint lep = std::make_pair("127.0.0.1", 1234);
-const plexus::network::endpoint rep = std::make_pair("127.0.0.1", 4321);
-
-}
-
 BOOST_AUTO_TEST_CASE(sync_udp_exchange)
 {
+    const boost::asio::ip::udp::endpoint lep(boost::asio::ip::udp::v4(), 1234);
+    const boost::asio::ip::udp::endpoint rep(boost::asio::ip::udp::v4(), 4321);
+
     auto lend = plexus::network::create_udp_transport(lep);
     auto rend = plexus::network::create_udp_transport(rep);
 
@@ -45,10 +41,13 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
 
 BOOST_AUTO_TEST_CASE(async_udp_exchange)
 {
+    const boost::asio::ip::udp::endpoint lep(boost::asio::ip::udp::v4(), 1234);
+    const boost::asio::ip::udp::endpoint rep(boost::asio::ip::udp::v4(), 4321);
+
     auto lend = plexus::network::create_udp_transport(lep);
     auto rend = plexus::network::create_udp_transport(rep);
 
-    auto work = [](std::shared_ptr<plexus::network::udp> udp, const plexus::network::endpoint& peer)
+    auto work = [](std::shared_ptr<plexus::network::udp> udp, const boost::asio::ip::udp::endpoint& peer)
     {
         wormhole::mutable_buffer out("plexus");
         wormhole::mutable_buffer in(512);

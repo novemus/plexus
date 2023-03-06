@@ -168,7 +168,7 @@ std::shared_ptr<ssl_echo_server> create_ssl_server(unsigned short port, const st
 }
 
 const uint16_t SSL_PORT = 4433;
-const plexus::network::endpoint SSL_SERVER("127.0.0.1", SSL_PORT);
+const boost::asio::ip::tcp::endpoint SSL_SERVER(boost::asio::ip::tcp::v4(), SSL_PORT);
 
 }
 

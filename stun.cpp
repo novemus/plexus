@@ -155,7 +155,7 @@ class message : public wormhole::mutable_buffer
         return 0;
     }
 
-    endpoint fetch_endpoint(uint16_t kind) const
+    boost::asio::ip::udp::endpoint fetch_endpoint(uint16_t kind) const
     {
         const uint8_t* ptr = fetch_attribute_place(kind);
         if (ptr)
@@ -167,8 +167,8 @@ class message : public wormhole::mutable_buffer
                 if (length != 8u)
                     throw std::runtime_error("wrong endpoint data");
 
-                return endpoint(
-                    utils::format("%d.%d.%d.%d", ptr[8], ptr[9], ptr[10], ptr[11]),
+                return boost::asio::ip::udp::endpoint(
+                    boost::asio::ip::address::from_string(utils::format("%d.%d.%d.%d", ptr[8], ptr[9], ptr[10], ptr[11])),
                     read_short(ptr, 6)
                 );
             }
@@ -177,8 +177,8 @@ class message : public wormhole::mutable_buffer
                 if (length != 20u)
                     throw std::runtime_error("wrong endpoint data");
 
-                return endpoint(
-                    utils::format("%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23]),
+                return boost::asio::ip::udp::endpoint(
+                    boost::asio::ip::address::from_string(utils::format("%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
                     read_short(ptr, 6)
                 );
             }
@@ -187,7 +187,7 @@ class message : public wormhole::mutable_buffer
         if (type() == msg::binding_response)
             throw std::runtime_error(utils::format("endpoint attribute %d not found", kind));
 
-        return endpoint();
+        return boost::asio::ip::udp::endpoint();
     }
 
 public:
@@ -252,17 +252,17 @@ public:
         return std::string();
     }
 
-    endpoint source_endpoint() const
+    boost::asio::ip::udp::endpoint source_endpoint() const
     {
         return fetch_endpoint(attr::source_address);
     }
 
-    endpoint changed_endpoint() const
+    boost::asio::ip::udp::endpoint changed_endpoint() const
     {
         return fetch_endpoint(attr::changed_address);
     }
 
-    endpoint mapped_endpoint() const
+    boost::asio::ip::udp::endpoint mapped_endpoint() const
     {
         return fetch_endpoint(attr::mapped_address);
     }
@@ -270,17 +270,17 @@ public:
 
 class client : public stun_client
 {
-    endpoint m_stun;
-    endpoint m_bind;
+    boost::asio::ip::udp::endpoint m_stun;
+    boost::asio::ip::udp::endpoint m_bind;
 
 public:
 
-    client(const endpoint& stun, const endpoint& bind) 
+    client(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) 
         : m_stun(stun)
         , m_bind(bind)
     {}
 
-    static message exec_binding(std::shared_ptr<plexus::network::udp> pin, endpoint stun, uint8_t flags = 0, int64_t deadline = 4600)
+    static message exec_binding(std::shared_ptr<plexus::network::udp> pin, boost::asio::ip::udp::endpoint stun, uint8_t flags = 0, int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -308,13 +308,13 @@ public:
                 {
                     case msg::binding_response:
                     {
-                        endpoint me = resp.mapped_endpoint();
-                        endpoint se = resp.source_endpoint();
-                        endpoint ce = resp.changed_endpoint();
+                        auto me = resp.mapped_endpoint();
+                        auto se = resp.source_endpoint();
+                        auto ce = resp.changed_endpoint();
 
-                        _dbg_ << "mapped_endpoint=" << me.first << ":" << me.second
-                            << " source_endpoint=" << se.first << ":" << se.second
-                            << " changed_endpoint=" << ce.first << ":" << ce.second;
+                        _dbg_ << "mapped_endpoint=" << me
+                            << " source_endpoint=" << se
+                            << " changed_endpoint=" << ce;
                         break;
                     }
                     case msg::binding_request:
@@ -343,7 +343,7 @@ public:
 
 public:
 
-    endpoint reflect_endpoint() noexcept(false) override
+    boost::asio::ip::udp::endpoint reflect_endpoint() noexcept(false) override
     {
         _dbg_ << "reflecting endpoint...";
 
@@ -360,19 +360,19 @@ public:
         _dbg_ << "nat test...";
         auto response = exec_binding(pin, m_stun);
 
-        endpoint mapped = response.mapped_endpoint();
-        endpoint source = response.source_endpoint();
-        endpoint changed = response.changed_endpoint();
+        auto mapped = response.mapped_endpoint();
+        auto source = response.source_endpoint();
+        auto changed = response.changed_endpoint();
 
         if (mapped != m_bind)
         {
             state.nat = 1;
-            state.random_port = mapped.second != m_bind.second ? 1 : 0;
+            state.random_port = mapped.port() != m_bind.port() ? 1 : 0;
             
             _dbg_ << "first mapping test...";
-            endpoint fst_mapped = exec_binding(pin, changed).mapped_endpoint();
+            auto fst_mapped = exec_binding(pin, changed).mapped_endpoint();
 
-            state.variable_address = mapped.first != fst_mapped.first ? 1 : 0;
+            state.variable_address = mapped.port() != fst_mapped.port() ? 1 : 0;
 
             if (fst_mapped == mapped)
             {
@@ -381,7 +381,7 @@ public:
             else
             {
                 _dbg_ << "second mapping test...";
-                endpoint snd_mapped = exec_binding(pin, endpoint{changed.first, source.second}).mapped_endpoint();
+                auto snd_mapped = exec_binding(pin, boost::asio::ip::udp::endpoint{changed.address(), source.port()}).mapped_endpoint();
 
                 state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
             }
@@ -401,7 +401,7 @@ public:
         }
         catch(const plexus::timeout_error&) { }
 
-        pin = plexus::network::create_udp_transport(endpoint(m_bind.first, m_bind.second + 1));
+        pin = plexus::network::create_udp_transport(boost::asio::ip::udp::endpoint(m_bind.address(), m_bind.port() + 1));
         try
         {
             _dbg_ << "first filtering test...";
@@ -436,7 +436,7 @@ public:
 
 }
 
-std::shared_ptr<plexus::stun_client> create_stun_client(const endpoint& server, const endpoint& local)
+std::shared_ptr<plexus::stun_client> create_stun_client(const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local)
 {
     return std::make_shared<plexus::stun::client>(server, local);
 }

@@ -20,7 +20,7 @@ struct handshake_error : public std::runtime_error { handshake_error() : std::ru
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
 
-typedef std::pair<plexus::network::endpoint, /* puzzle */ uint64_t> reference;
+typedef std::pair<boost::asio::ip::udp::endpoint, /* puzzle */ uint64_t> reference;
 
 struct mediator
 {
@@ -70,20 +70,19 @@ using namespace network;
 struct stun_client
 {
     virtual ~stun_client() {}
-    virtual endpoint reflect_endpoint() noexcept(false) = 0;
+    virtual boost::asio::ip::udp::endpoint reflect_endpoint() noexcept(false) = 0;
     virtual traverse explore_network() noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(const endpoint& stun, const endpoint& bind);
+std::shared_ptr<stun_client> create_stun_client(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind);
 
 struct nat_puncher : public stun_client
 {
-    virtual endpoint punch_udp_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) = 0;
-    virtual void reach_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
-    virtual void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) = 0;
-    virtual void trace_tcp_syn_to_peer(const endpoint& peer, uint8_t hops, uint8_t trace) noexcept(false) = 0;
+    virtual boost::asio::ip::udp::endpoint punch_hole_to_peer(const boost::asio::ip::udp::endpoint& peer, uint8_t hops) noexcept(false) = 0;
+    virtual void reach_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual void await_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
-std::shared_ptr<nat_puncher> create_nat_puncher(const endpoint& stun, const endpoint& bind);
+std::shared_ptr<nat_puncher> create_nat_puncher(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind);
 
 }

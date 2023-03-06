@@ -19,8 +19,8 @@ namespace plexus {
 
 class puncher : public plexus::nat_puncher
 {
-    endpoint m_stun;
-    endpoint m_bind;
+    boost::asio::ip::udp::endpoint m_stun;
+    boost::asio::ip::udp::endpoint m_bind;
 
     class handshake : public wormhole::mutable_buffer
     {
@@ -70,13 +70,13 @@ class puncher : public plexus::nat_puncher
 
 public:
 
-    puncher(const endpoint& stun, const endpoint& bind)
+    puncher(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind)
         : m_stun(stun)
         , m_bind(bind)
     {
     }
 
-    void reach_peer(const endpoint& peer, uint64_t mask) noexcept(false) override
+    void reach_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "reaching peer...";
 
@@ -99,7 +99,7 @@ public:
 
                 if (out.flag() == 1)
                 {
-                    _dbg_ << "handshake peer=" << peer.first << ":" << peer.second;
+                    _dbg_ << "handshake peer=" << peer;
                     return;
                 }
 
@@ -122,7 +122,7 @@ public:
         throw plexus::timeout_error();
     }
 
-    void await_peer(const endpoint& peer, uint64_t mask) noexcept(false) override
+    void await_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "awaiting peer...";
 
@@ -149,7 +149,7 @@ public:
                 }
                 else
                 {
-                    _dbg_ << "handshake peer=" << peer.first << ":" << peer.second;
+                    _dbg_ << "handshake peer=" << peer;
                     return;
                 }
             }
@@ -165,11 +165,11 @@ public:
         throw plexus::timeout_error();
     }
 
-    endpoint punch_udp_hole_to_peer(const endpoint& peer, uint8_t hops) noexcept(false) override
+    boost::asio::ip::udp::endpoint punch_hole_to_peer(const boost::asio::ip::udp::endpoint& peer, uint8_t hops) noexcept(false) override
     {
         _dbg_ << "punching udp hole to peer...";
 
-        endpoint ep = reflect_endpoint();
+        auto ep = reflect_endpoint();
 
         auto pin = plexus::network::create_udp_transport(m_bind);
         pin->send(peer, handshake(0, 0), 2000, hops);
@@ -177,46 +177,7 @@ public:
         return ep;
     }
 
-    void trace_tcp_syn_to_peer(const endpoint& peer, uint8_t hops, uint8_t trace) noexcept(false) override
-    {
-        _dbg_ << "tracing tcp syn to peer...";
-
-        uint8_t max_hops = hops + trace;
-
-        while (hops < max_hops)
-        {
-            try
-            {
-                auto tcp = plexus::network::create_tcp_client(peer, m_bind, 2000, hops);
-
-                tcp->connect();
-                tcp->shutdown();
-
-                _wrn_ << "tcp trace reached the peer";
-
-                return;
-            }
-            catch(const boost::system::system_error& ex)
-            {
-                if (ex.code() == boost::asio::error::operation_aborted)
-                {
-                    return;
-                }
-                else if (ex.code() == boost::asio::error::host_unreachable)
-                {
-                    ++hops;
-                }
-                else
-                {
-                    throw;
-                }
-            }
-        }
-
-        _wrn_ << "tcp trace did not reach unresponsive router";
-    }
-
-    endpoint reflect_endpoint() noexcept(false) override
+    boost::asio::ip::udp::endpoint reflect_endpoint() noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_stun, m_bind);
         return stun->reflect_endpoint();
@@ -229,7 +190,7 @@ public:
     }
 };
 
-std::shared_ptr<plexus::nat_puncher> create_nat_puncher(const endpoint& stun, const endpoint& bind)
+std::shared_ptr<plexus::nat_puncher> create_nat_puncher(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind)
 {
     return std::make_shared<plexus::puncher>(stun, bind);
 }

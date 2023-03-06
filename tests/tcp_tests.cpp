@@ -18,13 +18,6 @@
 #include "../network.h"
 #include "../utils.h"
 
-namespace {
-
-const plexus::network::endpoint lep = std::make_pair("127.0.0.1", 1234);
-const plexus::network::endpoint rep = std::make_pair("127.0.0.1", 4321);
-
-}
-
 class tcp_echo_session
 {
     enum { max_length = 1024 };
@@ -157,9 +150,9 @@ const char HELLO[] = "Hello, Plexus!";
 const uint16_t TCP_SERVER_PORT = 8765;
 const uint16_t TCP_CLIENT_PORT = 5678;
 
-const plexus::network::endpoint TCP_SERVER("127.0.0.1", TCP_SERVER_PORT);
-const plexus::network::endpoint TCP_CLIENT("127.0.0.1", TCP_CLIENT_PORT);
-const plexus::network::endpoint TCP_REMOTE_SERVER("8.8.8.8", 80);
+const boost::asio::ip::tcp::endpoint TCP_SERVER(boost::asio::ip::tcp::v4(), TCP_SERVER_PORT);
+const boost::asio::ip::tcp::endpoint TCP_CLIENT(boost::asio::ip::tcp::v4(), TCP_CLIENT_PORT);
+const boost::asio::ip::tcp::endpoint TCP_REMOTE_SERVER(boost::asio::ip::address::from_string("8.8.8.8"), 80);
 
 }
 

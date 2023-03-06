@@ -33,8 +33,8 @@ namespace email {
 
 struct config
 {
-    network::endpoint smtp;
-    network::endpoint imap;
+    boost::asio::ip::tcp::endpoint smtp;
+    boost::asio::ip::tcp::endpoint imap;
     std::string login;
     std::string passwd;
     std::string from;
@@ -60,7 +60,7 @@ class channel
 
 public:
 
-    channel(const network::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+    channel(const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
         : m_ssl(network::create_ssl_client(remote, cert, key, ca))
     {
     }
@@ -457,7 +457,7 @@ class email_mediator : public mediator
                 if (std::regex_search(message, match, pattern))
                 {
                     peer = std::make_pair(
-                        std::make_pair(match[1].str(), boost::lexical_cast<uint16_t>(match[2].str())),
+                        utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str()),
                         boost::lexical_cast<uint64_t>(match[3].str())
                     );
                 }
@@ -465,7 +465,7 @@ class email_mediator : public mediator
                 message = m_imap.pull();
             }
 
-            if (!peer.first.first.empty())
+            if (!peer.first.address().is_unspecified())
                 return peer;
 
             if (!idle)
@@ -490,7 +490,7 @@ public:
 
         reference peer = receive(std::regex("^PLEXUS\\s+2.1\\s+request\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"));
 
-        _inf_ << "received plexus request " << peer.first.first << ":" << peer.first.second;
+        _inf_ << "received plexus request " << peer.first;
         return peer;
     }
 
@@ -500,7 +500,7 @@ public:
 
         reference peer = receive(std::regex("^PLEXUS\\s+2.1\\s+response\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), RESPONSE_TIMEOUT);
 
-        _inf_ << "received plexus response " << peer.first.first << ":" << peer.first.second;
+        _inf_ << "received plexus response " << peer.first;
         return peer;
     }
 
@@ -508,18 +508,18 @@ public:
     {
         _inf_ << "sending plexus request...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 2.1 request %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
+        m_smtp.push(plexus::utils::format("PLEXUS 2.1 request %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second));
 
-        _inf_ << "sent plexus request " << host.first.first << ":" << host.first.second;
+        _inf_ << "sent plexus request " << host.first;
     }
 
     void dispatch_response(const reference& host) noexcept(false) override
     {
         _inf_ << "sending plexus response...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 2.1 response %s %u %llu", host.first.first.c_str(), host.first.second, host.second));
+        m_smtp.push(plexus::utils::format("PLEXUS 2.1 response %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second));
         
-        _inf_ << "sent plexus response " << host.first.first << ":" << host.first.second;
+        _inf_ << "sent plexus response " << host.first;
     }
 };
 
@@ -539,25 +539,10 @@ std::shared_ptr<mediator> create_email_mediator(const std::string& host_id,
                                                 const std::string& smime_key,
                                                 const std::string& smime_ca)
 {
-    network::endpoint smtp_ep(smtp, 25);
-
-    std::smatch match;
-    if (std::regex_search(smtp, match, std::regex("(\\w+://)?(.+):(.*)")))
-    {
-        smtp_ep.first = match[2].str();
-        smtp_ep.second = boost::lexical_cast<uint16_t>(match[3].str());
-    }
-
-    network::endpoint imap_ep(imap, 143);
-
-    if (std::regex_search(imap, match, std::regex("(\\w+://)?(.+):(.*)")))
-    {
-        imap_ep.first = match[2].str();
-        imap_ep.second = boost::lexical_cast<uint16_t>(match[3].str());
-    }
-
     return std::make_shared<email_mediator>(config{
-        smtp_ep, imap_ep, login, passwd,
+        utils::parse_endpoint<boost::asio::ip::tcp::endpoint>(smtp, "smtps"),
+        utils::parse_endpoint<boost::asio::ip::tcp::endpoint>(imap, "imaps"),
+        login, passwd,
         from, to, host_id, peer_id,
         cert, key, ca,
         { smime_peer, smime_cert, smime_key, smime_ca }});

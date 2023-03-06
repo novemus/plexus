@@ -61,6 +61,25 @@ template<class var_t> var_t getenv(const std::string& name, const var_t& def)
     return def;
 }
 
+template<class endpoint>
+endpoint parse_endpoint(const std::string& url, const std::string& service)
+{
+    if (url.empty() && service.empty())
+        return endpoint();
+
+    boost::asio::io_context io;
+    typename endpoint::protocol_type::resolver resolver(io);
+
+    std::smatch match;
+    if (std::regex_search(url, match, std::regex("^(\\w+://)?([^/]+):(\\d+)?$")))
+        return *resolver.resolve(match[2].str(), match[3].str());
+    
+    if (std::regex_search(url, match, std::regex("^(\\w+)://([^/]+).*$")))
+        return *resolver.resolve(match[2].str(), match[1].str());
+
+    return *resolver.resolve(url, service);
+}
+
 }
 
 template<class byte>
@@ -75,24 +94,8 @@ template<class proto>
 std::ostream& operator<<(std::ostream& stream, const boost::asio::ip::basic_endpoint<proto>& endpoint)
 {
     if (stream.rdbuf())
-        return stream << endpoint;
+        return stream << endpoint.address().to_string() << ":" << endpoint.port();
     return stream;
-}
-
-template<class endpoint>
-endpoint parse_endpoint(const std::string& url, const std::string& service)
-{
-    boost::asio::io_context io;
-    typename endpoint::protocol_type::resolver resolver(io);
-
-    std::smatch match;
-    if (std::regex_search(url, match, std::regex("^(\\w+://)?([^/]+):(\\d+)?$")))
-        return *resolver.resolve(match[2].str(), match[3].str());
-    
-    if (std::regex_search(url, match, std::regex("^(\\w+)://([^/]+).*$")))
-        return *resolver.resolve(match[2].str(), match[1].str());
-
-    return *resolver.resolve(url, service);
 }
 
 }

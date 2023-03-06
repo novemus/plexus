@@ -11,7 +11,6 @@
 #include "socket.h"
 #include "utils.h"
 #include <logger.h>
-#include <map>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/buffer.hpp>
@@ -21,29 +20,8 @@ namespace plexus { namespace network {
 
 class asio_udp_channel : public udp
 {
-    boost::asio::io_service                            m_io;
-    asio_socket<boost::asio::ip::udp::socket>          m_socket;
-    std::map<endpoint, boost::asio::ip::udp::endpoint> m_endpoints;
-
-    boost::asio::ip::udp::endpoint resolve_endpoint(const endpoint& ep)
-    {
-        if (ep.first.empty())
-        {
-            return boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), ep.second);
-        }
-
-        auto iter = m_endpoints.find(ep);
-        if (iter != m_endpoints.end())
-            return iter->second;
-
-        boost::asio::ip::udp::resolver resolver(m_io);
-        boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), ep.first, std::to_string(ep.second));
-        boost::asio::ip::udp::endpoint endpoint = *resolver.resolve(query);
-
-        m_endpoints.insert(std::make_pair(ep, endpoint));
-
-        return endpoint;
-    }
+    boost::asio::io_service                   m_io;
+    asio_socket<boost::asio::ip::udp::socket> m_socket;
 
     static bool is_matched(const boost::asio::ip::udp::endpoint& source, const boost::asio::ip::udp::endpoint& match)
     {
@@ -52,12 +30,10 @@ class asio_udp_channel : public udp
 
 public:
 
-    asio_udp_channel(const endpoint& bind)
+    asio_udp_channel(const boost::asio::ip::udp::endpoint& bind)
         : m_socket(m_io)
     {
-        boost::asio::ip::udp::endpoint endpoint = resolve_endpoint(bind);
-
-        m_socket.open(endpoint.protocol());
+        m_socket.open(bind.protocol());
 
         static const size_t SOCKET_BUFFER_SIZE = 1048576;
 
@@ -65,7 +41,7 @@ public:
         m_socket.set_option(boost::asio::socket_base::send_buffer_size(SOCKET_BUFFER_SIZE));
         m_socket.set_option(boost::asio::socket_base::receive_buffer_size(SOCKET_BUFFER_SIZE));
 
-        m_socket.bind(endpoint);
+        m_socket.bind(bind);
     }
 
     ~asio_udp_channel()
@@ -78,20 +54,19 @@ public:
         }
     }
 
-    size_t receive(const endpoint& remote, const wormhole::mutable_buffer& buffer, int64_t timeout) noexcept(false) override
+    size_t receive(const boost::asio::ip::udp::endpoint& remote, const wormhole::mutable_buffer& buffer, int64_t timeout) noexcept(false) override
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        auto match = resolve_endpoint(remote);
         while (timer().total_milliseconds() < timeout)
         {
             boost::asio::ip::udp::endpoint source;
             size_t size = m_socket.receive_from(buffer, source, boost::posix_time::milliseconds(timeout));
 
-            if (is_matched(source, match))
+            if (is_matched(source, remote))
             {
                 _trc_ << source << " >>>>> " << std::make_pair(buffer.data(), size);
                 return size;
@@ -101,14 +76,12 @@ public:
         throw boost::system::error_code(boost::asio::error::operation_aborted);
     }
 
-    size_t send(const endpoint& remote, const wormhole::const_buffer& buffer, int64_t timeout, uint8_t hops) noexcept(false) override
+    size_t send(const boost::asio::ip::udp::endpoint& remote, const wormhole::const_buffer& buffer, int64_t timeout, uint8_t hops) noexcept(false) override
     {
-        auto endpoint = resolve_endpoint(remote);
-
         m_socket.set_option(boost::asio::ip::unicast::hops(hops));
-        size_t size = m_socket.send_to(buffer, endpoint, boost::posix_time::milliseconds(timeout));
+        size_t size = m_socket.send_to(buffer, remote, boost::posix_time::milliseconds(timeout));
 
-        _trc_ << endpoint << " <<<<< " << std::make_pair(buffer.data(), size);
+        _trc_ << remote << " <<<<< " << std::make_pair(buffer.data(), size);
 
         if (size < buffer.size())
             throw std::runtime_error("can't send message");
@@ -117,7 +90,7 @@ public:
     }
 };
 
-std::shared_ptr<udp> create_udp_transport(const endpoint& bind)
+std::shared_ptr<udp> create_udp_transport(const boost::asio::ip::udp::endpoint& bind)
 {
     return std::make_shared<asio_udp_channel>(bind);
 }

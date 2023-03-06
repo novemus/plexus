@@ -12,7 +12,6 @@
 #include "utils.h"
 #include <logger.h>
 #include <boost/program_options.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
 
 int main(int argc, char** argv)
@@ -23,6 +22,8 @@ int main(int argc, char** argv)
         ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate NAT punching")
         ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of the host")
         ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of the peer")
+        ("stun-server", boost::program_options::value<std::string>()->required(), "endpoint of public stun server")
+        ("stun-client", boost::program_options::value<std::string>()->required(), "endpoint of local stun client")
         ("email-smtps", boost::program_options::value<std::string>()->required(), "smtps server used to send reference to the peer")
         ("email-imaps", boost::program_options::value<std::string>()->required(), "imaps server used to receive reference from the peer")
         ("email-login", boost::program_options::value<std::string>()->required(), "login of email account")
@@ -36,12 +37,7 @@ int main(int argc, char** argv)
         ("smime-cert", boost::program_options::value<std::string>()->default_value(""), "path to smime X509 certificate of the host")
         ("smime-key", boost::program_options::value<std::string>()->default_value(""), "path to smime Private Key of the host")
         ("smime-ca", boost::program_options::value<std::string>()->default_value(""), "path to smime Certification Authority")
-        ("stun-ip", boost::program_options::value<std::string>()->required(), "ip address of stun server")
-        ("stun-port", boost::program_options::value<uint16_t>()->default_value(3478), "port of stun server")
-        ("bind-ip", boost::program_options::value<std::string>()->required(), "local ip address from which to punch the hole in NAT")
-        ("bind-port", boost::program_options::value<uint16_t>()->required(), "local port from which to punch the hole in NAT")
         ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for punch packets")
-        ("tcp-trace", boost::program_options::value<uint16_t>()->default_value(0), "trace to peer by TCP syn packets after handshake with the specified hops increasing")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
         ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
@@ -89,10 +85,10 @@ int main(int argc, char** argv)
     {
         wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), false, vm["log-file"].as<std::string>());
         
-        auto puncher = plexus::create_nat_puncher(
-            plexus::network::endpoint(vm["stun-ip"].as<std::string>(), vm["stun-port"].as<uint16_t>()),
-            plexus::network::endpoint(vm["bind-ip"].as<std::string>(), vm["bind-port"].as<uint16_t>())
-            );
+        auto stun = plexus::utils::parse_endpoint<boost::asio::ip::udp::endpoint>(vm["stun-server"].as<std::string>(), "3478");
+        auto bind = plexus::utils::parse_endpoint<boost::asio::ip::udp::endpoint>(vm["stun-client"].as<std::string>(), "1974");
+
+        auto puncher = plexus::create_nat_puncher(stun, bind);
 
         plexus::traverse state = puncher->explore_network();
         if (state.mapping != plexus::independent)
@@ -119,18 +115,18 @@ int main(int argc, char** argv)
             vm["smime-ca"].as<std::string>()
             );
 
-        auto executor = [&](const plexus::network::endpoint& host, const plexus::network::endpoint& peer, uint64_t secret)
+        auto executor = [&](const boost::asio::ip::udp::endpoint& host, const boost::asio::ip::udp::endpoint& peer, uint64_t secret)
         {
             auto args = vm["exec-args"].as<std::string>();
             if (args.empty())
             {
                 args = plexus::utils::format("%s %u %s %u %s %u %llu",
-                    vm["bind-ip"].as<std::string>().c_str(),
-                    vm["bind-port"].as<uint16_t>(),
-                    host.first.c_str(),
-                    host.second,
-                    peer.first.c_str(),
-                    peer.second,
+                    bind.address().to_string().c_str(),
+                    bind.port(),
+                    host.address().to_string().c_str(),
+                    host.port(),
+                    peer.address().to_string().c_str(),
+                    peer.port(),
                     secret
                     );
             }
@@ -140,12 +136,12 @@ int main(int argc, char** argv)
                     args,
                     boost::regex("(%innerip%)|(%innerport%)|(%outerip%)|(%outerport%)|(%peerip%)|(%peerport%)|(%secret%)"),
                     plexus::utils::format("(?{1}%s)(?{2}%u)(?{3}%s)(?{4}%u)(?{5}%s)(?{6}%u)(?{7}%llu)",
-                        vm["bind-ip"].as<std::string>().c_str(),
-                        vm["bind-port"].as<uint16_t>(),
-                        host.first.c_str(),
-                        host.second,
-                        peer.first.c_str(),
-                        peer.second,
+                        bind.address().to_string().c_str(),
+                        bind.port(),
+                        host.address().to_string().c_str(),
+                        host.port(),
+                        peer.address().to_string().c_str(),
+                        peer.port(),
                         secret),
                     boost::match_posix | boost::format_all
                     );
@@ -164,22 +160,17 @@ int main(int argc, char** argv)
             try
             {
                 uint8_t hops = static_cast<uint8_t>(vm["punch-hops"].as<uint16_t>());
-                uint8_t trace = static_cast<uint8_t>(vm["tcp-trace"].as<uint16_t>());
-
                 if (vm["accept"].as<bool>())
                 {
                     plexus::reference peer = mediator->receive_request();
                     plexus::reference host = std::make_pair(
-                        puncher->punch_udp_hole_to_peer(peer.first, hops),
+                        puncher->punch_hole_to_peer(peer.first, hops),
                         plexus::utils::random<uint64_t>()
                         );
                     mediator->dispatch_response(host);
 
                     uint64_t secret = peer.second ^ host.second;
                     puncher->await_peer(peer.first, secret);
-
-                    if (trace > 0)
-                        puncher->trace_tcp_syn_to_peer(peer.first, hops, trace);
 
                     executor(host.first, peer.first, secret);
                 }
@@ -194,9 +185,6 @@ int main(int argc, char** argv)
 
                     uint64_t secret = peer.second ^ host.second;
                     puncher->reach_peer(peer.first, secret);
-
-                    if (trace > 0)
-                        puncher->trace_tcp_syn_to_peer(peer.first, hops, trace);
 
                     executor(host.first, peer.first, secret);
                 }
