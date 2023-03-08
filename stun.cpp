@@ -178,14 +178,11 @@ class message : public wormhole::mutable_buffer
                     throw std::runtime_error("wrong endpoint data");
 
                 return boost::asio::ip::udp::endpoint(
-                    boost::asio::ip::address::from_string(utils::format("%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
+                    boost::asio::ip::address::from_string(utils::format("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
                     read_short(ptr, 6)
                 );
             }
         }
-
-        if (type() == msg::binding_response)
-            throw std::runtime_error(utils::format("endpoint attribute %d not found", kind));
 
         return boost::asio::ip::udp::endpoint();
     }
@@ -280,7 +277,7 @@ public:
         , m_bind(bind)
     {}
 
-    static message exec_binding(std::shared_ptr<plexus::network::udp> pin, boost::asio::ip::udp::endpoint stun, uint8_t flags = 0, int64_t deadline = 4600)
+    static message exec_binding(std::shared_ptr<plexus::network::udp> pin, boost::asio::ip::udp::endpoint stun, boost::asio::ip::udp::endpoint back, uint8_t flags = 0, int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -297,7 +294,7 @@ public:
 
             try
             {
-                resp.truncate(pin->receive(stun, resp, timeout));
+                resp.truncate(pin->receive(back, resp, timeout));
 
                 if (timer().total_milliseconds() >= deadline)
                     throw plexus::timeout_error();
@@ -347,7 +344,7 @@ public:
     {
         _dbg_ << "reflecting endpoint...";
 
-        return exec_binding(plexus::network::create_udp_transport(m_bind), m_stun).mapped_endpoint();
+        return exec_binding(plexus::network::create_udp_transport(m_bind), m_stun, m_stun).mapped_endpoint();
     }
 
     traverse explore_network() noexcept(false) override
@@ -358,7 +355,7 @@ public:
         auto pin = plexus::network::create_udp_transport(m_bind);
 
         _dbg_ << "nat test...";
-        auto response = exec_binding(pin, m_stun);
+        auto response = exec_binding(pin, m_stun, m_stun);
 
         auto mapped = response.mapped_endpoint();
         auto source = response.source_endpoint();
@@ -369,21 +366,27 @@ public:
             state.nat = 1;
             state.random_port = mapped.port() != m_bind.port() ? 1 : 0;
             
-            _dbg_ << "first mapping test...";
-            auto fst_mapped = exec_binding(pin, changed).mapped_endpoint();
-
-            state.variable_address = mapped.port() != fst_mapped.port() ? 1 : 0;
-
-            if (fst_mapped == mapped)
+            if (!changed.address().is_unspecified())
             {
-                state.mapping = binding::independent;
-            }
-            else
-            {
-                _dbg_ << "second mapping test...";
-                auto snd_mapped = exec_binding(pin, boost::asio::ip::udp::endpoint{changed.address(), source.port()}).mapped_endpoint();
+                _dbg_ << "first mapping test...";
+                auto first = exec_binding(pin, changed, changed).mapped_endpoint();
 
-                state.mapping = snd_mapped == fst_mapped ? binding::address_dependent : binding::address_and_port_dependent;
+                if (first == mapped)
+                {
+                    state.mapping = binding::independent;
+                    state.variable_address = 0;
+                }
+                else
+                {
+                    state.variable_address = mapped.address() != first.address() ? 1 : 0;
+
+                    _dbg_ << "second mapping test...";
+
+                    boost::asio::ip::udp::endpoint target(changed.address(), source.address().is_unspecified() ? m_stun.port() : source.port());
+                    auto second = exec_binding(pin, target, target).mapped_endpoint();
+
+                    state.mapping = second == first ? binding::address_dependent : binding::address_and_port_dependent;
+                }
             }
         }
         else
@@ -396,29 +399,34 @@ public:
         try
         {
             _dbg_ << "hairpin test...";
-            exec_binding(pin, mapped, 0, 1400);
+            exec_binding(pin, mapped, mapped, 0, 1400);
             state.hairpin = 1;
         }
         catch(const plexus::timeout_error&) { }
 
-        pin = plexus::network::create_udp_transport(boost::asio::ip::udp::endpoint(m_bind.address(), m_bind.port() + 1));
-        try
+        if (!changed.address().is_unspecified())
         {
-            _dbg_ << "first filtering test...";
-            exec_binding(pin, m_stun, flag::change_address | flag::change_port, 1400);
-            state.filtering = binding::independent;
-        }
-        catch(const plexus::timeout_error&)
-        {
+            pin = plexus::network::create_udp_transport(boost::asio::ip::udp::endpoint(m_bind.address(), m_bind.port() + 1));
             try
             {
-                _dbg_ << "second filtering test...";
-                exec_binding(pin, m_stun, flag::change_port, 1400);
-                state.filtering = binding::address_dependent;
+                _dbg_ << "first filtering test...";
+                exec_binding(pin, m_stun, changed, flag::change_address | flag::change_port, 1400);
+                state.filtering = binding::independent;
             }
             catch(const plexus::timeout_error&)
             {
-                state.filtering = binding::address_and_port_dependent;
+                try
+                {
+                    _dbg_ << "second filtering test...";
+
+                    boost::asio::ip::udp::endpoint reply(m_stun.address(), changed.port());
+                    exec_binding(pin, m_stun, reply, flag::change_port, 1400);
+                    state.filtering = binding::address_dependent;
+                }
+                catch(const plexus::timeout_error&)
+                {
+                    state.filtering = binding::address_and_port_dependent;
+                }
             }
         }
 
