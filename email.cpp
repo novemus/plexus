@@ -523,10 +523,10 @@ public:
     }
 };
 
-std::shared_ptr<mediator> create_email_mediator(const std::string& host_id,
+std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
+                                                const boost::asio::ip::tcp::endpoint& imap,
+                                                const std::string& host_id,
                                                 const std::string& peer_id,
-                                                const std::string& smtp,
-                                                const std::string& imap,
                                                 const std::string& login,
                                                 const std::string& passwd,
                                                 const std::string& from,
@@ -539,9 +539,11 @@ std::shared_ptr<mediator> create_email_mediator(const std::string& host_id,
                                                 const std::string& smime_key,
                                                 const std::string& smime_ca)
 {
+    _dbg_ << "smtp server: " << smtp;
+    _dbg_ << "imap server: " << imap;
+
     return std::make_shared<email_mediator>(config{
-        utils::parse_endpoint<boost::asio::ip::tcp::endpoint>(smtp, "smtps"),
-        utils::parse_endpoint<boost::asio::ip::tcp::endpoint>(imap, "imaps"),
+        smtp, imap,
         login, passwd,
         from, to, host_id, peer_id,
         cert, key, ca,

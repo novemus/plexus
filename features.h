@@ -31,10 +31,10 @@ struct mediator
     virtual void dispatch_request(const reference& host) noexcept(false) = 0;
 };
 
-std::shared_ptr<mediator> create_email_mediator(const std::string& host_id,
+std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
+                                                const boost::asio::ip::tcp::endpoint& imap,
+                                                const std::string& host_id,
                                                 const std::string& peer_id,
-                                                const std::string& smtp,
-                                                const std::string& imap,
                                                 const std::string& login,
                                                 const std::string& passwd,
                                                 const std::string& from,

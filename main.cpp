@@ -14,6 +14,41 @@
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 
+template<class proto, const char* service>
+struct endpoint : public boost::asio::ip::basic_endpoint<proto>
+{
+    endpoint() {}
+    endpoint(const boost::asio::ip::basic_endpoint<proto>& ep) : boost::asio::ip::basic_endpoint<proto>(ep) {}
+};
+
+constexpr char stun_server_default_port[] = "3478";
+constexpr char stun_client_default_port[] = "1974";
+constexpr char smtp_server_default_port[] = "smtps";
+constexpr char imap_client_default_port[] = "imaps";
+
+using stun_server_endpoint = endpoint<boost::asio::ip::udp, stun_server_default_port>;
+using stun_client_endpoint = endpoint<boost::asio::ip::udp, stun_client_default_port>;
+using smtp_server_endpoint = endpoint<boost::asio::ip::tcp, smtp_server_default_port>;
+using imap_server_endpoint = endpoint<boost::asio::ip::tcp, imap_client_default_port>;
+
+template<class proto, const char* service>
+void validate(boost::any& result, const std::vector<std::string>& values, endpoint<proto, service>*, int)
+{
+    boost::program_options::validators::check_first_occurrence(result);
+    const std::string& url = boost::program_options::validators::get_single_string(values);
+
+    try
+    {
+        result = endpoint<proto, service>(
+            plexus::utils::parse_endpoint<boost::asio::ip::basic_endpoint<proto>>(url, service)
+            );
+    }
+    catch(const boost::system::system_error&)
+    {
+        boost::throw_exception(boost::program_options::error("can't resolve " + url));
+    }
+}
+
 int main(int argc, char** argv)
 {
     boost::program_options::options_description desc("plexus options");
@@ -22,10 +57,10 @@ int main(int argc, char** argv)
         ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate NAT punching")
         ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of the host")
         ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of the peer")
-        ("stun-server", boost::program_options::value<std::string>()->required(), "endpoint of public stun server")
-        ("stun-client", boost::program_options::value<std::string>()->required(), "endpoint of local stun client")
-        ("email-smtps", boost::program_options::value<std::string>()->required(), "smtps server used to send reference to the peer")
-        ("email-imaps", boost::program_options::value<std::string>()->required(), "imaps server used to receive reference from the peer")
+        ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of public stun server")
+        ("stun-client", boost::program_options::value<stun_client_endpoint>()->required(), "endpoint of local stun client")
+        ("email-smtps", boost::program_options::value<smtp_server_endpoint>()->required(), "smtps server used to send reference to the peer")
+        ("email-imaps", boost::program_options::value<imap_server_endpoint>()->required(), "imaps server used to receive reference from the peer")
         ("email-login", boost::program_options::value<std::string>()->required(), "login of email account")
         ("email-passwd", boost::program_options::value<std::string>()->required(), "password of email account")
         ("email-from", boost::program_options::value<std::string>()->required(), "email address used by the host")
@@ -62,7 +97,7 @@ int main(int argc, char** argv)
             auto config = vm["config"].as<std::string>();
             boost::program_options::store(boost::program_options::parse_config_file<char>(config.c_str(), desc), vm);
         }
-        catch (const boost::program_options::reading_file& e)
+        catch (const std::exception& e)
         {
             std::cerr << e.what() << std::endl;
             std::cout << desc;
@@ -85,8 +120,11 @@ int main(int argc, char** argv)
     {
         wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), false, vm["log-file"].as<std::string>());
         
-        auto stun = plexus::utils::parse_endpoint<boost::asio::ip::udp::endpoint>(vm["stun-server"].as<std::string>(), "3478");
-        auto bind = plexus::utils::parse_endpoint<boost::asio::ip::udp::endpoint>(vm["stun-client"].as<std::string>(), "1974");
+        boost::asio::ip::udp::endpoint stun = vm["stun-server"].as<stun_server_endpoint>();
+        boost::asio::ip::udp::endpoint bind = vm["stun-client"].as<stun_client_endpoint>();
+
+        _dbg_ << "stun server: " << stun;
+        _dbg_ << "stun client: " << bind;
 
         auto puncher = plexus::create_nat_puncher(stun, bind);
 
@@ -98,10 +136,10 @@ int main(int argc, char** argv)
         }
 
         auto mediator = plexus::create_email_mediator(
+            vm["email-smtps"].as<smtp_server_endpoint>(),
+            vm["email-imaps"].as<imap_server_endpoint>(),
             vm["host-id"].as<std::string>(),
             vm["peer-id"].as<std::string>(),
-            vm["email-smtps"].as<std::string>(),
-            vm["email-imaps"].as<std::string>(),
             vm["email-login"].as<std::string>(),
             vm["email-passwd"].as<std::string>(),
             vm["email-from"].as<std::string>(),
