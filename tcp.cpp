@@ -114,10 +114,8 @@ public:
         m_socket.set_option(boost::asio::socket_base::receive_buffer_size(SOCKET_BUFFER_SIZE));
         m_socket.set_option(boost::asio::ip::unicast::hops(hops));
 
-        if (!local.address().is_unspecified())
-        {
+        if (local.port())
             m_socket.bind(local);
-        }
     }
 };
 

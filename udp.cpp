@@ -41,7 +41,8 @@ public:
         m_socket.set_option(boost::asio::socket_base::send_buffer_size(SOCKET_BUFFER_SIZE));
         m_socket.set_option(boost::asio::socket_base::receive_buffer_size(SOCKET_BUFFER_SIZE));
 
-        m_socket.bind(bind);
+        if (bind.port())
+            m_socket.bind(bind);
     }
 
     ~asio_udp_channel()

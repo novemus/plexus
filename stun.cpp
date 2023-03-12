@@ -22,45 +22,59 @@
 #include <winsock.h>
 #endif
 
-/* Algorithm of polling the STUN server to test firewall
-
-*** parameters ***
-
-SA - source ip address of the stun server
-CA - canged ip address of the stun server
-SP - source port of the stun server
-CP - canged port of the stun server
-MA - mapped address
-MP - mapped port
-AF - state of the address change flag
-PF - state of the port change flag
-
-*** testing procedure ***
-
-NAT_TEST: SA, SP, AF=0, PF=0
-    Acquire mapped endpoint from source address and source port of the stun server.
-    If mapped endpoint is equal to the local endpoint, then there is no NAT go to HAIRPIN_TEST and FILERING_TEST_1 tests,
-    otherwise check if the mapping preserves port and go to the MAPPING_TEST_1, HAIRPIN_TEST and FILERING_TEST_1 tests
-MAPPING_TEST_1: CA, CP, AF=0, PF=0
-    Acquire mapped endpoint from changed address and changed port of the stun server.
-    If mapped endpoint is equal to the NAT_TEST endpoint, then there is the independent mapping,
-    otherwise check if the address is variable and go to the MAPPING_TEST_2 test
-MAPPING_TEST_2: CA, SP, AF=0, PF=0
-    Acquire mapped endpoint from changed address and source port of the stun server.
-    if mapped endpoint is equal to the "MAPPING_TEST_1" endpoint, then there is the address dependent mapping,
-    otherwise there is address and port dependent mapping.
-HAIRPIN_TEST: MA, MP, AF=0, PF=0
-    Send request to the mapped endpoint.
-    If response will be received, then there is a hairpin.
-FILERING_TEST_1: SA, SP, AF=1, PF=1
-    Tell the stun server to reply from changed address and changed port.
-    If response will be received, then there is the endpoint independent filtering,
-    otherwise go to the FILERING_TEST_2 test
-FILERING_TEST_2: SA, SP, AF=0, PF=1
-    Tell the stun server to reply from source address and changed port.
-    if response will be received, then there is the address dependent filtering,
-    otherwise there is address and port dependent filtering
-*/
+/* 
+ * Procedure of polling the STUN server to test network traverse
+ *
+ * SA - source ip address of the stun server
+ * CA - canged ip address of the stun server
+ * SP - source port of the stun server
+ * CP - canged port of the stun server
+ * MA - mapped address
+ * MP - mapped port
+ * AF - state of the address change flag
+ * PF - state of the port change flag
+ *
+ * ***** NAT *****
+ *
+ * NAT_TEST: SA, SP, AF=0, PF=0
+ *      Acquire mapped endpoint from source address and source port of the stun server.
+ *      If mapped endpoint is equal to the local endpoint, then there is no NAT,
+ *      otherwise check if the mapping preserves port and go to the MAPPING_TEST_1
+ *
+ * ***** MAPPING *****
+ *
+ * MAPPING_TEST_1: CA, CP, AF=0, PF=0
+ *      Acquire mapped endpoint from changed address and changed port of the stun server.
+ *      If mapped endpoint is equal to the NAT_TEST endpoint, then there is the independent mapping,
+ *      otherwise check if the port is variable and go to the MAPPING_TEST_2 test
+ * MAPPING_TEST_2: CA, SP, AF=0, PF=0
+ *      Acquire mapped endpoint from changed address and source port of the stun server.
+ *      if mapped endpoint is equal to the NAT_TEST endpoint, then there is the port dependent mapping,
+ *      else if mapped endpoint is equal to the MAPPING_TEST_1 endpoint, then there is the address dependent mapping,
+ *      otherwise there is the address and port dependent mapping. Check if the address is variable.
+ *
+ * ***** FILERING *****
+ *
+ * FILERING_TEST_1: SA, SP, AF=1, PF=1
+ *      Tell the stun server to reply from changed address and changed port.
+ *      If response will be received, then there is the endpoint independent filtering,
+ *      otherwise go to the FILERING_TEST_2 test
+ * FILERING_TEST_2: SA, SP, AF=1, PF=0
+ *      Tell the stun server to reply from changed address and source port.
+ *      If response will be received, then there is the port dependent filtering,
+ *      otherwise go to the FILERING_TEST_3 test
+ * FILERING_TEST_3: SA, SP, AF=0, PF=1
+ *      Tell the stun server to reply from source address and changed port.
+ *      If response will be received, then there is the address dependent filtering,
+ *      otherwise there is the address and port dependent filtering
+ * 
+ * ***** HAIRPIN *****
+ *
+ * HAIRPIN_TEST:
+ *      Send message from one local endpoint to the mapping of another local endpoint.
+ *      If response will be received, then there is a hairpin.
+ *
+ */
 
 namespace plexus { 
 
@@ -68,14 +82,14 @@ std::ostream& operator<<(std::ostream& stream, const binding& bind)
 {
     switch (bind)
     {
-        case binding::independent:
-            return stream << "independent";
         case binding::address_dependent:
             return stream << "address dependent";
-        case binding::address_and_port_dependent:
-            return stream << "address and port dependent";
+        case binding::port_dependent:
+            return stream << "port dependent";
+        case binding::independent:
+            return stream << "independent";
         default:
-            return stream << "unknown";
+            return stream << "address and port dependent";
     }
     return stream;
 }
@@ -184,6 +198,9 @@ class message : public wormhole::mutable_buffer
             }
         }
 
+        if (type() == msg::binding_response)
+            throw std::runtime_error(utils::format("endpoint attribute %d not found", kind));
+
         return boost::asio::ip::udp::endpoint();
     }
 
@@ -200,16 +217,6 @@ public:
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             0x00, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, flags
-        })
-    {
-    }
-
-    message(uint16_t type) : mutable_buffer(std::vector<uint8_t>{
-            high_byte(type), low_byte(type), 0x00, 0x00,
-            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
-            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
-            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
-            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
         })
     {
     }
@@ -277,7 +284,7 @@ public:
         , m_bind(bind)
     {}
 
-    static message exec_binding(std::shared_ptr<plexus::network::udp> pin, boost::asio::ip::udp::endpoint stun, boost::asio::ip::udp::endpoint back, uint8_t flags = 0, int64_t deadline = 4600)
+    static message exec_binding(std::shared_ptr<plexus::network::udp> udp, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& back, uint8_t flags = 0, int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -290,11 +297,11 @@ public:
         int64_t timeout = 200;
         while (timer().total_milliseconds() < deadline)
         {
-            pin->send(stun, recv, timeout);
+            udp->send(stun, recv, timeout);
 
             try
             {
-                resp.truncate(pin->receive(back, resp, timeout));
+                resp.truncate(udp->receive(back, resp, timeout));
 
                 if (timer().total_milliseconds() >= deadline)
                     throw plexus::timeout_error();
@@ -338,6 +345,46 @@ public:
         throw plexus::timeout_error();
     }
 
+    static void exec_transfer(std::shared_ptr<plexus::network::udp> source, const boost::asio::ip::udp::endpoint& to, std::shared_ptr<plexus::network::udp> sink, const boost::asio::ip::udp::endpoint& from, int64_t deadline = 1400)
+    {
+        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return boost::posix_time::microsec_clock::universal_time() - start;
+        };
+
+        message recv(0);
+        message resp;
+
+        int64_t timeout = 200;
+        while (timer().total_milliseconds() < deadline)
+        {
+            source->send(to, recv, timeout);
+
+            try
+            {
+                resp.truncate(sink->receive(from, resp, timeout));
+
+                if (timer().total_milliseconds() >= deadline)
+                    throw plexus::timeout_error();
+                else if (recv.transaction() != resp.transaction())
+                    continue;
+
+                return;
+            }
+            catch(const boost::system::system_error& ex)
+            {
+                if (ex.code() != boost::asio::error::operation_aborted)
+                    throw;
+
+                _trc_ << ex.what();
+
+                timeout = std::min<int64_t>(1600, timeout * 2);
+            }
+        } 
+
+        throw plexus::timeout_error();
+    }
+
 public:
 
     boost::asio::ip::udp::endpoint reflect_endpoint() noexcept(false) override
@@ -352,81 +399,114 @@ public:
         _dbg_ << "testing network...";
         
         traverse state = {0};
-        auto pin = plexus::network::create_udp_transport(m_bind);
 
-        _dbg_ << "nat test...";
-        auto response = exec_binding(pin, m_stun, m_stun);
+        auto mapper = plexus::network::create_udp_transport(m_bind);
 
-        auto mapped = response.mapped_endpoint();
-        auto source = response.source_endpoint();
+        auto response = exec_binding(mapper, m_stun, m_stun);
+        auto primary = response.mapped_endpoint();
         auto changed = response.changed_endpoint();
 
-        if (mapped != m_bind)
+        if (primary != m_bind)
         {
             state.nat = 1;
-            state.random_port = mapped.port() != m_bind.port() ? 1 : 0;
-            
-            if (!changed.address().is_unspecified())
-            {
-                _dbg_ << "first mapping test...";
-                auto first = exec_binding(pin, changed, changed).mapped_endpoint();
 
-                if (first == mapped)
+            if (m_bind.port() != primary.port())
+            {
+                state.random_port = 1;
+            }
+
+            _dbg_ << "first mapping test...";
+
+            auto first = exec_binding(mapper, changed, changed).mapped_endpoint();
+            if (first == primary)
+            {
+                state.mapping = binding::independent;
+            }
+            else
+            {
+                _dbg_ << "second mapping test...";
+
+                boost::asio::ip::udp::endpoint stun(changed.address(), m_stun.port());
+                auto second = exec_binding(mapper, stun, stun).mapped_endpoint();
+                
+                if (second == primary)
                 {
-                    state.mapping = binding::independent;
-                    state.variable_address = 0;
+                    state.mapping = binding::port_dependent;
+                }
+                else if (second == first)
+                {
+                    state.mapping = binding::address_dependent;
                 }
                 else
                 {
-                    state.variable_address = mapped.address() != first.address() ? 1 : 0;
+                    state.mapping = binding::address_and_port_dependent;
+                }
 
-                    _dbg_ << "second mapping test...";
-
-                    boost::asio::ip::udp::endpoint target(changed.address(), source.address().is_unspecified() ? m_stun.port() : source.port());
-                    auto second = exec_binding(pin, target, target).mapped_endpoint();
-
-                    state.mapping = second == first ? binding::address_dependent : binding::address_and_port_dependent;
+                if (second.address() != primary.address() || second.address() != first.address())
+                {
+                    state.variable_address = 1;
                 }
             }
         }
         else
         {
-            state.random_port = 0;
-            state.variable_address = 0;
             state.mapping = binding::independent;
         }
 
+        auto filter = plexus::network::create_udp_transport();
         try
         {
-            _dbg_ << "hairpin test...";
-            exec_binding(pin, mapped, mapped, 0, 1400);
-            state.hairpin = 1;
-        }
-        catch(const plexus::timeout_error&) { }
+            _dbg_ << "first filtering test...";
 
-        if (!changed.address().is_unspecified())
+            exec_binding(filter, m_stun, boost::asio::ip::udp::endpoint(), flag::change_address | flag::change_port, 1400);
+            state.filtering = binding::independent;
+        }
+        catch(const plexus::timeout_error&)
         {
-            pin = plexus::network::create_udp_transport(boost::asio::ip::udp::endpoint(m_bind.address(), m_bind.port() + 1));
             try
             {
-                _dbg_ << "first filtering test...";
-                exec_binding(pin, m_stun, changed, flag::change_address | flag::change_port, 1400);
-                state.filtering = binding::independent;
+                _dbg_ << "second filtering test...";
+
+                exec_binding(filter, m_stun, boost::asio::ip::udp::endpoint(), flag::change_address, 1400);
+                state.filtering = binding::port_dependent;
             }
             catch(const plexus::timeout_error&)
             {
                 try
                 {
-                    _dbg_ << "second filtering test...";
+                    _dbg_ << "third filtering test...";
 
-                    boost::asio::ip::udp::endpoint reply(m_stun.address(), changed.port());
-                    exec_binding(pin, m_stun, reply, flag::change_port, 1400);
+                    exec_binding(filter, m_stun, boost::asio::ip::udp::endpoint(), flag::change_port, 1400);
                     state.filtering = binding::address_dependent;
                 }
                 catch(const plexus::timeout_error&)
                 {
                     state.filtering = binding::address_and_port_dependent;
                 }
+            }
+        }
+        
+        if (state.mapping == binding::independent || state.filtering == binding::independent)
+        {
+            _dbg_ << "hairpin test...";
+
+            auto another = exec_binding(filter, m_stun, m_stun).mapped_endpoint();
+            try
+            {
+                exec_transfer(mapper, another, filter, primary);
+                state.hairpin = 1;
+            }
+            catch(const plexus::timeout_error&)
+            {
+                try
+                {
+                    if (state.filtering != binding::independent)
+                    {
+                        exec_transfer(filter, primary, mapper, another);
+                        state.hairpin = 1;
+                    }
+                }
+                catch(const plexus::timeout_error&) {}
             }
         }
 

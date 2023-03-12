@@ -37,6 +37,6 @@ struct udp
     virtual size_t receive(const boost::asio::ip::udp::endpoint& remote, const wormhole::mutable_buffer& buffer, int64_t timeout_ms = 1600) noexcept(false) = 0;
 };
 
-std::shared_ptr<udp> create_udp_transport(const boost::asio::ip::udp::endpoint& local);
+std::shared_ptr<udp> create_udp_transport(const boost::asio::ip::udp::endpoint& local = boost::asio::ip::udp::endpoint());
 
 }}

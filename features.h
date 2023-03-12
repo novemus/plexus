@@ -49,10 +49,10 @@ std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endp
 
 enum binding
 {
-    unknown = 0,
-    independent = 1,
-    address_dependent = 2,
-    address_and_port_dependent = 3
+    address_and_port_dependent = 0,
+    address_dependent = 1,
+    port_dependent = 2,
+    independent = 3
 };
 
 struct traverse
