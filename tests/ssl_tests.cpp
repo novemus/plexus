@@ -22,7 +22,7 @@
 
 namespace {
 
-class ssl_echo_session
+class ssl_echo_session : public std::enable_shared_from_this<ssl_echo_session>
 {
     enum { max_length = 1024 };
 
@@ -45,7 +45,7 @@ public:
     {
         m_socket.async_handshake(
             boost::asio::ssl::stream_base::server,
-            boost::bind(&ssl_echo_session::handle_handshake, this, boost::asio::placeholders::error)
+            boost::bind(&ssl_echo_session::handle_handshake, shared_from_this(), boost::asio::placeholders::error)
             );
     }
 
@@ -57,11 +57,9 @@ protected:
         {
             m_socket.async_read_some(
                 boost::asio::buffer(m_data, max_length),
-                boost::bind(&ssl_echo_session::handle_read, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred)
+                boost::bind(&ssl_echo_session::handle_read, shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred)
                 );
         }
-        else
-            delete this;
     }
 
     void handle_read(const boost::system::error_code &error, size_t transferred)
@@ -70,11 +68,9 @@ protected:
         {
             m_socket.async_write_some(
                 boost::asio::buffer(m_data, transferred),
-                boost::bind(&ssl_echo_session::handle_write, this, boost::asio::placeholders::error)
+                boost::bind(&ssl_echo_session::handle_write, shared_from_this(), boost::asio::placeholders::error)
                 );
         }
-        else
-            delete this;
     }
 
     void handle_write(const boost::system::error_code &error)
@@ -83,11 +79,9 @@ protected:
         {
             m_socket.async_read_some(
                 boost::asio::buffer(m_data, max_length),
-                boost::bind(&ssl_echo_session::handle_read, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred)
+                boost::bind(&ssl_echo_session::handle_read, shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred)
                 );
         }
-        else
-            delete this;
     }
 };
 
@@ -144,19 +138,17 @@ protected:
 
     void start_accept()
     {
-        ssl_echo_session* session = new ssl_echo_session(m_io, m_ssl);
+        auto session = std::make_shared<ssl_echo_session>(m_io, m_ssl);
         m_acceptor.async_accept(
             session->socket(),
             boost::bind(&ssl_echo_server::handle_accept, this, session, boost::asio::placeholders::error)
             );
     }
 
-    void handle_accept(ssl_echo_session *session, const boost::system::error_code &error)
+    void handle_accept(std::shared_ptr<ssl_echo_session> session, const boost::system::error_code &error)
     {
         if (!error)
             session->start();
-        else
-            delete session;
 
         start_accept();
     }
@@ -168,7 +160,7 @@ std::shared_ptr<ssl_echo_server> create_ssl_server(unsigned short port, const st
 }
 
 const uint16_t SSL_PORT = 4433;
-const boost::asio::ip::tcp::endpoint SSL_SERVER(boost::asio::ip::tcp::v4(), SSL_PORT);
+const boost::asio::ip::tcp::endpoint SSL_SERVER(boost::asio::ip::address::from_string("127.0.0.1"), SSL_PORT);
 
 }
 
@@ -199,10 +191,10 @@ BOOST_AUTO_TEST_CASE(no_check_certs)
 BOOST_AUTO_TEST_CASE(check_certs)
 {
     auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
-    server->start();
+    BOOST_REQUIRE_NO_THROW(server->start());
 
     auto client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
-    client->connect();
+    BOOST_REQUIRE_NO_THROW(client->connect());
 
     char buffer[1024];
     std::strcpy(buffer, "hello");
@@ -215,7 +207,7 @@ BOOST_AUTO_TEST_CASE(check_certs)
     BOOST_CHECK_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), strlen(buffer) + 1);
     BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
 
-    client->shutdown();
+    BOOST_REQUIRE_NO_THROW(client->shutdown());
     server->stop();
 }
 

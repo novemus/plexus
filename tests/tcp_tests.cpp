@@ -18,7 +18,7 @@
 #include "../network.h"
 #include "../utils.h"
 
-class tcp_echo_session
+class tcp_echo_session : public std::enable_shared_from_this<tcp_echo_session>
 {
     enum { max_length = 1024 };
 
@@ -41,7 +41,7 @@ public:
     {
         m_socket.async_read_some(
             boost::asio::buffer(m_data, max_length),
-            boost::bind(&tcp_echo_session::handle_read, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred)
+            boost::bind(&tcp_echo_session::handle_read, shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred)
             );
     }
 
@@ -53,11 +53,9 @@ protected:
         {
             m_socket.async_write_some(
                 boost::asio::buffer(m_data, transferred),
-                boost::bind(&tcp_echo_session::handle_write, this, boost::asio::placeholders::error)
+                boost::bind(&tcp_echo_session::handle_write, shared_from_this(), boost::asio::placeholders::error)
                 );
         }
-        else
-            delete this;
     }
 
     void handle_write(const boost::system::error_code &error)
@@ -66,11 +64,9 @@ protected:
         {
             m_socket.async_read_some(
                 boost::asio::buffer(m_data, max_length),
-                boost::bind(&tcp_echo_session::handle_read, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred)
+                boost::bind(&tcp_echo_session::handle_read, shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred)
                 );
         }
-        else
-            delete this;
     }
 };
 
@@ -85,7 +81,7 @@ class tcp_echo_server
 public:
 
     tcp_echo_server(unsigned short port)
-        : m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
+        : m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), port))
     {
         m_acceptor.non_blocking(true);
         m_acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
@@ -121,19 +117,17 @@ protected:
 
     void start_accept()
     {
-        tcp_echo_session* session = new tcp_echo_session(m_io);
+        auto session = std::make_shared<tcp_echo_session>(m_io);
         m_acceptor.async_accept(
             session->socket(),
             boost::bind(&tcp_echo_server::handle_accept, this, session, boost::asio::placeholders::error)
             );
     }
 
-    void handle_accept(tcp_echo_session *session, const boost::system::error_code &error)
+    void handle_accept(std::shared_ptr<tcp_echo_session> session, const boost::system::error_code &error)
     {
         if (!error)
             session->start();
-        else
-            delete session;
 
         start_accept();
     }
@@ -150,8 +144,8 @@ const char HELLO[] = "Hello, Plexus!";
 const uint16_t TCP_SERVER_PORT = 8765;
 const uint16_t TCP_CLIENT_PORT = 5678;
 
-const boost::asio::ip::tcp::endpoint TCP_SERVER(boost::asio::ip::tcp::v4(), TCP_SERVER_PORT);
-const boost::asio::ip::tcp::endpoint TCP_CLIENT(boost::asio::ip::tcp::v4(), TCP_CLIENT_PORT);
+const boost::asio::ip::tcp::endpoint TCP_SERVER(boost::asio::ip::address::from_string("127.0.0.1"), TCP_SERVER_PORT);
+const boost::asio::ip::tcp::endpoint TCP_CLIENT(boost::asio::ip::address::from_string("127.0.0.1"), TCP_CLIENT_PORT);
 const boost::asio::ip::tcp::endpoint TCP_REMOTE_SERVER(boost::asio::ip::address::from_string("8.8.8.8"), 80);
 
 }
