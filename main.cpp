@@ -82,31 +82,18 @@ int main(int argc, char** argv)
         ("config", boost::program_options::value<std::string>(), "path to INI-like configuration file");
 
     boost::program_options::variables_map vm;
-    boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
-
-    if(vm.count("help"))
-    {
-        std::cout << desc;
-        return 0;
-    }
-
-    if(vm.count("config"))
-    {
-        try
-        {
-            auto config = vm["config"].as<std::string>();
-            boost::program_options::store(boost::program_options::parse_config_file<char>(config.c_str(), desc), vm);
-        }
-        catch (const std::exception& e)
-        {
-            std::cerr << e.what() << std::endl;
-            std::cout << desc;
-            return 1;
-        }
-    }
-
     try
     {
+        boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
+        if(vm.count("help"))
+        {
+            std::cout << desc;
+            return 0;
+        }
+
+        if(vm.count("config"))
+            boost::program_options::store(boost::program_options::parse_config_file<char>(vm["config"].as<std::string>().c_str(), desc), vm);
+
         boost::program_options::notify(vm);
     }
     catch (const std::exception& e)

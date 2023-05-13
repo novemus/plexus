@@ -1,4 +1,5 @@
 .vscode/**
+.cache/**
 obj/**
 plexus
 plexus.exe

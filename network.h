@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <buffer.h>
+#include <tubus/buffer.h>
 #include <string>
 #include <vector>
 #include <boost/asio/ip/tcp.hpp>
@@ -33,8 +33,8 @@ std::shared_ptr<tcp> create_tcp_client(const boost::asio::ip::tcp::endpoint& rem
 struct udp
 {
     virtual ~udp() {}
-    virtual size_t send(const boost::asio::ip::udp::endpoint& remote, const wormhole::const_buffer& buffer, int64_t timeout_ms = 1600, uint8_t hops = 64) noexcept(false) = 0;
-    virtual size_t receive(const boost::asio::ip::udp::endpoint& remote, const wormhole::mutable_buffer& buffer, int64_t timeout_ms = 1600) noexcept(false) = 0;
+    virtual size_t send(const boost::asio::ip::udp::endpoint& remote, const tubus::const_buffer& buffer, int64_t timeout_ms = 1600, uint8_t hops = 64) noexcept(false) = 0;
+    virtual size_t receive(const boost::asio::ip::udp::endpoint& remote, const tubus::mutable_buffer& buffer, int64_t timeout_ms = 1600) noexcept(false) = 0;
 };
 
 std::shared_ptr<udp> create_udp_transport(const boost::asio::ip::udp::endpoint& local = boost::asio::ip::udp::endpoint());

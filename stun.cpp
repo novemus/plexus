@@ -140,7 +140,7 @@ inline uint8_t low_byte(uint16_t value)
     return uint8_t(value);
 }
 
-class message : public wormhole::mutable_buffer
+class message : public tubus::mutable_buffer
 {
     const uint8_t* fetch_attribute_place(uint16_t type) const
     {

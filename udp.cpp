@@ -55,7 +55,7 @@ public:
         }
     }
 
-    size_t receive(const boost::asio::ip::udp::endpoint& remote, const wormhole::mutable_buffer& buffer, int64_t timeout) noexcept(false) override
+    size_t receive(const boost::asio::ip::udp::endpoint& remote, const tubus::mutable_buffer& buffer, int64_t timeout) noexcept(false) override
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -77,7 +77,7 @@ public:
         throw boost::system::error_code(boost::asio::error::operation_aborted);
     }
 
-    size_t send(const boost::asio::ip::udp::endpoint& remote, const wormhole::const_buffer& buffer, int64_t timeout, uint8_t hops) noexcept(false) override
+    size_t send(const boost::asio::ip::udp::endpoint& remote, const tubus::const_buffer& buffer, int64_t timeout, uint8_t hops) noexcept(false) override
     {
         m_socket.set_option(boost::asio::ip::unicast::hops(hops));
         size_t size = m_socket.send_to(buffer, remote, boost::posix_time::milliseconds(timeout));

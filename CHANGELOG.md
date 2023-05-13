@@ -21,3 +21,7 @@
 - The `wormhole` tool is integrated to provide the possibility of forwarding a remote TCP service to a local interface.
 - The ability to specify an custom arguments for executable command, including using *plexus* wildcards.
 - Support for ini-like configuration files.
+
+## 2.1.2 (May 13, 2023)
+
+- Updating `wormhole` tool to 1.0.2 version.

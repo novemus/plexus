@@ -22,7 +22,7 @@ class puncher : public plexus::nat_puncher
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
 
-    class handshake : public wormhole::mutable_buffer
+    class handshake : public tubus::mutable_buffer
     {
         uint64_t m_mask;
 

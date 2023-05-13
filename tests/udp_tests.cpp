@@ -23,8 +23,8 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
     auto lend = plexus::network::create_udp_transport(lep);
     auto rend = plexus::network::create_udp_transport(rep);
 
-    wormhole::mutable_buffer out("plexus");
-    wormhole::mutable_buffer in(512);
+    tubus::mutable_buffer out("plexus");
+    tubus::mutable_buffer in(512);
 
     BOOST_REQUIRE_NO_THROW(lend->send(rep, out));
 
@@ -49,8 +49,8 @@ BOOST_AUTO_TEST_CASE(async_udp_exchange)
 
     auto work = [](std::shared_ptr<plexus::network::udp> udp, const boost::asio::ip::udp::endpoint& peer)
     {
-        wormhole::mutable_buffer out("plexus");
-        wormhole::mutable_buffer in(512);
+        tubus::mutable_buffer out("plexus");
+        tubus::mutable_buffer in(512);
 
         BOOST_REQUIRE_NO_THROW(udp->send(peer, out));
         BOOST_REQUIRE_NO_THROW(udp->send(peer, out));

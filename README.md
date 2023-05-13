@@ -1,6 +1,6 @@
 # README
 
-The `plexus` tool is designed to make the possibility of establishing a direct network connection between applications running on machines located behind *NAT*s. To do this `plexus` implements the well-known *UDP hole punching* technique using the *STUN*. An email service is used to exchange public addresses between app instances on the local and remote machines. For success, it is necessary that *NAT*s of the both sides implement policy of independent mapping internal addresses to public ones. That is, the public address and port assigned by the *NAT* should not be changed when the destination address/port of the outgoing packet is changed, while the local address/port of the outgoing packet remains unchanged. In addition, you will need an accessible *STUN* server and email accounts for each side. It is possible to use one email account for both sides. For that, you need to specify a unique subjects (`--host-id` and `--peer-id` arguments) for incoming and outgoing plexus messages.
+The [plexus](https://github.com/novemus/plexus) tool is designed to make the possibility of establishing a direct network connection between applications running on machines located behind *NAT*s. To do this `plexus` implements the well-known *UDP hole punching* technique using the *STUN*. An email service is used to exchange public addresses between app instances on the local and remote machines. For success, it is necessary that *NAT*s of the both sides implement policy of independent mapping internal addresses to public ones. That is, the public address and port assigned by the *NAT* should not be changed when the destination address/port of the outgoing packet is changed, while the local address/port of the outgoing packet remains unchanged. In addition, you will need an accessible *STUN* server and email accounts for each side. It is possible to use one email account for both sides. For that, you need to specify a unique subjects (`--host-id` and `--peer-id` arguments) for incoming and outgoing plexus messages.
 
 ## Build
 
@@ -57,7 +57,7 @@ To learn about additional parameters run tool with `--help` argument.
 
 ## Extension
 
-If you need to link *TCP* applications and for some reason cannot use *VPN*, then [consider](https://github.com/novemus/wormhole) the `wormhole` tunneling extension as execution payload.
+If you need to link *TCP* applications and for some reason cannot use *VPN*, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling extension as execution payload.
 
 ## Bugs and improvements
 
