@@ -483,8 +483,8 @@ public:
         , m_imap(conf)
     {
     }
-    
-    reference receive_request() noexcept(false)
+
+    reference receive_request() noexcept(false) override
     {
         _inf_ << "waiting plexus request...";
 
@@ -494,7 +494,7 @@ public:
         return peer;
     }
 
-    reference receive_response() noexcept(false)
+    reference receive_response() noexcept(false) override
     {
         _inf_ << "waiting plexus response...";
 

@@ -8,7 +8,7 @@ The project depends on `boost` and `openssl` libraries. Clone repository and run
 
 ```console
 cd ~
-git clone --recurse-submodules git@github.com:novemus/plexus.git
+git clone --recurse-submodules https://github.com/novemus/plexus.git
 cd ~/plexus
 cmake -B ./build [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
 cmake --build ./build --target plexus [wormhole]
