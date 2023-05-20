@@ -139,33 +139,33 @@ std::string from_base64_url(const char* data, size_t length)
     return from_base64_impl<true,true>(data,length);
 }
 
-std::string format(const std::string& format, ...)
+std::string format(const char* fmt, ...)
 {
     va_list args1;
-    va_start(args1, format);
+    va_start(args1, fmt);
     va_list args2;
     va_copy(args2, args1);
-    std::vector<char> buf(1 + std::vsnprintf(nullptr, 0, format.c_str(), args1));
+    std::vector<char> buf(1 + std::vsnprintf(nullptr, 0, fmt, args1));
     va_end(args1);
-    std::vsnprintf(buf.data(), buf.size(), format.c_str(), args2);
+    std::vsnprintf(buf.data(), buf.size(), fmt, args2);
     va_end(args2);
     return buf.data();
 }
 
-std::string format(const std::string& format, const boost::posix_time::ptime& time)
+std::string format(const char* fmt, const boost::posix_time::ptime& time)
 {
     std::stringstream out;
-    out.imbue(std::locale(std::cout.getloc(), new boost::posix_time::time_facet(format.c_str())));
+    out.imbue(std::locale(std::cout.getloc(), new boost::posix_time::time_facet(fmt)));
     out << time;
     return out.str();
 }
 
-std::string format(const std::string& format, const std::chrono::system_clock::time_point& time)
+std::string format(const char* fmt, const std::chrono::system_clock::time_point& time)
 {
     std::time_t tt = std::chrono::system_clock::to_time_t(time);
     std::tm tm = *std::gmtime(&tt);
     std::stringstream ss;
-    ss << std::put_time(&tm, format.c_str());
+    ss << std::put_time(&tm, fmt);
     return ss.str();
 }
 

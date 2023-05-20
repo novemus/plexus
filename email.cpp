@@ -327,7 +327,7 @@ class imap
         return false;
     };
 
-    const response_parser_t idle_parser = [this](const std::string& response) -> bool {
+    const response_parser_t idle_parser = [](const std::string& response) -> bool {
         std::smatch match;
         if (std::regex_search(response, match, std::regex("(.*\\r\\n)?x\\s+(NO|BAD)\\s+.*\\r\\n$")))
         {

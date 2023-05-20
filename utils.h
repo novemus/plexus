@@ -31,9 +31,9 @@ std::string to_base64_no_nl(const void* data, size_t length);
 std::string to_base64_url(const void* data, size_t length);
 std::string from_base64(const char* data, size_t length);
 std::string from_base64_url(const char* data, size_t length);
-std::string format(const std::string& format, ...);
-std::string format(const std::string& format, const boost::posix_time::ptime& time);
-std::string format(const std::string& format, const std::chrono::system_clock::time_point& time);
+std::string format(const char* fmt, ...);
+std::string format(const char* fmt, const boost::posix_time::ptime& time);
+std::string format(const char* fmt, const std::chrono::system_clock::time_point& time);
 std::string smime_sign(const std::string& msg, const std::string& cert, const std::string& key);
 std::string smime_verify(const std::string& msg, const std::string& cert, const std::string& ca);
 std::string smime_encrypt(const std::string& msg, const std::string& cert);
@@ -82,19 +82,23 @@ endpoint parse_endpoint(const std::string& url, const std::string& service)
 
 }
 
-template<class byte>
-std::ostream& operator<<(std::ostream& stream, const std::pair<byte*, size_t>& buffer)
-{
-    if (stream.rdbuf())
-        return stream << plexus::utils::to_hexadecimal(buffer.first, buffer.second);
-    return stream;
-}
-
 template<class proto>
 std::ostream& operator<<(std::ostream& stream, const boost::asio::ip::basic_endpoint<proto>& endpoint)
 {
     if (stream.rdbuf())
         return stream << endpoint.address().to_string() << ":" << endpoint.port();
+    return stream;
+}
+
+}
+
+namespace std {
+
+template<class byte>
+std::ostream& operator<<(std::ostream& stream, const std::pair<byte*, size_t>& buffer)
+{
+    if (stream.rdbuf())
+        return stream << plexus::utils::to_hexadecimal(buffer.first, buffer.second);
     return stream;
 }
 
