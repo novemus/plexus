@@ -81,10 +81,8 @@ class tcp_echo_server
 public:
 
     tcp_echo_server(unsigned short port)
-        : m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), port))
+        : m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
     {
-        m_acceptor.non_blocking(true);
-        m_acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
     }
 
     ~tcp_echo_server()
@@ -142,10 +140,9 @@ std::shared_ptr<tcp_echo_server> create_tcp_server(unsigned short port)
 const char HELLO[] = "Hello, Plexus!";
 
 const uint16_t TCP_SERVER_PORT = 8765;
-const uint16_t TCP_CLIENT_PORT = 5678;
 
 const boost::asio::ip::tcp::endpoint TCP_SERVER(boost::asio::ip::address::from_string("127.0.0.1"), TCP_SERVER_PORT);
-const boost::asio::ip::tcp::endpoint TCP_CLIENT(boost::asio::ip::address::from_string("127.0.0.1"), TCP_CLIENT_PORT);
+const boost::asio::ip::tcp::endpoint TCP_CLIENT(boost::asio::ip::tcp::v4(), 0);
 const boost::asio::ip::tcp::endpoint TCP_REMOTE_SERVER(boost::asio::ip::address::from_string("8.8.8.8"), 80);
 
 }
