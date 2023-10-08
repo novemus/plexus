@@ -25,3 +25,7 @@
 ## 2.1.2 (May 13, 2023)
 
 - Updating `wormhole` tool to 1.0.2 version.
+
+## 2.2.0 (October 8, 2023)
+
+- Updating `wormhole` tool to 1.1.0 version.
