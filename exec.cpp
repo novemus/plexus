@@ -27,7 +27,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
-	std::string cmd = "\"\"" + prog + "\" " + args + "\"";
+	std::string cmd = "\"" + prog + "\" " + args;
 
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
@@ -36,25 +36,40 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 	si.cb = sizeof(si);
 	std::memset(&pi, 0, sizeof(pi));
 
-	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, false, 0, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
-	{
+    if (!log.empty())
+    {
+        SECURITY_ATTRIBUTES sa;
+        sa.nLength = sizeof(sa);
+        sa.lpSecurityDescriptor = NULL;
+        sa.bInheritHandle = TRUE;  
 
+        HANDLE h = CreateFile(log.c_str(),
+            FILE_APPEND_DATA,
+            FILE_SHARE_WRITE | FILE_SHARE_READ,
+            &sa,
+            OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL);
+
+        if (h == INVALID_HANDLE_VALUE)
+            throw std::runtime_error(utils::format("CreateFile: error=%d", GetLastError()));
+
+        si.dwFlags |= STARTF_USESTDHANDLES;
+        si.hStdError = h;
+        si.hStdOutput = h;
+    }
+
+	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, true, CREATE_NO_WINDOW, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
+	{
 		WaitForSingleObject(pi.hProcess, INFINITE);
 
-		DWORD code;
-		if (!GetExitCodeProcess(pi.hProcess, &code))
+		DWORD code = 0;
+		if (!GetExitCodeProcess(pi.hProcess, &code) || code != 0)
 		{
 			CloseHandle(pi.hProcess);
 			CloseHandle(pi.hThread);
 
-			throw std::runtime_error(utils::format("GetExitCodeProcess: error=%d", GetLastError()));
-		}
-		else if (code != 0)
-		{
-			CloseHandle(pi.hProcess);
-			CloseHandle(pi.hThread);
-
-			throw std::runtime_error(utils::format("posix_spawn_file_actions_init: error=%d", code));
+			throw std::runtime_error(utils::format("GetExitCodeProcess: error=%d, code=%d", GetLastError(), code));
 		}
 
 		CloseHandle(pi.hProcess);
