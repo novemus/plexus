@@ -110,6 +110,7 @@ public:
 
         m_socket.non_blocking(true);
         m_socket.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+        m_socket.set_option(boost::asio::socket_base::keep_alive(true));
         m_socket.set_option(boost::asio::socket_base::send_buffer_size(SOCKET_BUFFER_SIZE));
         m_socket.set_option(boost::asio::socket_base::receive_buffer_size(SOCKET_BUFFER_SIZE));
         m_socket.set_option(boost::asio::ip::unicast::hops(hops));

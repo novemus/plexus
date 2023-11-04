@@ -365,56 +365,65 @@ public:
 
     std::string pull(bool idle = false) noexcept(false)
     {
-        std::unique_ptr<channel> session = std::make_unique<channel>(
-            m_config.imap,
-            m_config.cert,
-            m_config.key,
-            m_config.ca
-        );
-
-        session->connect(connect_checker);
-        session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
-        session->request("x SELECT INBOX\r\n", select_parser);
-
-        auto time = std::chrono::system_clock::now();
-        do
+        std::string data;
+        try
         {
-            session->request(utils::format("x UID SEARCH (SINCE %s) (From %s) (To %s) (Subject \"%s\")\r\n",
-                utils::format("%d-%b-%Y", time).c_str(),
-                get_address(m_config.from).c_str(),
-                get_address(m_config.to).c_str(),
-                m_config.peer_id.c_str()
-            ), search_parser);
+            std::unique_ptr<channel> session = std::make_unique<channel>(
+                m_config.imap,
+                m_config.cert,
+                m_config.key,
+                m_config.ca
+            );
 
-            if (m_unseen.empty() && idle)
+            session->connect(connect_checker);
+            session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
+            session->request("x SELECT INBOX\r\n", select_parser);
+
+            auto time = std::chrono::system_clock::now();
+            do
             {
-                try
+                session->request(utils::format("x UID SEARCH (SINCE %s) (From %s) (To %s) (Subject \"%s\")\r\n",
+                    utils::format("%d-%b-%Y", time).c_str(),
+                    get_address(m_config.from).c_str(),
+                    get_address(m_config.to).c_str(),
+                    m_config.peer_id.c_str()
+                ), search_parser);
+
+                if (m_unseen.empty() && idle)
                 {
-                    session->request("x IDLE\r\n", idle_parser, true);
-                    session->request("DONE\r\n", success_checker);
-                }
-                catch (const bad_command&)
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(MAX_POLLING_TIMEOUT));
+                    try
+                    {
+                        session->request("x IDLE\r\n", idle_parser, true);
+                        session->request("DONE\r\n", success_checker);
+                    }
+                    catch (const bad_command&)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(MAX_POLLING_TIMEOUT));
+                    }
                 }
             }
-        }
-        while (m_unseen.empty() && idle);
+            while (m_unseen.empty() && idle);
 
-        std::string data;
-        while (data.empty() && !m_unseen.empty())
+            while (data.empty() && !m_unseen.empty())
+            {
+                auto uid = m_unseen.front();
+                session->request(
+                    utils::format("x UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
+                );
+                
+                m_unseen.pop_front();
+                m_last_seen = uid;
+
+                data = pull_data();
+            }
+        }
+        catch (const boost::system::system_error& ex)
         {
-            auto uid = m_unseen.front();
-            session->request(
-                utils::format("x UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
-            );
-            
-            m_unseen.pop_front();
-            m_last_seen = uid;
-
-            data = pull_data();
+            if (ex.code() == boost::asio::error::connection_reset)
+                std::this_thread::sleep_for(std::chrono::milliseconds(MIN_POLLING_TIMEOUT));
+            else
+                throw;
         }
-
         return data;
     }
 
@@ -470,6 +479,7 @@ class email_mediator : public mediator
 
             if (!idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
+
         }
         while (clock().total_milliseconds() < deadline);
 
