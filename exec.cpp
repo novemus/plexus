@@ -68,12 +68,14 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 		{
 			CloseHandle(pi.hProcess);
 			CloseHandle(pi.hThread);
+            CloseHandle(si.hStdOutput);
 
 			throw std::runtime_error(utils::format("GetExitCodeProcess: error=%d, code=%d", GetLastError(), code));
 		}
 
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
+        CloseHandle(si.hStdOutput);
 	}
 	else
 	{

@@ -9,6 +9,7 @@
  */
 
 #include <boost/test/unit_test.hpp>
+#include <boost/filesystem.hpp>
 #include <fstream>
 #include <string>
 #include "../features.h"
@@ -16,10 +17,12 @@
 BOOST_AUTO_TEST_CASE(exec)
 {
 #ifdef _WIN32
-    BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo line> out.txt"));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo line", boost::filesystem::current_path().string(), "out.txt"));
 #else
-    BOOST_REQUIRE_NO_THROW(plexus::exec("echo", "line> out.txt"));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("echo", "line", boost::filesystem::current_path().string(), "out.txt"));
 #endif
+
+    BOOST_REQUIRE(boost::filesystem::exists(boost::filesystem::path("out.txt")));
 
     std::ifstream file("out.txt");
     std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -27,6 +30,5 @@ BOOST_AUTO_TEST_CASE(exec)
     BOOST_REQUIRE_EQUAL(text, "line\n");
 
     file.close();
-    std::remove("out.txt");
+    BOOST_REQUIRE(boost::filesystem::remove("out.txt"));
 }
-
