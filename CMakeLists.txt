@@ -5,9 +5,11 @@ cmake_minimum_required(VERSION 3.10)
 project(plexus)
 project(${PROJECT_NAME} VERSION 2.1)
 
-set(WORMHOLE_DIR wormhole)
+set(Boost_USE_STATIC_LIBS ON)
 
-add_subdirectory(${WORMHOLE_DIR})
+add_subdirectory(wormhole)
+
+include(GNUInstallDirs)
 
 set(SOURCES utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp stun.cpp puncher.cpp main.cpp wormhole/logger.cpp)
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
@@ -33,7 +35,7 @@ message("* Boost Librariy Dirs: ${Boost_LIBRARY_DIRS}")
 message("* Boost Libraries: ${Boost_LIBRARIES}")
 
 include_directories(${Boost_INCLUDE_DIRS})
-include_directories(${WORMHOLE_DIR})
+include_directories(wormhole)
 link_directories(${Boost_LIBRARY_DIRS})
 
 find_package(OpenSSL REQUIRED)
@@ -43,6 +45,9 @@ message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
 add_executable(${PROJECT_NAME} ${SOURCES})
+
+set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
+
 target_link_libraries(${PROJECT_NAME} OpenSSL::Crypto OpenSSL::SSL)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -63,7 +68,7 @@ if(APPLE AND Boost_USE_STATIC_LIBS)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}")
 endif()
 
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 if(BUILD_TESTING)
     set(TESTS_NAME plexus_ut)
@@ -76,8 +81,9 @@ if(BUILD_TESTING)
                     ./tests/exec_tests.cpp)
 
     add_executable(${TESTS_NAME} ${TESTS_SOURCES})
-
+    set_target_properties(${TESTS_NAME} PROPERTIES DEBUG_POSTFIX "d")
     target_link_libraries(${TESTS_NAME} OpenSSL::Crypto OpenSSL::SSL)
+
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_link_libraries(${TESTS_NAME} Threads::Threads)
         target_link_libraries(${TESTS_NAME} Boost::system Boost::thread Boost::regex Boost::filesystem Boost::unit_test_framework)
