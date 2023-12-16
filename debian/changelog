@@ -1,0 +1,5 @@
+antinat (1-1+deb12u3) unstable; urgency=low
+
+  * Initial debian package.
+
+ -- Novemus Band <nineletters@mail.ru>  Sun, 10 Dec 2023 16:05:09 +0300

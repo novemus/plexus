@@ -1,0 +1,20 @@
+antinat for Debian
+=================
+
+This package contains plexus and wormhole network utilities.
+
+The plexus tool provides ability to establish a direct network
+connection between your UDP applications running on machines
+located behind NATs. To do this plexus implements the well-known
+UDP hole punching technique, using the STUN server and email service
+to exchange public IP addresses between the app instances running
+on local and remote hosts.
+
+The wormhole tool provides ability to make UDP tunnel to remote
+machine and forward a remote TCP service to a local interface
+with optional ability to obfuscate the channel protocol by
+a pre-shared key.
+
+https://github.com/novemus
+
+ -- Novemus Band <nineletters@mail.ru>  Sat, 09 Dec 2023 12:15:30 +0300
