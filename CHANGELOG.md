@@ -1,5 +1,9 @@
 # Change Log
 
+## 2.2.1 (December 18, 2023)
+
+- Added the debian build package files and improved CMake build scripts.
+
 ## 2.2.0 (October 8, 2023)
 
 - Updating `wormhole` tool to 1.1.0 version.
