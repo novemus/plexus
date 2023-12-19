@@ -34,6 +34,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
 	std::memset(&si, 0, sizeof(si));
 	si.cb = sizeof(si);
+    si.dwFlags |= STARTF_USESTDHANDLES;
 	std::memset(&pi, 0, sizeof(pi));
 
     if (!log.empty())
@@ -54,12 +55,18 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         if (h == INVALID_HANDLE_VALUE)
             throw std::runtime_error(utils::format("CreateFile: error=%d", GetLastError()));
 
-        si.dwFlags |= STARTF_USESTDHANDLES;
-        si.hStdError = h;
+        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
         si.hStdOutput = h;
+        si.hStdError = h;
+    }
+    else
+    {
+        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
     }
 
-	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, true, CREATE_NO_WINDOW, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
+	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, true, 0, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
 	{
 		WaitForSingleObject(pi.hProcess, INFINITE);
 

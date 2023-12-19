@@ -4,6 +4,8 @@ The [plexus](https://github.com/novemus/plexus) tool is designed to make the pos
 
 ## Build
 
+You can download [prebuild packages](https://github.com/novemus/plexus/releases) for Debian and Windows platforms.
+
 The project depends on `boost` and `openssl` libraries. Clone repository and run make command.
 
 ```console
