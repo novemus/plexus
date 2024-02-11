@@ -11,6 +11,7 @@
 #include "features.h"
 #include "network.h"
 #include "utils.h"
+#include <limits>
 #include <logger.h>
 #include <string>
 #include <list>
@@ -91,7 +92,7 @@ public:
 
         std::string response;
         do {
-			size_t read = m_ssl->read(m_buffer, BUFFER_SIZE, prolonged);
+			size_t read = m_ssl->read(m_buffer, BUFFER_SIZE, prolonged ? std::numeric_limits<int64_t>::max() : network::default_tcp_timeout_ms);
             response.append((char*)m_buffer, read);
         } while (!parse(response));
 

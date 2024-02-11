@@ -155,17 +155,21 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
     if (status)
         throw std::runtime_error(utils::format("posix_spawn: error=%d", status));
 
-    if (waitpid(pid, &status, 0) == -1)
+    int retcode = 0;
+    if (waitpid(pid, &retcode, 0) == -1)
         throw std::runtime_error(utils::format("waitpid: error=%d", errno));
 
-    if (WIFSIGNALED(status))
-        throw std::runtime_error(utils::format("signal=%d", WTERMSIG(status)));
-    else if (WIFSTOPPED(status))
-        throw std::runtime_error(utils::format("signal=%d", WSTOPSIG(status)));
+    if (WIFSIGNALED(retcode))
+        throw std::runtime_error(utils::format("signal=%d", WTERMSIG(retcode)));
+    else if (WIFSTOPPED(retcode))
+        throw std::runtime_error(utils::format("signal=%d", WSTOPSIG(retcode)));
 
     status = posix_spawn_file_actions_destroy(&action);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn_file_actions_destroy: error=%d", status));
+
+    if (retcode)
+        throw std::runtime_error(utils::format("exit: error=%d", retcode));
 }
 
 }

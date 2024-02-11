@@ -9,14 +9,12 @@
  */
 
 #include <future>
-#include <iostream>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/system/system_error.hpp>
 #include <boost/test/unit_test.hpp>
 #include "../network.h"
-#include "../utils.h"
 
 class tcp_echo_session : public std::enable_shared_from_this<tcp_echo_session>
 {
@@ -151,8 +149,8 @@ BOOST_AUTO_TEST_CASE(tcp_echo_exchange)
 {
     char buffer[1024];
 
-    auto shorty = plexus::network::create_tcp_client(TCP_REMOTE_SERVER, TCP_CLIENT, 2000, 3);
-    BOOST_REQUIRE_THROW(shorty->connect(), boost::system::system_error);
+    auto shorty = plexus::network::create_tcp_client(TCP_REMOTE_SERVER, TCP_CLIENT, 3);
+    BOOST_REQUIRE_THROW(shorty->connect(2000), boost::system::system_error);
     BOOST_REQUIRE_NO_THROW(shorty->shutdown());
 
     auto server = create_tcp_server(TCP_SERVER_PORT);

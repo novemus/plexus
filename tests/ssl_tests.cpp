@@ -10,7 +10,6 @@
 
 #include <future>
 #include <cstdlib>
-#include <iostream>
 #include <stdio.h>
 #include <string.h>
 #include <boost/bind.hpp>

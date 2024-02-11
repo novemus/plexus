@@ -10,6 +10,7 @@
 
 #include "socket.h"
 #include "utils.h"
+#include "network.h"
 #include <logger.h>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>

@@ -9,6 +9,7 @@
  */
 
 #include "socket.h"
+#include "network.h"
 #include "utils.h"
 #include <logger.h>
 #include <boost/bind.hpp>
@@ -16,25 +17,28 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/date_time/posix_time/posix_time_config.hpp>
+#include <boost/date_time/posix_time/posix_time_duration.hpp>
 
 namespace plexus { namespace network {
 
 template<class socket>
 struct asio_tcp_client_base : public tcp
 {
-    asio_tcp_client_base(const boost::asio::ip::tcp::endpoint& remote, int64_t timeout)
-        : m_socket(m_io)
+    template <typename ...socket_args>
+    asio_tcp_client_base(const boost::asio::ip::tcp::endpoint& remote, socket_args& ...options)
+        : m_socket(m_io, options...)
         , m_remote(remote)
-        , m_timeout(timeout)
     {
-    }
+        static const size_t SOCKET_BUFFER_SIZE = 1048576;
 
-    template <typename socket_arg>
-    asio_tcp_client_base(socket_arg& option, const boost::asio::ip::tcp::endpoint& remote, int64_t timeout)
-        : m_socket(m_io, option)
-        , m_remote(remote)
-        , m_timeout(timeout)
-    {
+        m_socket.lowest_layer().open(m_remote.protocol());
+
+        m_socket.lowest_layer().non_blocking(true);
+        m_socket.lowest_layer().set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+        m_socket.lowest_layer().set_option(boost::asio::socket_base::keep_alive(true));
+        m_socket.lowest_layer().set_option(boost::asio::socket_base::send_buffer_size(SOCKET_BUFFER_SIZE));
+        m_socket.lowest_layer().set_option(boost::asio::socket_base::receive_buffer_size(SOCKET_BUFFER_SIZE));
     }
 
     ~asio_tcp_client_base()
@@ -52,17 +56,19 @@ struct asio_tcp_client_base : public tcp
         }
     }
 
-    void connect() noexcept(false) override
+    void connect(int64_t timeout) noexcept(false) override
     {
-        m_socket.connect(m_remote, m_timeout);
+        m_socket.connect(m_remote, boost::posix_time::milliseconds(timeout));
     }
 
-    size_t read(uint8_t* buffer, size_t len, bool deferred) noexcept(false) override
+    void wait(boost::asio::socket_base::wait_type what, int64_t timeout = 10000) noexcept(false) override
     {
-        if (deferred)
-            m_socket.lowest_layer().wait(boost::asio::ip::tcp::socket::wait_read);
+        m_socket.wait(what, boost::posix_time::milliseconds(timeout));
+    }
 
-        size_t size = m_socket.read_some(boost::asio::buffer(buffer, len), m_timeout);
+    size_t read(uint8_t* buffer, size_t len, int64_t timeout) noexcept(false) override
+    {
+        size_t size = m_socket.read_some(boost::asio::buffer(buffer, len), boost::posix_time::milliseconds(timeout));
 
         _trc_ << m_remote << " >>>>> " << std::make_pair(buffer, size);
 
@@ -72,12 +78,9 @@ struct asio_tcp_client_base : public tcp
         return size;
     }
 
-    size_t write(const uint8_t* buffer, size_t len, bool deferred) noexcept(false) override
+    size_t write(const uint8_t* buffer, size_t len, int64_t timeout) noexcept(false) override
     {
-        if (deferred)
-            m_socket.lowest_layer().wait(boost::asio::ip::tcp::socket::wait_write);
-
-        size_t size = m_socket.write_some(boost::asio::buffer(buffer, len), m_timeout);
+        size_t size = m_socket.write_some(boost::asio::buffer(buffer, len), boost::posix_time::milliseconds(timeout));
 
         _trc_ << m_remote << " <<<<< " << std::make_pair(buffer, size);
 
@@ -92,7 +95,6 @@ protected:
     boost::asio::io_service         m_io;
     asio_socket<socket>             m_socket;
     boost::asio::ip::tcp::endpoint  m_remote;
-    boost::posix_time::milliseconds m_timeout;
 };
 
 class asio_tcp_client : public asio_tcp_client_base<asio_socket<boost::asio::ip::tcp::socket>>
@@ -101,18 +103,9 @@ class asio_tcp_client : public asio_tcp_client_base<asio_socket<boost::asio::ip:
 
 public:
 
-    asio_tcp_client(const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, int64_t timeout, uint8_t hops)
-        : asio_tcp_client_base(remote, timeout)
+    asio_tcp_client(const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops)
+        : asio_tcp_client_base(remote)
     {
-        static const size_t SOCKET_BUFFER_SIZE = 1048576;
-
-        m_socket.open(m_remote.protocol());
-
-        m_socket.non_blocking(true);
-        m_socket.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
-        m_socket.set_option(boost::asio::socket_base::keep_alive(true));
-        m_socket.set_option(boost::asio::socket_base::send_buffer_size(SOCKET_BUFFER_SIZE));
-        m_socket.set_option(boost::asio::socket_base::receive_buffer_size(SOCKET_BUFFER_SIZE));
         m_socket.set_option(boost::asio::ip::unicast::hops(hops));
 
         if (local.port())
@@ -127,15 +120,15 @@ class asio_ssl_client : public asio_tcp_client_base<asio_socket<boost::asio::ssl
 public:
 
     asio_ssl_client(const boost::asio::ip::tcp::endpoint& remote, boost::asio::ssl::context&& ssl)
-        : asio_tcp_client_base(ssl, remote, plexus::utils::getenv<int64_t>("PLEXUS_SSL_TIMEOUT", 5000))
+        : asio_tcp_client_base(remote, ssl)
         , m_ssl(std::move(ssl))
     {
     }
 
-    void connect() noexcept(false) override
+    void connect(int64_t timeout) noexcept(false) override
     {
-        base::connect();
-        m_socket.handshake(boost::asio::ssl::stream_base::client, m_timeout);
+        base::connect(timeout);
+        m_socket.handshake(boost::asio::ssl::stream_base::client, boost::posix_time::milliseconds(timeout));
     }
 
 private:
@@ -143,9 +136,9 @@ private:
     boost::asio::ssl::context m_ssl;
 };
 
-std::shared_ptr<tcp> create_tcp_client(const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, int64_t timeout, uint8_t hops)
+std::shared_ptr<tcp> create_tcp_client(const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops)
 {
-    return std::make_shared<asio_tcp_client>(remote, local, timeout, hops);
+    return std::make_shared<asio_tcp_client>(remote, local, hops);
 }
 
 std::shared_ptr<tcp> create_ssl_client(const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)

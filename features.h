@@ -10,8 +10,9 @@
 
 #pragma once
 
-#include "network.h"
 #include <string>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ip/udp.hpp>
 
 namespace plexus {
 
@@ -64,8 +65,6 @@ struct traverse
                  mapping : 2, // enum binding
                  filtering : 2; // enum binding
 };
-
-using namespace network;
 
 struct stun_client
 {
