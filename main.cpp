@@ -10,6 +10,8 @@
 
 #include "features.h"
 #include "utils.h"
+#include <stdexcept>
+#include <thread>
 #include <logger.h>
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
@@ -214,12 +216,11 @@ int main(int argc, char** argv)
                     executor(host.first, peer.first, secret);
                 }
             }
-            catch (const plexus::timeout_error& ex)
+            catch (const std::runtime_error& ex)
             {
-                _err_ << ex.what();
-            }
-            catch (const plexus::handshake_error& ex)
-            {
+                if (vm["accept"].as<bool>())
+                    std::this_thread::sleep_for(std::chrono::seconds(15));
+
                 _err_ << ex.what();
             }
         }

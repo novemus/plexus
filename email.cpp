@@ -21,11 +21,9 @@
 #include <memory>
 #include <regex>
 #include <functional>
-#include <thread>
 
 namespace plexus {
 
-const bool ENABLE_IMAP_IDLE = plexus::utils::getenv<int64_t>("ENABLE_IMAP_IDLE", true);
 const int64_t RESPONSE_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
 const int64_t MAX_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
 const int64_t MIN_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 5000);
@@ -97,6 +95,19 @@ public:
         } while (!parse(response));
 
         _trc_ << ">>>>>\n" << response << "\n*****";
+    }
+
+    void snooze(int64_t timeout)
+    {
+        try
+        {
+            m_ssl->wait(boost::asio::socket_base::wait_read, timeout);
+        }
+        catch (const boost::system::system_error& ex)
+        {
+            if (ex.code() != boost::asio::error::operation_aborted)
+                throw;
+        }
     }
 
 private:
@@ -188,7 +199,7 @@ public:
     {
     }
 
-    void push(const std::string& data) noexcept(false)
+    void push(const std::string& message) noexcept(false)
     {
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.smtp,
@@ -205,7 +216,7 @@ public:
         session->request(utils::format("MAIL FROM: %s\r\n", get_address(m_config.from).c_str()), code_checker(250));
         session->request(utils::format("RCPT TO: %s\r\n", get_address(m_config.to).c_str()), code_checker(250));
         session->request("DATA\r\n", code_checker(354));
-        session->request(build_data(data), code_checker(250));
+        session->request(build_data(message), code_checker(250));
     }
 
 private:
@@ -290,13 +301,13 @@ class imap
                 std::string raw = match[1].str();
                 if (m_config.smime.peer.empty())
                 {
-                    m_data = match[1].str();
+                    m_message = match[1].str();
                 }
                 else
                 {
                     try
                     {
-                        m_data = plexus::utils::smime_verify(
+                        m_message = plexus::utils::smime_verify(
                             plexus::utils::smime_decrypt(match[1].str(), m_config.smime.cert, m_config.smime.key),
                             m_config.smime.peer,
                             m_config.smime.ca
@@ -339,13 +350,6 @@ class imap
         return std::regex_search(response, match, std::regex("^\\+\\s+idling(\\r\\n.*)+\\*\\s+\\d+\\s+EXISTS(\\r\\n.*)*\\r\\n$"));
     };
 
-    inline std::string pull_data()
-    {
-        std::string data;
-        std::swap(data, m_data);
-        return data;
-    }
-
 public:
 
     imap(const config& conf)
@@ -364,33 +368,37 @@ public:
         session->request("x FETCH * UID\r\n", uid_parser);
     }
 
-    std::string pull(bool idle = false) noexcept(false)
+    static constexpr uint8_t search_none = 0;
+    static constexpr uint8_t search_once = 1;
+    static constexpr uint8_t search_more = 2;
+    static constexpr uint8_t search_ever = 0xFF;
+
+    std::string pull(uint8_t mode = search_none) noexcept(false)
     {
-        std::string data;
-        try
+        std::unique_ptr<channel> session = std::make_unique<channel>(
+            m_config.imap,
+            m_config.cert,
+            m_config.key,
+            m_config.ca
+        );
+
+        session->connect(connect_checker);
+        session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
+        session->request("x SELECT INBOX\r\n", select_parser);
+
+        auto time = std::chrono::system_clock::now();
+        while (m_unseen.empty() && mode != search_none)
         {
-            std::unique_ptr<channel> session = std::make_unique<channel>(
-                m_config.imap,
-                m_config.cert,
-                m_config.key,
-                m_config.ca
-            );
-
-            session->connect(connect_checker);
-            session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
-            session->request("x SELECT INBOX\r\n", select_parser);
-
-            auto time = std::chrono::system_clock::now();
-            do
-            {
-                session->request(utils::format("x UID SEARCH (SINCE %s) (From %s) (To %s) (Subject \"%s\")\r\n",
+            session->request(utils::format("x UID SEARCH (SINCE %s) (From %s) (To %s) (Subject \"%s\")\r\n",
                     utils::format("%d-%b-%Y", time).c_str(),
                     get_address(m_config.from).c_str(),
                     get_address(m_config.to).c_str(),
                     m_config.peer_id.c_str()
                 ), search_parser);
 
-                if (m_unseen.empty() && idle)
+            if (m_unseen.empty())
+            {
+                if (mode == search_ever)
                 {
                     try
                     {
@@ -399,40 +407,35 @@ public:
                     }
                     catch (const bad_command&)
                     {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(MAX_POLLING_TIMEOUT));
+                        session->snooze(MAX_POLLING_TIMEOUT);
                     }
                 }
-            }
-            while (m_unseen.empty() && idle);
-
-            while (data.empty() && !m_unseen.empty())
-            {
-                auto uid = m_unseen.front();
-                session->request(
-                    utils::format("x UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
-                );
-                
-                m_unseen.pop_front();
-                m_last_seen = uid;
-
-                data = pull_data();
+                else if (--mode != search_none)
+                {
+                    session->snooze(MIN_POLLING_TIMEOUT);
+                }
             }
         }
-        catch (const boost::system::system_error& ex)
+
+        while (m_message.empty() && !m_unseen.empty())
         {
-            if (ex.code() == boost::asio::error::connection_reset)
-                std::this_thread::sleep_for(std::chrono::milliseconds(MIN_POLLING_TIMEOUT));
-            else
-                throw;
+            auto uid = m_unseen.front();
+            session->request(
+                utils::format("x UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser
+            );
+
+            m_unseen.pop_front();
+            m_last_seen = uid;
         }
-        return data;
+
+        return std::move(m_message);
     }
 
 private:
 
     config m_config;
     std::list<uint64_t> m_unseen;
-    std::string m_data;
+    std::string m_message;
     uint64_t m_last_seen = 0;
     uint64_t m_validity = 0;
 };
@@ -448,9 +451,6 @@ class email_mediator : public mediator
 
     reference receive(const std::regex& pattern, int64_t deadline = std::numeric_limits<int64_t>::max())
     {
-        bool idle = ENABLE_IMAP_IDLE && deadline == std::numeric_limits<int64_t>::max();
-        int64_t timeout = std::max<int64_t>(MIN_POLLING_TIMEOUT, std::min<int64_t>(MAX_POLLING_TIMEOUT, deadline / 12));
-
         auto clock = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
@@ -459,7 +459,7 @@ class email_mediator : public mediator
         reference peer;
         do
         {
-            std::string message = m_imap.pull(idle);
+            std::string message = m_imap.pull(deadline == std::numeric_limits<int64_t>::max() ? imap::search_ever : imap::search_more);
 
             while (!message.empty())
             {
@@ -477,10 +477,6 @@ class email_mediator : public mediator
 
             if (!peer.first.address().is_unspecified())
                 return peer;
-
-            if (!idle)
-                std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
-
         }
         while (clock().total_milliseconds() < deadline);
 
