@@ -29,6 +29,9 @@ namespace plexus { namespace utils {
 
     std::string smime_sign(const std::string& msg, const std::string& cert, const std::string& key)
     {
+        if (cert.empty() || key.empty())
+            return msg;
+
         int flags = PKCS7_DETACHED | PKCS7_STREAM | PKCS7_NOCERTS | PKCS7_CRLFEOL;
 
         std::shared_ptr<BIO> cert_bio(BIO_new_file(cert.c_str(), "r"), BIO_free);
@@ -72,6 +75,15 @@ namespace plexus { namespace utils {
 
     std::string smime_encrypt(const std::string& msg, const std::string& cert)
     {
+        if (cert.empty())
+        {
+            return utils::format("Content-Type: text/plain; charset=UTF-8; format=flowed\r\n"
+                                 "Content-Transfer-Encoding: 7bit\r\n"
+                                 "\r\n"
+                                 "%s"
+                                 "\r\n", msg.c_str());
+        }
+
         int flags = PKCS7_STREAM | PKCS7_CRLFEOL;
 
         std::shared_ptr<BIO> tbio(BIO_new_file(cert.c_str(), "r"), BIO_free);
@@ -115,6 +127,19 @@ namespace plexus { namespace utils {
 
     std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key)
     {
+        if (cert.empty() || key.empty())
+        {
+            std::smatch match;
+            if (std::regex_search(msg, match, std::regex("^Content-Type:\\s+text\\/plain;\\s+format=flowed\\r\\n"
+                                                         "Content-Transfer-Encoding:\\s+7bit\\r\\n"
+                                                         "\\r\\n(.*)\\r\\n$")))
+            {
+                return match[1].str();
+            }
+
+            return msg;
+        }
+
         std::shared_ptr<BIO> cert_bio(BIO_new_file(cert.c_str(), "r"), BIO_free);
         if (!cert_bio)
             throw std::runtime_error(get_last_error());
@@ -156,11 +181,8 @@ namespace plexus { namespace utils {
 
     std::string smime_verify(const std::string& msg, const std::string& cert, const std::string& ca)
     {
-        std::shared_ptr<X509_STORE> st(X509_STORE_new(), X509_STORE_free);
-        if (st == NULL)
-            throw std::runtime_error(get_last_error());
-
-        X509_STORE_set_purpose(st.get(), X509_PURPOSE_ANY);
+        if (cert.empty())
+            return msg;
 
         STACK_OF(X509) *certs = sk_X509_new_null();
         if (certs == NULL)
@@ -177,17 +199,29 @@ namespace plexus { namespace utils {
 
         sk_X509_push(certs, sign_cert.get());
 
-        std::shared_ptr<BIO> ca_bio(BIO_new_file(ca.c_str(), "r"), BIO_free);
-        if (!ca_bio)
-            throw std::runtime_error(get_last_error());
+        std::shared_ptr<BIO> ca_bio;
+        std::shared_ptr<X509> ca_cert;
+        std::shared_ptr<X509_STORE> st;
 
-        std::shared_ptr<X509> ca_cert(PEM_read_bio_X509(ca_bio.get(), NULL, 0, NULL), X509_free);
+        if (!ca.empty())
+        {
+            ca_bio.reset(BIO_new_file(ca.c_str(), "r"), BIO_free);
+            if (!ca_bio)
+                throw std::runtime_error(get_last_error());
 
-        if (!ca_cert)
-            throw std::runtime_error(get_last_error());
+            ca_cert.reset(PEM_read_bio_X509(ca_bio.get(), NULL, 0, NULL), X509_free);
+            if (!ca_cert)
+                throw std::runtime_error(get_last_error());
 
-        if (!X509_STORE_add_cert(st.get(), ca_cert.get()))
-            throw std::runtime_error(get_last_error());
+            st.reset(X509_STORE_new(), X509_STORE_free);
+            if (st == NULL)
+                throw std::runtime_error(get_last_error());
+
+            X509_STORE_set_purpose(st.get(), X509_PURPOSE_ANY);
+
+            if (!X509_STORE_add_cert(st.get(), ca_cert.get()))
+                throw std::runtime_error(get_last_error());
+        }
 
         std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), (int)msg.size()), BIO_free);
 
@@ -204,7 +238,7 @@ namespace plexus { namespace utils {
         if (!out)
             throw std::runtime_error(get_last_error());
 
-        if (!PKCS7_verify(p7.get(), certs, st.get(), cont, out.get(), 0))
+        if (!PKCS7_verify(p7.get(), certs, st.get(), cont, out.get(), st ? 0 : PKCS7_NOVERIFY))
             throw std::runtime_error(get_last_error());
 
         char *ptr;

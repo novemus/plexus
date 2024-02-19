@@ -57,26 +57,24 @@ int main(int argc, char** argv)
     desc.add_options()
         ("help", "produce help message")
         ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate NAT punching")
+        ("app-id", boost::program_options::value<std::string>()->required(), "identifier of the application")
         ("host-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of the host")
         ("peer-id", boost::program_options::value<std::string>()->required(), "unique plexus identifier of the peer")
+        ("host-mail", boost::program_options::value<std::string>()->required(), "email address used by the host")
+        ("peer-mail", boost::program_options::value<std::string>()->required(), "email address used by the peer")
+        ("cred-repo", boost::program_options::value<std::string>()->default_value(""), "path to credentials repository")
         ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of public stun server")
         ("stun-client", boost::program_options::value<stun_client_endpoint>()->required(), "endpoint of local stun client")
         ("email-smtps", boost::program_options::value<smtp_server_endpoint>()->required(), "smtps server used to send reference to the peer")
         ("email-imaps", boost::program_options::value<imap_server_endpoint>()->required(), "imaps server used to receive reference from the peer")
         ("email-login", boost::program_options::value<std::string>()->required(), "login of email account")
         ("email-passwd", boost::program_options::value<std::string>()->required(), "password of email account")
-        ("email-from", boost::program_options::value<std::string>()->required(), "email address used by the host")
-        ("email-to", boost::program_options::value<std::string>()->required(), "email address used by the peer")
         ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to X509 certificate of email client")
         ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to Private Key of email client")
         ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to email Certification Authority")
-        ("smime-peer", boost::program_options::value<std::string>()->default_value(""), "path to smime X509 certificate of the peer")
-        ("smime-cert", boost::program_options::value<std::string>()->default_value(""), "path to smime X509 certificate of the host")
-        ("smime-key", boost::program_options::value<std::string>()->default_value(""), "path to smime Private Key of the host")
-        ("smime-ca", boost::program_options::value<std::string>()->default_value(""), "path to smime Certification Authority")
         ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for punch packets")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
-        ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%")
+        ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%, %hostid%, %peerid%, %hostmail%, %peermail%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable")
         ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable")
         ("log-level", boost::program_options::value<wormhole::log::severity>()->default_value(wormhole::log::info), "log level: <fatal|error|warning|info|debug|trace>")
@@ -127,101 +125,90 @@ int main(int argc, char** argv)
         auto mediator = plexus::create_email_mediator(
             vm["email-smtps"].as<smtp_server_endpoint>(),
             vm["email-imaps"].as<imap_server_endpoint>(),
-            vm["host-id"].as<std::string>(),
-            vm["peer-id"].as<std::string>(),
             vm["email-login"].as<std::string>(),
             vm["email-passwd"].as<std::string>(),
-            vm["email-from"].as<std::string>(),
-            vm["email-to"].as<std::string>(),
             vm["email-cert"].as<std::string>(),
             vm["email-key"].as<std::string>(),
             vm["email-ca"].as<std::string>(),
-            vm["smime-peer"].as<std::string>(),
-            vm["smime-cert"].as<std::string>(),
-            vm["smime-key"].as<std::string>(),
-            vm["smime-ca"].as<std::string>()
+            vm["app-id"].as<std::string>(),
+            vm["cred-repo"].as<std::string>()
             );
 
-        auto executor = [&](const boost::asio::ip::udp::endpoint& host, const boost::asio::ip::udp::endpoint& peer, uint64_t secret)
+        auto host_info = std::make_pair(vm["host-mail"].as<std::string>(), vm["host-id"].as<std::string>());
+        auto peer_info = std::make_pair(vm["peer-mail"].as<std::string>(), vm["peer-id"].as<std::string>());
+
+        auto execute = [&](const boost::asio::ip::udp::endpoint& host, const boost::asio::ip::udp::endpoint& peer, uint64_t secret)
         {
             auto args = vm["exec-args"].as<std::string>();
             if (args.empty())
             {
-                args = plexus::utils::format("%s %u %s %u %s %u %llu",
+                args = plexus::utils::format("%s %u %s %u %s %u %llu %s %s %s %s",
                     bind.address().to_string().c_str(),
                     bind.port(),
                     host.address().to_string().c_str(),
                     host.port(),
                     peer.address().to_string().c_str(),
                     peer.port(),
-                    secret
+                    secret,
+                    host_info.second.c_str(),
+                    peer_info.second.c_str(),
+                    host_info.first.c_str(),
+                    peer_info.first.c_str()
                     );
             }
             else
             {
                 args = boost::regex_replace(
                     args,
-                    boost::regex("(%innerip%)|(%innerport%)|(%outerip%)|(%outerport%)|(%peerip%)|(%peerport%)|(%secret%)"),
-                    plexus::utils::format("(?{1}%s)(?{2}%u)(?{3}%s)(?{4}%u)(?{5}%s)(?{6}%u)(?{7}%llu)",
+                    boost::regex("(%innerip%)|(%innerport%)|(%outerip%)|(%outerport%)|(%peerip%)|(%peerport%)|(%secret%)|(%hostid%)|(%peerid%)|(%hostmail%)|(%peermail%)"),
+                    plexus::utils::format("(?{1}%s)(?{2}%u)(?{3}%s)(?{4}%u)(?{5}%s)(?{6}%u)(?{7}%llu)(?{8}%s)(?{9}%s)(?{10}%s)(?{11}%s)",
                         bind.address().to_string().c_str(),
                         bind.port(),
                         host.address().to_string().c_str(),
                         host.port(),
                         peer.address().to_string().c_str(),
                         peer.port(),
-                        secret),
+                        secret,
+                        host_info.second.c_str(),
+                        peer_info.second.c_str(),
+                        host_info.first.c_str(),
+                        peer_info.first.c_str()),
                     boost::match_posix | boost::format_all
                     );
             }
 
-            plexus::exec(
-                vm["exec-command"].as<std::string>(),
-                args,
-                vm["exec-pwd"].as<std::string>(),
-                vm["exec-log-file"].as<std::string>()
-                );
+            plexus::exec(vm["exec-command"].as<std::string>(), args, vm["exec-pwd"].as<std::string>(), vm["exec-log-file"].as<std::string>());
         };
 
         do
         {
             try
             {
-                uint8_t hops = static_cast<uint8_t>(vm["punch-hops"].as<uint16_t>());
                 if (vm["accept"].as<bool>())
                 {
-                    plexus::reference peer = mediator->receive_request();
-                    plexus::reference host = std::make_pair(
-                        puncher->punch_hole_to_peer(peer.first, hops),
-                        plexus::utils::random<uint64_t>()
-                        );
-                    mediator->dispatch_response(host);
+                    plexus::reference peer(mediator->receive_request(peer_info, host_info));
+                    plexus::reference host(puncher->punch_hole_to_peer(peer.first, vm["punch-hops"].as<uint16_t>()), plexus::utils::random<uint64_t>());
+                    mediator->dispatch_response(host_info, peer_info, host);
 
-                    uint64_t secret = peer.second ^ host.second;
-                    puncher->await_peer(peer.first, secret);
-
-                    executor(host.first, peer.first, secret);
+                    puncher->await_peer(peer.first, peer.second ^ host.second);
+                    execute(host.first, peer.first, peer.second ^ host.second);
                 }
                 else
                 {
-                    plexus::reference host = std::make_pair(
-                        puncher->reflect_endpoint(),
-                        plexus::utils::random<uint64_t>()
-                        );
-                    mediator->dispatch_request(host);
-                    plexus::reference peer = mediator->receive_response();
+                    plexus::reference host(puncher->reflect_endpoint(), plexus::utils::random<uint64_t>());
+                    mediator->dispatch_request(host_info, peer_info, host);
+                    plexus::reference peer(mediator->receive_response(peer_info, host_info));
 
-                    uint64_t secret = peer.second ^ host.second;
-                    puncher->reach_peer(peer.first, secret);
-
-                    executor(host.first, peer.first, secret);
+                    puncher->reach_peer(peer.first, peer.second ^ host.second);
+                    execute(host.first, peer.first, peer.second ^ host.second);
                 }
             }
-            catch (const std::runtime_error& ex)
+            catch (const std::runtime_error& e)
             {
                 if (vm["accept"].as<bool>())
                     std::this_thread::sleep_for(std::chrono::seconds(15));
 
-                _err_ << ex.what();
+                _err_ << e.what();
             }
         }
         while (vm["accept"].as<bool>());

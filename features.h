@@ -18,35 +18,31 @@ namespace plexus {
 
 struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
 struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
+struct bad_message : public std::runtime_error { bad_message() : std::runtime_error("bad message") {} };
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
 
-typedef std::pair<boost::asio::ip::udp::endpoint, /* puzzle */ uint64_t> reference;
+using reference = std::pair<boost::asio::ip::udp::endpoint, /* puzzle */uint64_t>;
+using abonent = std::pair</* email */std::string , /* id */std::string>;
 
 struct mediator
 {
     virtual ~mediator() {}
-    virtual reference receive_request() noexcept(false) = 0;
-    virtual reference receive_response() noexcept(false) = 0;
-    virtual void dispatch_response(const reference& host) noexcept(false) = 0;
-    virtual void dispatch_request(const reference& host) noexcept(false) = 0;
+    virtual reference receive_request(abonent& from, abonent& whom) noexcept(false) = 0;
+    virtual reference receive_response(abonent& from, abonent& whom) noexcept(false) = 0;
+    virtual void dispatch_response(const abonent& from, const abonent& to, const reference& host) noexcept(false) = 0;
+    virtual void dispatch_request(const abonent& from, const abonent& to, const reference& host) noexcept(false) = 0;
 };
 
 std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
                                                 const boost::asio::ip::tcp::endpoint& imap,
-                                                const std::string& host_id,
-                                                const std::string& peer_id,
                                                 const std::string& login,
                                                 const std::string& passwd,
-                                                const std::string& from,
-                                                const std::string& to,
-                                                const std::string& cert = "",
-                                                const std::string& key = "",
-                                                const std::string& ca = "",
-                                                const std::string& smime_peer = "",
-                                                const std::string& smime_cert = "",
-                                                const std::string& smime_key = "",
-                                                const std::string& smime_ca = "");
+                                                const std::string& cert,
+                                                const std::string& key,
+                                                const std::string& ca,
+                                                const std::string& app_id,
+                                                const std::string& cred_repo);
 
 enum binding
 {
