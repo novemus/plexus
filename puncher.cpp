@@ -190,8 +190,15 @@ public:
     }
 };
 
-std::shared_ptr<plexus::nat_puncher> create_nat_puncher(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind)
+std::shared_ptr<plexus::nat_puncher> create_nat_puncher(const boost::asio::ip::udp::endpoint& stun, boost::asio::ip::udp::endpoint& bind)
 {
+    boost::asio::io_service io;
+    boost::asio::ip::udp::socket socket(io, bind.protocol());
+
+    socket.set_option(boost::asio::socket_base::reuse_address(true));
+    socket.bind(bind);
+    bind = socket.local_endpoint();
+
     return std::make_shared<plexus::puncher>(stun, bind);
 }
 

@@ -19,19 +19,38 @@ namespace plexus {
 struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
 struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
 struct bad_message : public std::runtime_error { bad_message() : std::runtime_error("bad message") {} };
+struct bad_subscriber : public std::runtime_error { bad_subscriber() : std::runtime_error("bad subscriber") {} };
 
-void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "");
+void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "", bool wait = true);
+
+using subscriber = std::pair</* email */std::string , /* id */std::string>;
+
+struct listener
+{
+    virtual ~listener() {}
+    virtual void listen() noexcept(false) = 0;
+    virtual subscriber host() const noexcept(true) = 0;
+    virtual subscriber peer() const noexcept(true) = 0;
+};
+
+std::shared_ptr<listener> create_email_listener(const boost::asio::ip::tcp::endpoint& imap,
+                                                const std::string& login,
+                                                const std::string& passwd,
+                                                const std::string& cert,
+                                                const std::string& key,
+                                                const std::string& ca,
+                                                const std::string& app,
+                                                const std::string& repo);
 
 using reference = std::pair<boost::asio::ip::udp::endpoint, /* puzzle */uint64_t>;
-using abonent = std::pair</* email */std::string , /* id */std::string>;
 
 struct mediator
 {
     virtual ~mediator() {}
-    virtual reference receive_request(abonent& from, abonent& whom) noexcept(false) = 0;
-    virtual reference receive_response(abonent& from, abonent& whom) noexcept(false) = 0;
-    virtual void dispatch_response(const abonent& from, const abonent& to, const reference& host) noexcept(false) = 0;
-    virtual void dispatch_request(const abonent& from, const abonent& to, const reference& host) noexcept(false) = 0;
+    virtual reference pull_request() noexcept(false) = 0;
+    virtual reference pull_response() noexcept(false) = 0;
+    virtual void push_response(const reference& host) noexcept(false) = 0;
+    virtual void push_request(const reference& host) noexcept(false) = 0;
 };
 
 std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
@@ -41,8 +60,10 @@ std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endp
                                                 const std::string& cert,
                                                 const std::string& key,
                                                 const std::string& ca,
-                                                const std::string& app_id,
-                                                const std::string& cred_repo);
+                                                const std::string& app,
+                                                const std::string& repo,
+                                                const subscriber& host,
+                                                const subscriber& peer);
 
 enum binding
 {
@@ -78,6 +99,6 @@ struct nat_puncher : public stun_client
     virtual void await_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
-std::shared_ptr<nat_puncher> create_nat_puncher(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind);
+std::shared_ptr<nat_puncher> create_nat_puncher(const boost::asio::ip::udp::endpoint& stun, boost::asio::ip::udp::endpoint& bind);
 
 }

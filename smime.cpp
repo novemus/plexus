@@ -76,13 +76,7 @@ namespace plexus { namespace utils {
     std::string smime_encrypt(const std::string& msg, const std::string& cert)
     {
         if (cert.empty())
-        {
-            return utils::format("Content-Type: text/plain; charset=UTF-8; format=flowed\r\n"
-                                 "Content-Transfer-Encoding: 7bit\r\n"
-                                 "\r\n"
-                                 "%s"
-                                 "\r\n", msg.c_str());
-        }
+            throw std::runtime_error("no certificate");
 
         int flags = PKCS7_STREAM | PKCS7_CRLFEOL;
 
@@ -127,18 +121,10 @@ namespace plexus { namespace utils {
 
     std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key)
     {
-        if (cert.empty() || key.empty())
-        {
-            std::smatch match;
-            if (std::regex_search(msg, match, std::regex("^Content-Type:\\s+text\\/plain;\\s+format=flowed\\r\\n"
-                                                         "Content-Transfer-Encoding:\\s+7bit\\r\\n"
-                                                         "\\r\\n(.*)\\r\\n$")))
-            {
-                return match[1].str();
-            }
-
-            return msg;
-        }
+        if (cert.empty())
+            throw std::runtime_error("no certificate");
+        if (key.empty())
+            throw std::runtime_error("no private key");
 
         std::shared_ptr<BIO> cert_bio(BIO_new_file(cert.c_str(), "r"), BIO_free);
         if (!cert_bio)

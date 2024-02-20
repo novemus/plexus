@@ -23,7 +23,7 @@
 
 namespace plexus {
 
-void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
+void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait)
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
@@ -55,11 +55,13 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         if (h == INVALID_HANDLE_VALUE)
             throw std::runtime_error(utils::format("CreateFile: error=%d", GetLastError()));
 
-        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        if (wait)
+            si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
         si.hStdOutput = h;
         si.hStdError = h;
     }
-    else
+    else if (wait)
     {
         si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
         si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -68,21 +70,28 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
 	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, true, 0, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
 	{
-		WaitForSingleObject(pi.hProcess, INFINITE);
+        if (wait)
+        {
+            WaitForSingleObject(pi.hProcess, INFINITE);
 
-		DWORD code = 0;
-		if (!GetExitCodeProcess(pi.hProcess, &code) || code != 0)
-		{
-			CloseHandle(pi.hProcess);
-			CloseHandle(pi.hThread);
+            DWORD code = 0;
+            if (!GetExitCodeProcess(pi.hProcess, &code) || code != 0)
+            {
+                CloseHandle(pi.hProcess);
+                CloseHandle(pi.hThread);
+
+                if (!log.empty())
+                    CloseHandle(si.hStdOutput);
+
+                throw std::runtime_error(utils::format("GetExitCodeProcess: error=%d, code=%d", GetLastError(), code));
+            }
+        }
+
+        if (!log.empty())
             CloseHandle(si.hStdOutput);
-
-			throw std::runtime_error(utils::format("GetExitCodeProcess: error=%d, code=%d", GetLastError(), code));
-		}
 
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
-        CloseHandle(si.hStdOutput);
 	}
 	else
 	{
@@ -120,7 +129,7 @@ std::shared_ptr<char*> copy_environment()
     return environment;
 }
 
-void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
+void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait)
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
@@ -129,6 +138,8 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
     std::string pwd = boost::replace_all_copy(dir, " ", "\\ ");
     std::string command = pwd.empty() ? cmd : "cd " + pwd + " && " + cmd;
+    if (!wait)
+        command += " &";
 
     const char* argv[] = { "sh", "-c", command.c_str(), 0 };
     std::shared_ptr<char*> env = copy_environment();
@@ -155,21 +166,19 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
     if (status)
         throw std::runtime_error(utils::format("posix_spawn: error=%d", status));
 
-    int retcode = 0;
-    if (waitpid(pid, &retcode, 0) == -1)
+    int code = 0;
+    if (waitpid(pid, &code, 0) == -1)
         throw std::runtime_error(utils::format("waitpid: error=%d", errno));
-
-    if (WIFSIGNALED(retcode))
-        throw std::runtime_error(utils::format("signal=%d", WTERMSIG(retcode)));
-    else if (WIFSTOPPED(retcode))
-        throw std::runtime_error(utils::format("signal=%d", WSTOPSIG(retcode)));
 
     status = posix_spawn_file_actions_destroy(&action);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn_file_actions_destroy: error=%d", status));
-
-    if (retcode)
-        throw std::runtime_error(utils::format("exit: error=%d", retcode));
+    if (WIFSIGNALED(code))
+        throw std::runtime_error(utils::format("signal=%d", WTERMSIG(code)));
+    if (WIFSTOPPED(code))
+        throw std::runtime_error(utils::format("signal=%d", WSTOPSIG(code)));
+    if (code)
+        throw std::runtime_error(utils::format("exit: error=%d", code));
 }
 
 }

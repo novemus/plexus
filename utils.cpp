@@ -179,4 +179,14 @@ std::string to_hexadecimal(const void* data, size_t len)
     return out.str();
 }
 
+std::string get_email_address(const std::string& email)
+{
+    std::smatch match;
+    if (std::regex_search(email, match, std::regex("[\\w\\s]*\\<([^\\<]+@[^\\>]+)\\>\\s*")))
+    {
+        return match[1].str();
+    }
+    return email;
+}
+
 }}

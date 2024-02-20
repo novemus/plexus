@@ -24,9 +24,9 @@
 
 namespace plexus {
 
-const int64_t RESPONSE_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
-const int64_t MAX_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
-const int64_t MIN_POLLING_TIMEOUT = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 5000);
+const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
+const int64_t max_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
+const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 10000);
 
 namespace email {
 
@@ -39,30 +39,52 @@ struct config
     std::string cert;
     std::string key;
     std::string ca;
-    std::string app_id;
-    std::string cred_repo;
+    std::string app;
+    std::string repo;
+    subscriber host;
+    subscriber peer;
 
-    bool is_exists(const abonent& info) const
+    bool is_absent() const
     {
-        return std::filesystem::exists(std::filesystem::path(std::filesystem::path(cred_repo) / info.first / info.second));
+        return host.first.empty() || host.second.empty() || peer.first.empty() || peer.second.empty();
     }
 
-    std::string get_cert(const abonent& info) const 
+    bool is_permissible() const
     {
-        std::filesystem::path cert(std::filesystem::path(cred_repo) / info.first / info.second / "cert.crt");
+        return !is_absent()
+            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.first / host.second))
+            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / peer.first / peer.second));
+    }
+
+    bool is_encryptable() const
+    {
+        return std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.first / host.second / "cert.crt"))
+            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.first / host.second / "private.key"))
+            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / peer.first / peer.second / "cert.crt"));
+    }
+
+    std::string get_host_cert() const 
+    {
+        std::filesystem::path cert(std::filesystem::path(repo) / host.first / host.second / "cert.crt");
         return std::filesystem::exists(cert) ? cert.generic_u8string() : "";
     }
 
-    std::string get_ca(const abonent& info) const 
+    std::string get_host_key() const 
     {
-        std::filesystem::path ca(std::filesystem::path(cred_repo) / info.first / info.second / "ca.crt");
-        return std::filesystem::exists(ca) ? ca.generic_u8string() : "";
-    }
-        
-    std::string get_key(const abonent& info) const 
-    {
-        std::filesystem::path key(std::filesystem::path(cred_repo) / info.first / info.second / "private.key");
+        std::filesystem::path key(std::filesystem::path(repo) / host.first / host.second / "private.key");
         return std::filesystem::exists(key) ? key.generic_u8string() : "";
+    }
+
+    std::string get_peer_cert() const 
+    {
+        std::filesystem::path cert(std::filesystem::path(repo) / peer.first / peer.second / "cert.crt");
+        return std::filesystem::exists(cert) ? cert.generic_u8string() : "";
+    }
+
+    std::string get_peer_ca() const 
+    {
+        std::filesystem::path ca(std::filesystem::path(repo) / peer.first / peer.second / "ca.crt");
+        return std::filesystem::exists(ca) ? ca.generic_u8string() : "";
     }
 };
 
@@ -129,16 +151,6 @@ private:
     std::shared_ptr<network::tcp> m_ssl;
 };
 
-std::string get_address(const std::string& email)
-{
-    std::smatch match;
-    if (std::regex_search(email, match, std::regex("[\\w\\s]*\\<([^\\<]+@[^\\>]+)\\>\\s*")))
-    {
-        return match[1].str();
-    }
-    return email;
-}
-
 class smtp
 {
     typedef channel::response_parser_t response_parser_t;
@@ -154,10 +166,37 @@ class smtp
         };
     }
 
-    std::string build_data(const abonent& from, const abonent& to, const std::string& message)
+    std::string build_data(const std::string& message, uint8_t variant)
     {
+        if (!m_config.is_encryptable())
+        {
+            static const char* SIMPLE_EMAIL =
+                "X-Sender: %s\r\n"
+                "X-Variant: %u\r\n"
+                "X-Source: %s\r\n"
+                "X-Target: %s\r\n"
+                "From: %s\r\n"
+                "To: %s\r\n"
+                "Subject: plexus\r\n"
+                "\r\n"
+                "%s\r\n"
+                ".\r\n";
+
+            return utils::format(
+                SIMPLE_EMAIL,
+                m_config.app.c_str(),
+                variant,
+                m_config.host.second.c_str(),
+                m_config.peer.second.c_str(),
+                m_config.host.first.c_str(),
+                m_config.peer.first.c_str(),
+                message.c_str()
+                );
+        }
+
         static const char* MULTIPART_EMAIL =
             "X-Sender: %s\r\n"
+            "X-Variant: %u\r\n"
             "X-Source: %s\r\n"
             "X-Target: %s\r\n"
             "From: %s\r\n"
@@ -171,22 +210,23 @@ class smtp
             "------%s--\r\n"
             ".\r\n";
 
-        std::string bound = plexus::utils::to_hexadecimal(from.first.data(), from.first.size());
+        std::string bound = plexus::utils::to_hexadecimal(m_config.host.first.data(), m_config.host.first.size());
         std::string content = plexus::utils::smime_encrypt(
-            plexus::utils::smime_sign(message, m_config.get_cert(from), m_config.get_key(from)),
-            m_config.get_cert(to)
+            plexus::utils::smime_sign(message, m_config.get_host_cert(), m_config.get_host_key()),
+            m_config.get_peer_cert()
             );
 
         return utils::format(
             MULTIPART_EMAIL,
-            m_config.app_id.c_str(),
-            from.second.c_str(),
-            to.second.c_str(),
-            from.first.c_str(),
-            to.first.c_str(),
+            m_config.app.c_str(),
+            variant,
+            m_config.host.second.c_str(),
+            m_config.peer.second.c_str(),
+            m_config.host.first.c_str(),
+            m_config.peer.first.c_str(),
             bound.c_str(),
             bound.c_str(),
-            message.c_str(),
+            content.c_str(),
             bound.c_str()
             );
     }
@@ -197,7 +237,7 @@ public:
     {
     }
 
-    void push(const abonent& from, const abonent& to, const std::string& message) noexcept(false)
+    void push(const std::string& message, uint8_t variant) noexcept(false)
     {
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.smtp,
@@ -211,10 +251,10 @@ public:
         session->request("AUTH LOGIN\r\n", code_checker(334));
         session->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.login.c_str(), m_config.login.size()).c_str()), code_checker(334));
         session->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.passwd.c_str(), m_config.passwd.size()).c_str()), code_checker(235));
-        session->request(utils::format("MAIL FROM: %s\r\n", get_address(from.first).c_str()), code_checker(250));
-        session->request(utils::format("RCPT TO: %s\r\n", get_address(to.first).c_str()), code_checker(250));
+        session->request(utils::format("MAIL FROM: %s\r\n", m_config.host.first.c_str()), code_checker(250));
+        session->request(utils::format("RCPT TO: %s\r\n", m_config.peer.first.c_str()), code_checker(250));
         session->request("DATA\r\n", code_checker(354));
-        session->request(build_data(from, to, message), code_checker(250));
+        session->request(build_data(message, variant), code_checker(250));
     }
 
 private:
@@ -222,7 +262,7 @@ private:
     config m_config;
 };
 
-class imap
+class imap : public listener
 {
     typedef channel::response_parser_t response_parser_t;
     
@@ -230,7 +270,7 @@ class imap
 
     const response_parser_t connect_checker = [](const std::string& response) -> bool {
             std::smatch match;
-            bool done = std::regex_search(response, match, std::regex("^\\*\\s+(OK|NO)\\s+.*\\r\\n$"));
+            bool done = std::regex_search(response, match, std::regex("^\\* +(OK|NO) +.*\\r\\n$"));
             if (done && match[1] != "OK")
                 throw std::runtime_error(response);
             return done;
@@ -238,7 +278,7 @@ class imap
 
     const response_parser_t success_checker = [](const std::string& response) -> bool {
         std::smatch match;
-        bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?x\\s+(OK|NO)\\s+.*\\r\\n$"));
+        bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ +(OK|NO) +.*\\r\\n$"));
         if (done && match[2] != "OK")
             throw std::runtime_error(response);
         return done;
@@ -248,7 +288,7 @@ class imap
         if (success_checker(response))
         {
             std::smatch match;
-            if (std::regex_search(response, match, std::regex(".*\\n\\*\\s+OK\\s+\\[UIDVALIDITY\\s+(\\d+)\\]$.*")))
+            if (std::regex_search(response, match, std::regex(".*\\r\\n\\* +OK +\\[UIDVALIDITY +(\\d+)\\].*")))
             {
                 std::stringstream ss;
                 ss << match[1].str();
@@ -257,10 +297,7 @@ class imap
                 ss >> validity;
 
                 if (validity != m_validity)
-                {
-                    m_last = 0;
-                    m_unseen.clear();
-                }
+                    m_uid = 0;
 
                 m_validity = validity;
             }
@@ -273,7 +310,7 @@ class imap
         if (success_checker(response))
         {
             std::smatch match;
-            if (std::regex_search(response, match, std::regex("^\\*\\s+SEARCH\\s+([\\d\\f\\t\\v ]+).*")))
+            if (std::regex_search(response, match, std::regex("^\\* +SEARCH +([\\d ]+)\\r\\n.*")))
             {
                 std::stringstream stream;
                 stream << match[1].str();
@@ -281,8 +318,8 @@ class imap
                 uint64_t uid = 0;
                 while (stream >> uid)
                 {
-                    if (uid > m_last)
-                        m_unseen.push_back(uid);
+                    if (uid > m_uid)
+                        m_uid = uid;
                 }
             }
             return true;
@@ -294,11 +331,11 @@ class imap
         if (success_checker(response))
         {
             std::smatch match;
-            if (std::regex_search(response, match, std::regex("^\\*\\s+\\d+\\s+FETCH\\s+\\(UID\\s+(\\d+)\\)\\r\\n.*")))
+            if (std::regex_search(response, match, std::regex("^\\* +\\d+ +FETCH +\\(UID +(\\d+)\\)\\r\\n.*")))
             {
                 std::stringstream ss;
                 ss << match[1].str();
-                ss >> m_last;
+                ss >> m_uid;
             }
             return true;
         }
@@ -307,68 +344,100 @@ class imap
 
     const response_parser_t idle_parser = [](const std::string& response) -> bool {
         std::smatch match;
-        if (std::regex_search(response, match, std::regex("(.*\\r\\n)?x\\s+(NO|BAD)\\s+.*\\r\\n$")))
+        if (std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ +(NO|BAD) +.*\\r\\n$")))
         {
             if (match[1] != "BAD")
                 throw bad_command();
             throw std::runtime_error(response);
         }
-        return std::regex_search(response, match, std::regex("^\\+\\s+idling(\\r\\n.*)+\\*\\s+\\d+\\s+EXISTS(\\r\\n.*)*\\r\\n$"));
+        return std::regex_search(response, match, std::regex("^\\+ +idling(\\r\\n.*)+\\* +\\d+ +EXISTS(\\r\\n.*)*\\r\\n$"));
     };
 
-    const response_parser_t fetch_parser(abonent& from, abonent& whom)
-    {
-        return [&](const std::string& response) -> bool
-        {
-            if (success_checker(response))
-            {
-                std::regex pattern(utils::format("^[^\\(\\r\\n]+\\([^\\r\\n]+\\r\\n"
-                                                "X-Source:\\s+(%s)\\r\\n\\r\\n"
-                                                "[^\\r\\n]+\\r\\n"
-                                                "X-Target:\\s+(%s)\\r\\n\\r\\n"
-                                                "[^\\r\\n]+\\r\\n"
-                                                "From:\\s+(%s)\\r\\n\\r\\n"
-                                                "[^\\r\\n]+\\r\\n"
-                                                "To:\\s+(%s)\\r\\n\\r\\n"
-                                                "[^\\r\\n]+\\r\\n"
-                                                "(.*)\\r\\n\\r\\n"
-                                                "\\)\\r\\n.*",
-                                                from.second.empty() ? "[^\\r\\n]+" : from.second.c_str(),
-                                                whom.second.empty() ? "[^\\r\\n]+" : whom.second.c_str(),
-                                                from.first.empty() ? "[^\\r\\n]+" : from.first.c_str(),
-                                                whom.first.empty() ? "[^\\r\\n]+" : whom.first.c_str(),
-                                                m_config.passwd.c_str()));
 
-                std::smatch match;
-                if (std::regex_search(response, match, pattern))
+    const response_parser_t listen_parser = [&](const std::string& response) -> bool
+    {
+        if (success_checker(response))
+        {
+            static const std::regex pattern("^[^\\(\\r\\n]+\\([^\\r\\n]+\\r\\n"
+                                            "From: +([^\\r\\n]+)\\r\\n\\r\\n"
+                                            "[^\\r\\n]+\\r\\n"
+                                            "X-Source: +([^\\r\\n]+)\\r\\n\\r\\n"
+                                            "[^\\r\\n]+\\r\\n"
+                                            "To: +([^\\r\\n]+)\\r\\n\\r\\n"
+                                            "[^\\r\\n]+\\r\\n"
+                                            "X-Target: +([^\\r\\n]+)\\r\\n\\r\\n"
+                                            "\\)\\r\\n.*");
+
+            std::smatch match;
+            if (std::regex_search(response, match, pattern))
+            {
+                m_config.peer = std::make_pair(match[1].str(), match[2].str());
+                m_config.host = std::make_pair(match[3].str(), match[4].str());
+
+                if (!m_config.is_permissible())
                 {
-                    from = std::make_pair(match[1].str(), match[3].str());
-                    whom = std::make_pair(match[2].str(), match[4].str());
-                    if (m_config.is_exists(from) && m_config.is_exists(whom))
+                    m_config.peer = subscriber();
+                    m_config.host = subscriber();
+                }
+            }
+            return true;
+        }
+        return false;
+    };
+
+    const response_parser_t fetch_parser = [&](const std::string& response) -> bool
+    {
+        if (success_checker(response))
+        {
+            std::smatch match;
+            if (std::regex_search(response, match, std::regex("^[^\\r\\n]+\\r\\n([\\s\\S]+)\\r\\n\\)\\r\\n.*")))
+            {
+                try
+                {
+                    if (m_config.is_encryptable())
                     {
-                        try
-                        {
-                            m_message = plexus::utils::smime_verify(
-                                plexus::utils::smime_decrypt(match[5].str(), m_config.get_cert(whom), m_config.get_key(whom)),
-                                m_config.get_cert(from),
-                                m_config.get_ca(from)
-                                );
-                        }
-                        catch(const std::exception& ex)
-                        {
-                            _err_ << ex.what();
-                        }
+                        m_message = plexus::utils::smime_verify(
+                            plexus::utils::smime_decrypt(match[1].str(), m_config.get_host_cert(), m_config.get_host_key()),
+                            m_config.get_peer_cert(),
+                            m_config.get_peer_ca()
+                            );
+                    }
+                    else
+                    {
+                        m_message = match[1].str();
                     }
                 }
-                return true;
+                catch(const std::exception& ex)
+                {
+                    _err_ << ex.what();
+                }
             }
-            return false;
-        };
-    }
+            return true;
+        }
+        return false;
+    };
 
 public:
 
     imap(const config& conf) : m_config(conf)
+    {
+        if (m_config.is_absent())
+        {
+            std::unique_ptr<channel> session = std::make_unique<channel>(
+                m_config.imap,
+                m_config.cert,
+                m_config.key,
+                m_config.ca
+            );
+
+            session->connect(connect_checker);
+            session->request(utils::format("%u LOGIN %s %s\r\n", ++m_seqno, m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
+            session->request(utils::format("%u SELECT INBOX\r\n", ++m_seqno), select_parser);
+            session->request(utils::format("%u FETCH * UID\r\n", ++m_seqno), uid_parser);
+        }
+    }
+
+    void listen() noexcept(false) override
     {
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.imap,
@@ -377,15 +446,50 @@ public:
             m_config.ca
         );
 
+        m_config.peer = subscriber();
+        m_config.host = subscriber();
+
         session->connect(connect_checker);
-        session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
-        session->request("x SELECT INBOX\r\n", select_parser);
-        session->request("x FETCH * UID\r\n", uid_parser);
+        session->request(utils::format("%u LOGIN %s %s\r\n", ++m_seqno, m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
+
+        do
+        {
+            uint64_t last = m_uid;
+
+            session->request(utils::format("%u SELECT INBOX\r\n", ++m_seqno), select_parser);
+            session->request(utils::format("%u UID SEARCH (SINCE %s) (HEADER X-Sender %s) (HEADER X-Variant 0)\r\n",
+                    ++m_seqno,
+                    utils::format("%d-%b-%Y", std::chrono::system_clock::now()).c_str(), m_config.app.c_str()
+                ),
+                search_parser
+            );
+
+            if (last == m_uid)
+            {
+                try
+                {
+                    session->request(utils::format("%u IDLE\r\n", ++m_seqno), idle_parser, true);
+                    session->request("DONE\r\n", success_checker);
+                }
+                catch (const bad_command&)
+                {
+                    session->snooze(max_polling_timeout);
+                }
+            }
+            else
+            {
+                session->request(
+                    utils::format("%u UID FETCH %d (BODY[HEADER.FIELDS (From)] BODY[HEADER.FIELDS (X-Source)] BODY[HEADER.FIELDS (To)] BODY[HEADER.FIELDS (X-Target)])\r\n", ++m_seqno, m_uid),
+                    listen_parser
+                );
+            }
+        }
+        while (m_config.is_absent());
     }
 
-    std::string pull(abonent& from, abonent& whom, int64_t deadline) noexcept(false)
+    std::string pull(uint8_t variant) noexcept(false)
     {
-        auto clock = [start = boost::posix_time::microsec_clock::universal_time()]()
+        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
@@ -398,81 +502,71 @@ public:
         );
 
         session->connect(connect_checker);
-        session->request(utils::format("x LOGIN %s %s\r\n", m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
-        session->request("x SELECT INBOX\r\n", select_parser);
+        session->request(utils::format("%u LOGIN %s %s\r\n", ++m_seqno, m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
 
+        uint64_t last = m_uid;
         do
         {
-            auto time = std::chrono::system_clock::now();
-            while (m_unseen.empty())
-            {
-                session->request(
-                    utils::format("x UID SEARCH (SINCE %s) (X-Sender %s)\r\n", utils::format("%d-%b-%Y", time).c_str(), m_config.app_id.c_str()),
-                    search_parser
-                    );
+            if (timer().total_milliseconds() > response_timeout)
+                throw plexus::timeout_error();
 
-                if (m_unseen.empty())
-                {
-                    if (deadline == std::numeric_limits<int64_t>::max())
-                    {
-                        try
-                        {
-                            session->request("x IDLE\r\n", idle_parser, true);
-                            session->request("DONE\r\n", success_checker);
-                        }
-                        catch (const bad_command&)
-                        {
-                            session->snooze(MAX_POLLING_TIMEOUT);
-                        }
-                    }
-                    else
-                    {
-                        session->snooze(MIN_POLLING_TIMEOUT);
-                    }
-                }
-            }
+            session->request(utils::format("%u SELECT INBOX\r\n", ++m_seqno), select_parser);
+            session->request(utils::format("%u UID SEARCH (SINCE %s) (HEADER X-Sender %s) (HEADER X-Variant %u) (From %s) (To %s) (HEADER X-Source %s) (HEADER X-Target %s)\r\n",
+                    ++m_seqno,
+                    utils::format("%d-%b-%Y", std::chrono::system_clock::now()).c_str(), 
+                    m_config.app.c_str(), variant,
+                    m_config.peer.first.c_str(),
+                    m_config.host.first.c_str(),
+                    m_config.peer.second.c_str(),
+                    m_config.host.second.c_str()
+                ),
+                search_parser
+            );
 
-            while (m_message.empty() && !m_unseen.empty())
-            {
-                auto uid = m_unseen.front();
-                session->request(
-                    utils::format("x UID FETCH %d (BODY.PEEK[TEXT])\r\n", uid), fetch_parser(from, whom)
-                );
-
-                m_unseen.pop_front();
-                m_last = uid;
-            }
+            if (last == m_uid)
+                session->snooze(min_polling_timeout);
         }
-        while (m_message.empty() && clock().total_milliseconds() < deadline);
+        while (last == m_uid);
 
-        if (m_message.empty())
-            throw plexus::timeout_error();
+        session->request(
+            utils::format("%u UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++m_seqno, m_uid), fetch_parser
+            );
 
         return std::move(m_message);
+    }
+
+    subscriber host() const noexcept(true) override
+    {
+        return m_config.host;
+    }
+
+    subscriber peer() const noexcept(true) override
+    {
+        return m_config.peer;
     }
 
 private:
 
     config m_config;
-    std::string m_message;
-    std::list<uint64_t> m_unseen;
+    uint8_t m_seqno = 0;
     uint64_t m_validity = 0;
-    uint64_t m_last = 0;
+    uint64_t m_uid = 0;
+    std::string m_message;
 };
 
-}
 
-using namespace email;
-
-class email_mediator : public mediator
+class mediator_impl : public mediator
 {
     smtp m_smtp;
     imap m_imap;
 
-    reference receive(abonent& from, abonent& whom, const std::regex& pattern, int64_t deadline = std::numeric_limits<int64_t>::max())
+    static constexpr uint8_t request_transaction = 0;
+    static constexpr uint8_t response_transaction = 1;
+
+    reference receive(const std::regex& pattern, uint8_t variant)
     {
         std::smatch match;
-        std::string message = m_imap.pull(from, whom, deadline);
+        std::string message = m_imap.pull(variant);
         if (std::regex_match(message, match, pattern))
         {
             return std::make_pair(
@@ -486,50 +580,64 @@ class email_mediator : public mediator
 
 public:
 
-    email_mediator(const config& conf)
-        : m_smtp(conf)
-        , m_imap(conf)
+    mediator_impl(const config& conf) : m_smtp(conf), m_imap(conf)
     {
     }
 
-    reference receive_request(abonent& from, abonent& whom) noexcept(false) override
+    reference pull_request() noexcept(false) override
     {
         _inf_ << "waiting plexus request...";
 
-        reference peer = receive(from, whom, std::regex("^PLEXUS\\s+2.1\\s+request\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"));
+        reference peer = receive(std::regex("^PLEXUS\\s+3.0\\s+0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), request_transaction);
 
         _inf_ << "received plexus request " << peer.first;
         return peer;
     }
 
-    reference receive_response(abonent& from, abonent& whom) noexcept(false) override
+    reference pull_response() noexcept(false) override
     {
         _inf_ << "waiting plexus response...";
 
-        reference peer = receive(from, whom, std::regex("^PLEXUS\\s+2.1\\s+response\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), RESPONSE_TIMEOUT);
+        reference peer = receive(std::regex("^PLEXUS\\s+3.0\\s+1\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), response_transaction);
 
         _inf_ << "received plexus response " << peer.first;
         return peer;
     }
 
-    void dispatch_request(const abonent& from, const abonent& to, const reference& host) noexcept(false) override
+    void push_request(const reference& host) noexcept(false) override
     {
         _inf_ << "sending plexus request...";
 
-        m_smtp.push(from, to, plexus::utils::format("PLEXUS 2.1 request %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second));
+        m_smtp.push(plexus::utils::format("PLEXUS 3.0 0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), request_transaction);
 
         _inf_ << "sent plexus request " << host.first;
     }
 
-    void dispatch_response(const abonent& from, const abonent& to, const reference& host) noexcept(false) override
+    void push_response(const reference& host) noexcept(false) override
     {
         _inf_ << "sending plexus response...";
 
-        m_smtp.push(from, to, plexus::utils::format("PLEXUS 2.1 response %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second));
+        m_smtp.push(plexus::utils::format("PLEXUS 3.0 1 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), response_transaction);
 
         _inf_ << "sent plexus response " << host.first;
     }
 };
+
+}
+
+std::shared_ptr<listener> create_email_listener(const boost::asio::ip::tcp::endpoint& imap,
+                                                const std::string& login,
+                                                const std::string& passwd,
+                                                const std::string& cert,
+                                                const std::string& key,
+                                                const std::string& ca,
+                                                const std::string& app,
+                                                const std::string& repo)
+{
+    _dbg_ << "imap server: " << imap;
+
+    return std::make_shared<email::imap>(email::config{{}, imap, login, passwd, cert, key, ca, app, repo, {}, {}});
+}
 
 std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
                                                 const boost::asio::ip::tcp::endpoint& imap,
@@ -538,13 +646,15 @@ std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endp
                                                 const std::string& cert,
                                                 const std::string& key,
                                                 const std::string& ca,
-                                                const std::string& app_id,
-                                                const std::string& cred_repo)
+                                                const std::string& app,
+                                                const std::string& repo,
+                                                const subscriber& host,
+                                                const subscriber& peer)
 {
     _dbg_ << "smtp server: " << smtp;
     _dbg_ << "imap server: " << imap;
 
-    return std::make_shared<email_mediator>(config{smtp, imap, login, passwd, cert, key, ca, app_id, cred_repo});
+    return std::make_shared<email::mediator_impl>(email::config{smtp, imap, login, passwd, cert, key, ca, app, repo, host, peer});
 }
 
 }

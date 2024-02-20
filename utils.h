@@ -38,6 +38,7 @@ std::string smime_sign(const std::string& msg, const std::string& cert, const st
 std::string smime_verify(const std::string& msg, const std::string& cert, const std::string& ca);
 std::string smime_encrypt(const std::string& msg, const std::string& cert);
 std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key);
+std::string get_email_address(const std::string& email);
 
 template<class var_t> var_t random()
 {
