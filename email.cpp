@@ -11,9 +11,9 @@
 #include "features.h"
 #include "network.h"
 #include "utils.h"
+#include <boost/test/execution_monitor.hpp>
 #include <filesystem>
 #include <logger.h>
-#include <limits>
 #include <stdexcept>
 #include <string>
 #include <iostream>
@@ -27,6 +27,8 @@ namespace plexus {
 const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
 const int64_t max_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
 const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 10000);
+constexpr const char* request_subject = "invite";
+constexpr const char* response_subject = "accept";
 
 namespace email {
 
@@ -114,7 +116,7 @@ public:
         _trc_ << ">>>>>\n" << response << "\n*****";
     }
 
-    void request(const std::string& request, const response_parser_t& parse, bool prolonged = false)
+    void request(const std::string& request, const response_parser_t& parse, int64_t timeout = 0)
     {
         _trc_ << "<<<<<\n" << request << "\n*****";
 
@@ -124,10 +126,19 @@ public:
         } while (written < request.size());
 
         std::string response;
-        do {
-			size_t read = m_ssl->read(m_buffer, BUFFER_SIZE, prolonged ? std::numeric_limits<int64_t>::max() : network::default_tcp_timeout_ms);
-            response.append((char*)m_buffer, read);
-        } while (!parse(response));
+        try
+        {
+
+            do {
+                size_t read = m_ssl->read(m_buffer, BUFFER_SIZE, timeout == 0 ? network::default_tcp_timeout_ms : timeout);
+                response.append((char*)m_buffer, read);
+            } while (!parse(response));
+        }
+        catch (const boost::system::system_error& ex)
+        {
+            if (timeout == 0 || ex.code() != boost::asio::error::operation_aborted)
+                throw;
+        }
 
         _trc_ << ">>>>>\n" << response << "\n*****";
     }
@@ -166,42 +177,34 @@ class smtp
         };
     }
 
-    std::string build_data(const std::string& message, uint8_t variant)
+    std::string build_data(const std::string& message, const std::string& subject)
     {
         if (!m_config.is_encryptable())
         {
             static const char* SIMPLE_EMAIL =
-                "X-Sender: %s\r\n"
-                "X-Variant: %u\r\n"
-                "X-Source: %s\r\n"
-                "X-Target: %s\r\n"
-                "From: %s\r\n"
-                "To: %s\r\n"
-                "Subject: plexus\r\n"
+                "From: %s <%s>\r\n"
+                "To: %s <%s>\r\n"
+                "Subject: %s %s\r\n"
                 "\r\n"
                 "%s\r\n"
                 ".\r\n";
 
             return utils::format(
                 SIMPLE_EMAIL,
-                m_config.app.c_str(),
-                variant,
                 m_config.host.second.c_str(),
-                m_config.peer.second.c_str(),
                 m_config.host.first.c_str(),
+                m_config.peer.second.c_str(),
                 m_config.peer.first.c_str(),
+                m_config.app.c_str(),
+                subject.c_str(),
                 message.c_str()
                 );
         }
 
         static const char* MULTIPART_EMAIL =
-            "X-Sender: %s\r\n"
-            "X-Variant: %u\r\n"
-            "X-Source: %s\r\n"
-            "X-Target: %s\r\n"
-            "From: %s\r\n"
-            "To: %s\r\n"
-            "Subject: plexus\r\n"
+            "From: %s <%s>\r\n"
+            "To: %s <%s>\r\n"
+            "Subject: %s %s\r\n"
             "MIME-Version: 1.0\r\n"
             "Content-Type: multipart/mixed; boundary=----%s\r\n"
             "\r\n"
@@ -218,12 +221,12 @@ class smtp
 
         return utils::format(
             MULTIPART_EMAIL,
-            m_config.app.c_str(),
-            variant,
             m_config.host.second.c_str(),
-            m_config.peer.second.c_str(),
             m_config.host.first.c_str(),
+            m_config.peer.second.c_str(),
             m_config.peer.first.c_str(),
+            m_config.app.c_str(),
+            subject.c_str(),
             bound.c_str(),
             bound.c_str(),
             content.c_str(),
@@ -237,7 +240,7 @@ public:
     {
     }
 
-    void push(const std::string& message, uint8_t variant) noexcept(false)
+    void push(const std::string& message, const std::string& subject) noexcept(false)
     {
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.smtp,
@@ -254,7 +257,7 @@ public:
         session->request(utils::format("MAIL FROM: %s\r\n", m_config.host.first.c_str()), code_checker(250));
         session->request(utils::format("RCPT TO: %s\r\n", m_config.peer.first.c_str()), code_checker(250));
         session->request("DATA\r\n", code_checker(354));
-        session->request(build_data(message, variant), code_checker(250));
+        session->request(build_data(message, subject), code_checker(250));
     }
 
 private:
@@ -265,12 +268,10 @@ private:
 class imap : public listener
 {
     typedef channel::response_parser_t response_parser_t;
-    
-    struct bad_command : public std::runtime_error { bad_command() : std::runtime_error("bad command") {} };
 
     const response_parser_t connect_checker = [](const std::string& response) -> bool {
             std::smatch match;
-            bool done = std::regex_search(response, match, std::regex("^\\* +(OK|NO) +.*\\r\\n$"));
+            bool done = std::regex_search(response, match, std::regex("^\\* (OK|NO) .*\\r\\n$"));
             if (done && match[1] != "OK")
                 throw std::runtime_error(response);
             return done;
@@ -278,17 +279,27 @@ class imap : public listener
 
     const response_parser_t success_checker = [](const std::string& response) -> bool {
         std::smatch match;
-        bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ +(OK|NO) +.*\\r\\n$"));
+        bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (OK|NO) .*\\r\\n$"));
         if (done && match[2] != "OK")
             throw std::runtime_error(response);
         return done;
+    };
+
+    const response_parser_t login_parser = [this](const std::string& response) -> bool {
+        if (success_checker(response))
+        {
+            std::smatch match;
+            m_idle = std::regex_search(response, match, std::regex("\\* CAPABILITY[^\\r\\n]+IDLE.*"));
+            return true;
+        }
+        return false;
     };
 
     const response_parser_t select_parser = [this](const std::string& response) -> bool {
         if (success_checker(response))
         {
             std::smatch match;
-            if (std::regex_search(response, match, std::regex(".*\\r\\n\\* +OK +\\[UIDVALIDITY +(\\d+)\\].*")))
+            if (std::regex_search(response, match, std::regex("\\[UIDVALIDITY (\\d+)\\]")))
             {
                 std::stringstream ss;
                 ss << match[1].str();
@@ -306,32 +317,39 @@ class imap : public listener
         return false;
     };
 
-    const response_parser_t search_parser = [this](const std::string& response) -> bool {
-        if (success_checker(response))
-        {
-            std::smatch match;
-            if (std::regex_search(response, match, std::regex("^\\* +SEARCH +([\\d ]+)\\r\\n.*")))
+    response_parser_t search_parser(bool first)
+    {
+        return [=](const std::string& response) -> bool {
+            if (success_checker(response))
             {
-                std::stringstream stream;
-                stream << match[1].str();
-
-                uint64_t uid = 0;
-                while (stream >> uid)
+                std::smatch match;
+                if (std::regex_search(response, match, std::regex("\\* SEARCH ([\\d ]+)\\r\\n.*")))
                 {
-                    if (uid > m_uid)
-                        m_uid = uid;
+                    std::stringstream stream;
+                    stream << match[1].str();
+
+                    uint64_t uid = 0;
+                    while (stream >> uid)
+                    {
+                        if (uid > m_uid)
+                        {
+                            m_uid = uid;
+                            if (first)
+                                break;
+                        }
+                    }
                 }
+                return true;
             }
-            return true;
-        }
-        return false;
-    };
+            return false;
+        };
+    }
 
     const response_parser_t uid_parser = [this](const std::string& response) -> bool {
         if (success_checker(response))
         {
             std::smatch match;
-            if (std::regex_search(response, match, std::regex("^\\* +\\d+ +FETCH +\\(UID +(\\d+)\\)\\r\\n.*")))
+            if (std::regex_search(response, match, std::regex("\\* \\d+ FETCH +\\(UID (\\d+)\\)\\r\\n.*")))
             {
                 std::stringstream ss;
                 ss << match[1].str();
@@ -344,35 +362,22 @@ class imap : public listener
 
     const response_parser_t idle_parser = [](const std::string& response) -> bool {
         std::smatch match;
-        if (std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ +(NO|BAD) +.*\\r\\n$")))
-        {
-            if (match[1] != "BAD")
-                throw bad_command();
+        if (std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (NO|BAD) .*\\r\\n")))
             throw std::runtime_error(response);
-        }
-        return std::regex_search(response, match, std::regex("^\\+ +idling(\\r\\n.*)+\\* +\\d+ +EXISTS(\\r\\n.*)*\\r\\n$"));
+        return std::regex_search(response, match, std::regex("\\+ idling\\r\\n.+\\r\\n"));
     };
-
 
     const response_parser_t listen_parser = [&](const std::string& response) -> bool
     {
         if (success_checker(response))
         {
-            static const std::regex pattern("^[^\\(\\r\\n]+\\([^\\r\\n]+\\r\\n"
-                                            "From: +([^\\r\\n]+)\\r\\n\\r\\n"
-                                            "[^\\r\\n]+\\r\\n"
-                                            "X-Source: +([^\\r\\n]+)\\r\\n\\r\\n"
-                                            "[^\\r\\n]+\\r\\n"
-                                            "To: +([^\\r\\n]+)\\r\\n\\r\\n"
-                                            "[^\\r\\n]+\\r\\n"
-                                            "X-Target: +([^\\r\\n]+)\\r\\n\\r\\n"
-                                            "\\)\\r\\n.*");
+            static const std::regex pattern(".*\\r\\nFrom: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n\\r\\n.*\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n\\r\\n.*");
 
             std::smatch match;
             if (std::regex_search(response, match, pattern))
             {
-                m_config.peer = std::make_pair(match[1].str(), match[2].str());
-                m_config.host = std::make_pair(match[3].str(), match[4].str());
+                m_config.peer = std::make_pair(match[2].str(), match[1].str());
+                m_config.host = std::make_pair(match[4].str(), match[3].str());
 
                 if (!m_config.is_permissible())
                 {
@@ -421,24 +426,13 @@ public:
 
     imap(const config& conf) : m_config(conf)
     {
-        if (m_config.is_absent())
-        {
-            std::unique_ptr<channel> session = std::make_unique<channel>(
-                m_config.imap,
-                m_config.cert,
-                m_config.key,
-                m_config.ca
-            );
-
-            session->connect(connect_checker);
-            session->request(utils::format("%u LOGIN %s %s\r\n", ++m_seqno, m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
-            session->request(utils::format("%u SELECT INBOX\r\n", ++m_seqno), select_parser);
-            session->request(utils::format("%u FETCH * UID\r\n", ++m_seqno), uid_parser);
-        }
     }
 
     void listen() noexcept(false) override
     {
+        m_config.peer = subscriber();
+        m_config.host = subscriber();
+
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.imap,
             m_config.cert,
@@ -446,32 +440,30 @@ public:
             m_config.ca
         );
 
-        m_config.peer = subscriber();
-        m_config.host = subscriber();
-
+        uint8_t seq = 0;
         session->connect(connect_checker);
-        session->request(utils::format("%u LOGIN %s %s\r\n", ++m_seqno, m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
+        session->request(utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
+        session->request(utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
+
+        if (m_uid == 0)
+            session->request(utils::format("%u FETCH * UID\r\n", ++seq), uid_parser);
 
         do
         {
             uint64_t last = m_uid;
-
-            session->request(utils::format("%u SELECT INBOX\r\n", ++m_seqno), select_parser);
-            session->request(utils::format("%u UID SEARCH (SINCE %s) (HEADER X-Sender %s) (HEADER X-Variant 0)\r\n",
-                    ++m_seqno,
-                    utils::format("%d-%b-%Y", std::chrono::system_clock::now()).c_str(), m_config.app.c_str()
-                ),
-                search_parser
+            session->request(
+                utils::format("%u UID SEARCH UNANSWERED (Subject %s) (Subject %s)\r\n", ++seq, m_config.app.c_str(), request_subject),
+                search_parser(true)
             );
 
             if (last == m_uid)
             {
-                try
+                if (m_idle)
                 {
-                    session->request(utils::format("%u IDLE\r\n", ++m_seqno), idle_parser, true);
+                    session->request(utils::format("%u IDLE\r\n", ++seq), idle_parser, max_polling_timeout);
                     session->request("DONE\r\n", success_checker);
                 }
-                catch (const bad_command&)
+                else
                 {
                     session->snooze(max_polling_timeout);
                 }
@@ -479,21 +471,23 @@ public:
             else
             {
                 session->request(
-                    utils::format("%u UID FETCH %d (BODY[HEADER.FIELDS (From)] BODY[HEADER.FIELDS (X-Source)] BODY[HEADER.FIELDS (To)] BODY[HEADER.FIELDS (X-Target)])\r\n", ++m_seqno, m_uid),
+                    utils::format("%u UID FETCH %d (BODY[HEADER.FIELDS (From)] BODY[HEADER.FIELDS (To)])\r\n", ++seq, m_uid),
                     listen_parser
                 );
             }
         }
         while (m_config.is_absent());
+
+        session->request(utils::format("%u LOGOUT\r\n", ++seq), success_checker);
     }
 
-    std::string pull(uint8_t variant) noexcept(false)
+    std::string pull(const std::string& subject) noexcept(false)
     {
-        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+        auto elapsed = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
-            return boost::posix_time::microsec_clock::universal_time() - start;
+            return (boost::posix_time::microsec_clock::universal_time() - start).total_milliseconds();
         };
-
+        
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.imap,
             m_config.cert,
@@ -501,36 +495,51 @@ public:
             m_config.ca
         );
 
+        uint8_t seq = 0;
         session->connect(connect_checker);
-        session->request(utils::format("%u LOGIN %s %s\r\n", ++m_seqno, m_config.login.c_str(), m_config.passwd.c_str()), success_checker);
+        session->request(utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
+        session->request(utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
 
-        uint64_t last = m_uid;
         do
         {
-            if (timer().total_milliseconds() > response_timeout)
-                throw plexus::timeout_error();
-
-            session->request(utils::format("%u SELECT INBOX\r\n", ++m_seqno), select_parser);
-            session->request(utils::format("%u UID SEARCH (SINCE %s) (HEADER X-Sender %s) (HEADER X-Variant %u) (From %s) (To %s) (HEADER X-Source %s) (HEADER X-Target %s)\r\n",
-                    ++m_seqno,
-                    utils::format("%d-%b-%Y", std::chrono::system_clock::now()).c_str(), 
-                    m_config.app.c_str(), variant,
-                    m_config.peer.first.c_str(),
-                    m_config.host.first.c_str(),
+            uint64_t last = m_uid;
+            session->request(utils::format("%u UID SEARCH UNANSWERED (Subject %s) (Subject %s) (From %s) (From %s) (To %s) (To %s)\r\n",
+                    ++seq,
+                    m_config.app.c_str(), subject.c_str(),
                     m_config.peer.second.c_str(),
-                    m_config.host.second.c_str()
+                    m_config.peer.first.c_str(),
+                    m_config.host.second.c_str(),
+                    m_config.host.first.c_str()
                 ),
-                search_parser
+                search_parser(false)
             );
 
             if (last == m_uid)
-                session->snooze(min_polling_timeout);
-        }
-        while (last == m_uid);
+            {
+                if (elapsed() > response_timeout)
+                    throw plexus::timeout_error();
 
-        session->request(
-            utils::format("%u UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++m_seqno, m_uid), fetch_parser
-            );
+                if (m_idle)
+                {
+                    session->request(utils::format("%u IDLE\r\n", ++seq), idle_parser, std::min(min_polling_timeout, response_timeout - elapsed()));
+                    session->request("DONE\r\n", success_checker);
+                }
+                else
+                {
+                    session->snooze(std::min(min_polling_timeout, response_timeout - elapsed()));
+                }
+            }
+            else
+            {
+                session->request(
+                    utils::format("%u UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++seq, m_uid), fetch_parser
+                    );
+            }
+        }
+        while (m_message.empty());
+
+        session->request(utils::format("%u UID STORE %d +flags (\\SEEN \\ANSWERED)\r\n", ++seq, m_uid), success_checker);
+        session->request(utils::format("%u LOGOUT\r\n", ++seq), success_checker);
 
         return std::move(m_message);
     }
@@ -548,7 +557,7 @@ public:
 private:
 
     config m_config;
-    uint8_t m_seqno = 0;
+    bool m_idle;
     uint64_t m_validity = 0;
     uint64_t m_uid = 0;
     std::string m_message;
@@ -560,14 +569,11 @@ class mediator_impl : public mediator
     smtp m_smtp;
     imap m_imap;
 
-    static constexpr uint8_t request_transaction = 0;
-    static constexpr uint8_t response_transaction = 1;
-
-    reference receive(const std::regex& pattern, uint8_t variant)
+    reference receive(const std::string& subject)
     {
         std::smatch match;
-        std::string message = m_imap.pull(variant);
-        if (std::regex_match(message, match, pattern))
+        std::string message = m_imap.pull(subject);
+        if (std::regex_match(message, match, std::regex("^PLEXUS 3.0 (\\S+) (\\d+) (\\d+)$")))
         {
             return std::make_pair(
                 utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str()),
@@ -588,7 +594,7 @@ public:
     {
         _inf_ << "waiting plexus request...";
 
-        reference peer = receive(std::regex("^PLEXUS\\s+3.0\\s+0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), request_transaction);
+        reference peer = receive(request_subject);
 
         _inf_ << "received plexus request " << peer.first;
         return peer;
@@ -598,7 +604,7 @@ public:
     {
         _inf_ << "waiting plexus response...";
 
-        reference peer = receive(std::regex("^PLEXUS\\s+3.0\\s+1\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)$"), response_transaction);
+        reference peer = receive(response_subject);
 
         _inf_ << "received plexus response " << peer.first;
         return peer;
@@ -608,7 +614,7 @@ public:
     {
         _inf_ << "sending plexus request...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 3.0 0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), request_transaction);
+        m_smtp.push(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), request_subject);
 
         _inf_ << "sent plexus request " << host.first;
     }
@@ -617,7 +623,7 @@ public:
     {
         _inf_ << "sending plexus response...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 3.0 1 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), response_transaction);
+        m_smtp.push(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), response_subject);
 
         _inf_ << "sent plexus response " << host.first;
     }

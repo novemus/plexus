@@ -21,6 +21,7 @@ class puncher : public plexus::nat_puncher
 {
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
+    std::shared_ptr<network::udp>  m_pin;
 
     class handshake : public tubus::mutable_buffer
     {
@@ -133,7 +134,7 @@ public:
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        auto pin = plexus::network::create_udp_transport(m_bind);
+        m_pin = plexus::network::create_udp_transport(m_bind);
         handshake out(1, mask);
         handshake in(mask);
 
@@ -141,11 +142,11 @@ public:
         {
             try
             {
-                in.truncate(pin->receive(peer, in));
+                in.truncate(m_pin->receive(peer, in));
 
                 if (in.flag() == 0)
                 {
-                    pin->send(peer, out);
+                    m_pin->send(peer, out);
                 }
                 else
                 {
@@ -171,8 +172,8 @@ public:
 
         auto ep = reflect_endpoint();
 
-        auto pin = plexus::network::create_udp_transport(m_bind);
-        pin->send(peer, handshake(0, 0), 2000, hops);
+        m_pin = plexus::network::create_udp_transport(m_bind);
+        m_pin->send(peer, handshake(0, 0), 2000, hops);
 
         return ep;
     }

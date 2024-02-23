@@ -23,7 +23,7 @@
 
 namespace plexus {
 
-void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait)
+void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
@@ -55,13 +55,10 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         if (h == INVALID_HANDLE_VALUE)
             throw std::runtime_error(utils::format("CreateFile: error=%d", GetLastError()));
 
-        if (wait)
-            si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-
         si.hStdOutput = h;
         si.hStdError = h;
     }
-    else if (wait)
+    else
     {
         si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
         si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -70,23 +67,6 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
 	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, true, 0, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
 	{
-        if (wait)
-        {
-            WaitForSingleObject(pi.hProcess, INFINITE);
-
-            DWORD code = 0;
-            if (!GetExitCodeProcess(pi.hProcess, &code) || code != 0)
-            {
-                CloseHandle(pi.hProcess);
-                CloseHandle(pi.hThread);
-
-                if (!log.empty())
-                    CloseHandle(si.hStdOutput);
-
-                throw std::runtime_error(utils::format("GetExitCodeProcess: error=%d, code=%d", GetLastError(), code));
-            }
-        }
-
         if (!log.empty())
             CloseHandle(si.hStdOutput);
 
@@ -129,7 +109,7 @@ std::shared_ptr<char*> copy_environment()
     return environment;
 }
 
-void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait)
+void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log)
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
@@ -137,9 +117,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
     cmd += " " + args;
 
     std::string pwd = boost::replace_all_copy(dir, " ", "\\ ");
-    std::string command = pwd.empty() ? cmd : "cd " + pwd + " && " + cmd;
-    if (!wait)
-        command += " &";
+    std::string command = pwd.empty() ? cmd + " &" : "cd " + pwd + " && " + cmd + " &";
 
     const char* argv[] = { "sh", "-c", command.c_str(), 0 };
     std::shared_ptr<char*> env = copy_environment();

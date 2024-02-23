@@ -19,9 +19,8 @@ namespace plexus {
 struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
 struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
 struct bad_message : public std::runtime_error { bad_message() : std::runtime_error("bad message") {} };
-struct bad_subscriber : public std::runtime_error { bad_subscriber() : std::runtime_error("bad subscriber") {} };
 
-void exec(const std::string& prog, const std::string& args, const std::string& dir = "", const std::string& log = "", bool wait = true);
+void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "");
 
 using subscriber = std::pair</* email */std::string , /* id */std::string>;
 

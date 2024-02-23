@@ -21,6 +21,8 @@ constexpr int common_error = -1;
 constexpr int bad_options = -2;
 constexpr int bad_network = -3;
 
+const char* plexus_path = 0;
+
 template<class proto, const char* service>
 struct endpoint : public boost::asio::ip::basic_endpoint<proto>
 {
@@ -56,100 +58,78 @@ void validate(boost::any& result, const std::vector<std::string>& values, endpoi
     }
 }
 
-enum usage
-{
-    to_listen,
-    to_accept,
-    to_invite
-};
+namespace usage {
 
-std::istream& operator>>(std::istream& in, usage& mode)
-{
-    std::string str;
-    in >> str;
+constexpr char to_listen[] = "listen";
+constexpr char to_accept[] = "accept";
+constexpr char to_invite[] = "invite";
 
-    if (str == "listen" || str == "LISTEN" || str == "0")
-        mode = usage::to_listen;
-    else if (str == "accept" || str == "ACCEPT" || str == "1")
-        mode = usage::to_accept;
-    else
-        mode = usage::to_invite;
-
-    return in;
-}
-
-std::ostream& operator<<(std::ostream& out, usage mode)
-{
-    switch(mode)
-    {
-        case usage::to_listen:
-            return out << "LISTEN";
-        case usage::to_accept:
-            return out << "ACCEPT";
-        default:
-            return out << "INVITE";
-    }
-    return out;
 }
 
 int listen(const boost::program_options::variables_map& vm)
 {
-    static const char* args_pattern = "--email-smtps=%s:%u --email-imaps=%s:%u --email-login=%s --email-passwd=%s --email-cert=%s --email-ca=%s --email-key=%s"
-                                      "--mode=accept --app-id=%s --app-repo=%s --host-email=%s --host-id=%s --peer-email=%s --peer-id=%s"
-                                      "--stun-server=%s:%u --stun-client=%s:%u --punch-hops=%u --exec-command=%s --exec-args=%s"
-                                      "--exec-pwd=%s --exec-log-file=%s --log-level=%u --log-file=%s";
-    try
+    static const char* args_pattern = "--email-smtps %s:%u --email-imaps %s:%u --email-login %s --email-passwd %s --email-cert \"%s\" --email-ca \"%s\" --email-key \"%s\" "
+                                      "--usage accept --app-id %s --app-repo \"%s\" --host-email %s --host-id %s --peer-email %s --peer-id %s "
+                                      "--stun-server %s:%u --stun-client %s:%u --punch-hops %u --exec-command \"%s\" --exec-args \"%s\" "
+                                      "--exec-pwd \"%s\" --log-level %u --log-file \"%s\"";
+    
+    auto imaps = vm["email-imaps"].as<imap_server_endpoint>();
+    auto smtps = vm["email-smtps"].as<smtp_server_endpoint>();
+    auto login = vm["email-login"].as<std::string>();
+    auto passwd = vm["email-passwd"].as<std::string>();
+    auto cert = vm["email-cert"].as<std::string>();
+    auto key = vm["email-key"].as<std::string>();
+    auto ca = vm["email-ca"].as<std::string>();
+    auto app = vm["app-id"].as<std::string>();
+    auto repo = vm["app-repo"].as<std::string>();
+    auto stuns = vm["stun-server"].as<stun_server_endpoint>();
+    auto stunc = vm["stun-client"].as<stun_client_endpoint>();
+
+    while (true)
     {
-        auto imaps = vm["email-imaps"].as<imap_server_endpoint>();
-        auto smtps = vm["email-smtps"].as<smtp_server_endpoint>();
-        auto login = vm["email-login"].as<std::string>();
-        auto passwd = vm["email-passwd"].as<std::string>();
-        auto cert = vm["email-cert"].as<std::string>();
-        auto key = vm["email-key"].as<std::string>();
-        auto ca = vm["email-ca"].as<std::string>();
-        auto app = vm["app-id"].as<std::string>();
-        auto repo = vm["app-repo"].as<std::string>();
-        auto stuns = vm["stun-server"].as<stun_server_endpoint>();
-        auto stunc = vm["stun-client"].as<stun_client_endpoint>();
-
-        auto listener = plexus::create_email_listener(imaps, login, passwd, cert, key, ca, app, repo);
-
-        do
+        try
         {
-            listener->listen();
+            auto listener = plexus::create_email_listener(imaps, login, passwd, cert, key, ca, app, repo);
 
-            auto host = listener->host();
-            auto peer = listener->peer();
+            while (true)
+            {
+                listener->listen();
 
-            _inf_ << "coupling peer=" << peer.first << "/" << peer.second << " and host=" << host.first << "/" << host.second;
+                auto host = listener->host();
+                auto peer = listener->peer();
 
-            std::string args = plexus::utils::format(args_pattern,
-                smtps.address().to_string().c_str(), smtps.port(),
-                imaps.address().to_string().c_str(), imaps.port(),
-                login.c_str(), passwd.c_str(),
-                cert.c_str(), ca.c_str(), key.c_str(),
-                app.c_str(), repo.c_str(),
-                host.first.c_str(), host.second.c_str(),
-                peer.first.c_str(), peer.second.c_str(),
-                stuns.address().to_string().c_str(), stuns.port(),
-                stunc.address().to_string().c_str(), stunc.port(),
-                vm["punch-hops"].as<uint16_t>(),
-                vm["exec-command"].as<std::string>().c_str(),
-                vm["exec-args"].as<std::string>().c_str(),
-                vm["exec-pwd"].as<std::string>().c_str(),
-                vm["exec-log-file"].as<std::string>().c_str(),
-                vm["log-level"].as<wormhole::log::severity>(),
-                vm["log-file"].as<std::string>().c_str()
-                );
+                _inf_ << "coupling peer=" << peer.first << "/" << peer.second << " and host=" << host.first << "/" << host.second;
 
-            plexus::exec("plexus", args, std::filesystem::current_path().generic_u8string(), vm["log-file"].as<std::string>(), false);
+                std::string args = plexus::utils::format(args_pattern,
+                    smtps.address().to_string().c_str(), smtps.port(),
+                    imaps.address().to_string().c_str(), imaps.port(),
+                    login.c_str(), passwd.c_str(),
+                    cert.c_str(), ca.c_str(), key.c_str(),
+                    app.c_str(), repo.c_str(),
+                    host.first.c_str(), host.second.c_str(),
+                    peer.first.c_str(), peer.second.c_str(),
+                    stuns.address().to_string().c_str(), stuns.port(),
+                    stunc.address().to_string().c_str(), stunc.port(),
+                    vm["punch-hops"].as<uint16_t>(),
+                    vm["exec-command"].as<std::string>().c_str(),
+                    vm["exec-args"].as<std::string>().c_str(),
+                    vm["exec-pwd"].as<std::string>().c_str(),
+                    vm["log-level"].as<wormhole::log::severity>(),
+                    vm["log-file"].as<std::string>().c_str()
+                    );
+
+                plexus::exec(
+                    std::filesystem::canonical(plexus_path).generic_u8string(),
+                    args,
+                    std::filesystem::current_path().generic_u8string(),
+                    std::filesystem::canonical(wormhole::log::file()).generic_u8string()
+                    );
+            }
         }
-        while (true);
-    }
-    catch(const std::exception& e)
-    {
-        _ftl_ << e.what();
-        return common_error;
+        catch(const std::exception& e)
+        {
+            _err_ << e.what();
+        }
     }
 
     return success;
@@ -188,8 +168,7 @@ int couple(const boost::program_options::variables_map& vm)
             vm["app-id"].as<std::string>(),
             vm["app-repo"].as<std::string>(),
             host_info,
-            peer_info
-            );
+            peer_info);
 
         auto execute = [&](const boost::asio::ip::udp::endpoint& host, const boost::asio::ip::udp::endpoint& peer, uint64_t secret)
         {
@@ -213,10 +192,15 @@ int couple(const boost::program_options::variables_map& vm)
                     );
             };
 
-            plexus::exec(format(vm["exec-command"].as<std::string>()), format(vm["exec-args"].as<std::string>()), format(vm["exec-pwd"].as<std::string>()), format(vm["exec-log-file"].as<std::string>()));
+            plexus::exec(
+                format(vm["exec-command"].as<std::string>()),
+                format(vm["exec-args"].as<std::string>()),
+                format(vm["exec-pwd"].as<std::string>()),
+                std::filesystem::canonical(wormhole::log::file()).generic_u8string()
+                );
         };
 
-        if (vm["usage"].as<usage>() == usage::to_accept)
+        if (vm["usage"].as<std::string>() == usage::to_accept)
         {
             plexus::reference peer(mediator->pull_request());
             plexus::reference host(puncher->punch_hole_to_peer(peer.first, vm["punch-hops"].as<uint16_t>()), plexus::utils::random<uint64_t>());
@@ -246,10 +230,12 @@ int couple(const boost::program_options::variables_map& vm)
 
 int main(int argc, char** argv)
 {
+    plexus_path = argv[0];
+
     boost::program_options::options_description desc("plexus options");
     desc.add_options()
         ("help", "produce help message")
-        ("usage", boost::program_options::value<usage>()->required(), "util usage: <listen|accept|invite>")
+        ("usage", boost::program_options::value<std::string>()->default_value("listen"), "util usage: <listen|accept|invite>")
         ("app-id", boost::program_options::value<std::string>()->required(), "identifier of the application")
         ("app-repo", boost::program_options::value<std::string>()->default_value(""), "path to application repository")
         ("host-email", boost::program_options::value<std::string>(), "email address used by the host")
@@ -269,9 +255,8 @@ int main(int argc, char** argv)
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
         ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%, %hostid%, %peerid%, %hostemail%, %peeremail%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable, the above wildcards are allowed")
-        ("exec-log-file", boost::program_options::value<std::string>()->default_value(""), "log file for executable, the above wildcards are allowed")
         ("log-level", boost::program_options::value<wormhole::log::severity>()->default_value(wormhole::log::info), "log level: <fatal|error|warning|info|debug|trace>")
-        ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file, allowed %p (process id) wildcard")
+        ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file, allowed wildcards: %usage%, %time%")
         ("config", boost::program_options::value<std::string>(), "path to INI-like configuration file");
 
     boost::program_options::variables_map vm;
@@ -287,7 +272,7 @@ int main(int argc, char** argv)
         if(vm.count("config"))
             boost::program_options::store(boost::program_options::parse_config_file<char>(vm["config"].as<std::string>().c_str(), desc), vm);
 
-        if (vm["usage"].as<usage>() != usage::to_listen)
+        if (vm["usage"].as<std::string>() != usage::to_listen)
         {
             if (!vm.count("host-email") || !vm.count("host-id") || !vm.count("peer-email") || !vm.count("peer-id"))
                 throw std::runtime_error("the following options are required: '--host-email', '--host-id', '--peer-email', '--peer-id'");
@@ -309,7 +294,12 @@ int main(int argc, char** argv)
         return bad_options;
     }
 
-    wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), false, vm["log-file"].as<std::string>());
+    auto log = boost::regex_replace(vm["log-file"].as<std::string>(),
+        boost::regex("(%time%)|(%usage%)"),
+        plexus::utils::format("(?{1}%s)(?{2}%s)", plexus::utils::format("%Y%m%d%H%M%S", std::chrono::system_clock::now()).c_str(), vm["usage"].as<std::string>().c_str()),
+        boost::match_posix | boost::format_all
+        );
+    wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), false, log);
 
-    return vm["usage"].as<usage>() == usage::to_listen ? listen(vm) : couple(vm);
+    return vm["usage"].as<std::string>() == usage::to_listen ? listen(vm) : couple(vm);
 }
