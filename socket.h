@@ -28,7 +28,7 @@ template<typename socket_impl> class asio_socket : public socket_impl
     size_t execute(const async_asio_call& invoke, const boost::posix_time::time_duration& timeout) noexcept(false)
     {
         boost::asio::deadline_timer timer(m_io);
-        if (timeout.is_positive())
+        if (timeout.ticks() > 0)
         {
             timer.expires_from_now(timeout);
             timer.async_wait([&](const boost::system::error_code& error)

@@ -15,11 +15,14 @@ set(SOURCES utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp stun.cpp punc
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
     add_definitions(
         -D_CRT_NO_VA_START_VALIDATION
         -D_CRT_SECURE_NO_WARNINGS
         -D_WIN32_WINNT=0x0600
         -D_WINSOCK_DEPRECATED_NO_WARNINGS
+        -D_SILENCE_CXX17_ALLOCATOR_VOID_DEPRECATION_WARNING
+        -D_SILENCE_CXX17_OLD_ALLOCATOR_MEMBERS_DEPRECATION_WARNING
     )
 endif()
 

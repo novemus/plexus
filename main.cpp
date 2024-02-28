@@ -203,7 +203,7 @@ int couple(const boost::program_options::variables_map& vm)
         if (vm["usage"].as<std::string>() == usage::to_accept)
         {
             plexus::reference peer(mediator->pull_request());
-            plexus::reference host(puncher->punch_hole_to_peer(peer.first, vm["punch-hops"].as<uint16_t>()), plexus::utils::random<uint64_t>());
+            plexus::reference host(puncher->punch_hole_to_peer(peer.first, static_cast<uint8_t>(vm["punch-hops"].as<uint16_t>())), plexus::utils::random<uint64_t>());
             mediator->push_response(host);
 
             puncher->await_peer(peer.first, peer.second ^ host.second);

@@ -21,6 +21,7 @@
 #include <memory>
 #include <regex>
 #include <functional>
+#include <filesystem>
 
 namespace plexus {
 

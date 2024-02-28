@@ -20,7 +20,7 @@ struct timeout_error : public std::runtime_error { timeout_error() : std::runtim
 struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
 struct bad_message : public std::runtime_error { bad_message() : std::runtime_error("bad message") {} };
 
-void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "");
+void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", bool wait = false);
 
 using subscriber = std::pair</* email */std::string , /* id */std::string>;
 

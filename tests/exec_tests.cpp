@@ -16,10 +16,11 @@
 
 BOOST_AUTO_TEST_CASE(exec)
 {
+    boost::filesystem::remove("out.txt");
 #ifdef _WIN32
-    BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo line", boost::filesystem::current_path().string(), "out.txt"));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo line", boost::filesystem::current_path().string(), "out.txt", true));
 #else
-    BOOST_REQUIRE_NO_THROW(plexus::exec("echo", "line", boost::filesystem::current_path().string(), "out.txt"));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("echo", "line", boost::filesystem::current_path().string(), "out.txt", true));
 #endif
 
     BOOST_REQUIRE(boost::filesystem::exists(boost::filesystem::path("out.txt")));
