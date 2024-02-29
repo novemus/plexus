@@ -32,7 +32,7 @@ namespace plexus { namespace utils {
         if (cert.empty() || key.empty())
             return msg;
 
-        int flags = PKCS7_DETACHED | PKCS7_STREAM | PKCS7_NOCERTS | PKCS7_CRLFEOL;
+        int flags = PKCS7_DETACHED | PKCS7_STREAM | PKCS7_NOCERTS;
 
         std::shared_ptr<BIO> cert_bio(BIO_new_file(cert.c_str(), "r"), BIO_free);
         if (!cert_bio)
@@ -70,7 +70,7 @@ namespace plexus { namespace utils {
         long len = BIO_get_mem_data(out.get(), &ptr);
         std::string data(ptr, len);
 
-        return data;
+        return std::regex_replace(data, std::regex("\\n"), "\r\n");
     }
 
     std::string smime_encrypt(const std::string& msg, const std::string& cert)
@@ -78,7 +78,7 @@ namespace plexus { namespace utils {
         if (cert.empty())
             throw std::runtime_error("no certificate");
 
-        int flags = PKCS7_STREAM | PKCS7_CRLFEOL;
+        int flags = PKCS7_STREAM;
 
         std::shared_ptr<BIO> tbio(BIO_new_file(cert.c_str(), "r"), BIO_free);
 
@@ -116,7 +116,7 @@ namespace plexus { namespace utils {
         long len = BIO_get_mem_data(out.get(), &ptr);
         std::string data(ptr, len);
 
-        return data;
+        return std::regex_replace(data, std::regex("\\n"), "\r\n");
     }
 
     std::string smime_decrypt(const std::string& msg, const std::string& cert, const std::string& key)
@@ -141,7 +141,8 @@ namespace plexus { namespace utils {
         if (!pcert || !pkey)
             throw std::runtime_error(get_last_error());
 
-        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), (int)msg.size()), BIO_free);
+        std::string m = std::regex_replace(msg, std::regex("\\r\\n"), "\n");
+        std::shared_ptr<BIO> in(BIO_new_mem_buf(m.c_str(), (int)m.size()), BIO_free);
 
         if (!in)
             throw std::runtime_error(get_last_error());
@@ -209,7 +210,8 @@ namespace plexus { namespace utils {
                 throw std::runtime_error(get_last_error());
         }
 
-        std::shared_ptr<BIO> in(BIO_new_mem_buf(msg.c_str(), (int)msg.size()), BIO_free);
+        std::string m = std::regex_replace(msg, std::regex("\\r\\n"), "\n");
+        std::shared_ptr<BIO> in(BIO_new_mem_buf(m.c_str(), (int)m.size()), BIO_free);
 
         if (!in)
             throw std::runtime_error(get_last_error());
