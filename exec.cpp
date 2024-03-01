@@ -12,9 +12,7 @@
 #include "utils.h"
 #include <logger.h>
 #include <fcntl.h>
-#include <memory>
 #include <vector>
-#include <boost/algorithm/string/replace.hpp>
 
 #ifdef _WIN32
 
@@ -108,25 +106,6 @@ extern char **environ;
 
 namespace plexus {
 
-std::shared_ptr<char*> copy_environment()
-{
-    std::vector<char*> list;
-    for (char **env = ::environ; *env; ++env)
-    {
-		list.push_back(*env);
-	}
-
-    std::shared_ptr<char*> environment(new char *[list.size() + 1], std::default_delete<char *[]>());
-    char **ptr = environment.get();
-    for (size_t i = 0; i < list.size(); ++i)
-    {
-		ptr[i] = list[i];
-	}
-    ptr[list.size()] = 0;
-
-    return environment;
-}
-
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait)
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
@@ -135,12 +114,16 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
     cmd += " " + args;
 
     std::string pwd = boost::replace_all_copy(dir, " ", "\\ ");
-    std::string command = pwd.empty() ? cmd + " &" : "cd " + pwd + " && " + cmd;
+    std::string command = pwd.empty() ? cmd : "cd " + pwd + " && " + cmd;
     if (!wait)
         command += " &";
 
     const char* argv[] = { "sh", "-c", command.c_str(), 0 };
-    std::shared_ptr<char*> env = copy_environment();
+
+    std::vector<char*> envp;
+    for (char **env = ::environ; *env; ++env)
+        envp.push_back(*env);
+    envp.push_back(0);
 
     posix_spawn_file_actions_t action = {};
     int status = posix_spawn_file_actions_init(&action);
@@ -153,14 +136,14 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         status = posix_spawn_file_actions_addopen(&action, 1, outfile.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0644);
         if (status)
             throw std::runtime_error(utils::format("posix_spawn_file_actions_addopen: error=%d", status));
-        
+
         status = posix_spawn_file_actions_adddup2(&action, 1, 2);
         if (status)
             throw std::runtime_error(utils::format("posix_spawn_file_actions_adddup2: error=%d", status));
     }
 
     pid_t pid;
-    status = posix_spawn(&pid, "/bin/sh", &action, 0, (char*const*)argv, env.get());
+    status = posix_spawn(&pid, "/bin/sh", &action, 0, (char*const*)argv, envp.data());
     if (status)
         throw std::runtime_error(utils::format("posix_spawn: error=%d", status));
 

@@ -98,7 +98,7 @@ int listen(const boost::program_options::variables_map& vm)
                 auto host = listener->host();
                 auto peer = listener->peer();
 
-                _inf_ << "coupling peer=" << peer.first << "/" << peer.second << " and host=" << host.first << "/" << host.second;
+                _inf_ << "invoke accept from peer=" << peer.first << "/" << peer.second << " for host=" << host.first << "/" << host.second;
 
                 std::string args = plexus::utils::format(args_pattern,
                     smtps.address().to_string().c_str(), smtps.port(),
@@ -199,6 +199,8 @@ int couple(const boost::program_options::variables_map& vm)
                 std::filesystem::canonical(wormhole::log::file()).generic_u8string()
                 );
         };
+
+        _inf_ << vm["usage"].as<std::string>() << " peer=" << peer_info.first << "/" << peer_info.second << " for host=" << peer_info.first << "/" << peer_info.second;
 
         if (vm["usage"].as<std::string>() == usage::to_accept)
         {
