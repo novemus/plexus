@@ -24,11 +24,14 @@ BOOST_AUTO_TEST_CASE(smime)
 
     BOOST_REQUIRE_NO_THROW(decrypted_smime = plexus::utils::smime_decrypt(encrypted_smime, "./certs/server.crt", "./certs/server.key"));
     BOOST_REQUIRE_NO_THROW(verified_smime = plexus::utils::smime_verify(decrypted_smime, "./certs/client.crt", "./certs/ca.crt"));
-    
+    BOOST_REQUIRE_EQUAL(verified_smime, message);
+
+    BOOST_REQUIRE_NO_THROW(verified_smime = plexus::utils::smime_verify(decrypted_smime, "./certs/client.crt", ""));
     BOOST_REQUIRE_EQUAL(verified_smime, message);
 
     BOOST_REQUIRE_THROW(plexus::utils::smime_sign(message, "./certs/client.crt", "./certs/server.key"), std::runtime_error);
     BOOST_REQUIRE_THROW(plexus::utils::smime_encrypt(signed_smime, "./certs/server.key"), std::runtime_error);
     BOOST_REQUIRE_THROW(plexus::utils::smime_decrypt(encrypted_smime, "./certs/client.crt", "./certs/client.key"), std::runtime_error);
     BOOST_REQUIRE_THROW(plexus::utils::smime_verify(decrypted_smime, "./certs/server.crt", "./certs/ca.crt"), std::runtime_error);
+    BOOST_REQUIRE_THROW(plexus::utils::smime_verify(decrypted_smime, "./certs/server.crt", ""), std::runtime_error);
 }

@@ -11,17 +11,13 @@
 #include "features.h"
 #include "network.h"
 #include "utils.h"
-#include <boost/test/execution_monitor.hpp>
 #include <filesystem>
 #include <logger.h>
-#include <stdexcept>
 #include <string>
 #include <iostream>
-#include <cstring>
 #include <memory>
 #include <regex>
 #include <functional>
-#include <filesystem>
 
 namespace plexus {
 
@@ -241,7 +237,7 @@ public:
     {
     }
 
-    void push(const std::string& message, const std::string& subject) noexcept(false)
+    void push(const reference& host, const std::string& subject) noexcept(false)
     {
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_config.smtp,
@@ -258,7 +254,8 @@ public:
         session->request(utils::format("MAIL FROM: %s\r\n", m_config.host.first.c_str()), code_checker(250));
         session->request(utils::format("RCPT TO: %s\r\n", m_config.peer.first.c_str()), code_checker(250));
         session->request("DATA\r\n", code_checker(354));
-        session->request(build_data(message, subject), code_checker(250));
+        session->request(build_data(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), subject), code_checker(250));
+        session->request("QUIT\r\n", code_checker(221));
     }
 
 private:
@@ -391,37 +388,47 @@ class imap : public listener
         return false;
     };
 
-    const response_parser_t fetch_parser = [&](const std::string& response) -> bool
+    response_parser_t fetch_parser(reference& peer)
     {
-        if (success_checker(response))
+        return [&](const std::string& response) -> bool
         {
-            std::smatch match;
-            if (std::regex_search(response, match, std::regex("^[^\\r\\n]+\\r\\n([\\s\\S]+)\\r\\n\\)\\r\\n.*")))
+            if (success_checker(response))
             {
-                try
+                std::smatch match;
+                if (std::regex_search(response, match, std::regex("^[^\\r\\n]+\\r\\n([\\s\\S]+)\\r\\n\\)\\r\\n.*")))
                 {
-                    if (m_config.is_encryptable())
+                    try
                     {
-                        m_message = plexus::utils::smime_verify(
-                            plexus::utils::smime_decrypt(match[1].str(), m_config.get_host_cert(), m_config.get_host_key()),
-                            m_config.get_peer_cert(),
-                            m_config.get_peer_ca()
-                            );
+                        std::string message;
+                        if (m_config.is_encryptable())
+                        {
+                            message = plexus::utils::smime_verify(
+                                plexus::utils::smime_decrypt(match[1].str(), m_config.get_host_cert(), m_config.get_host_key()),
+                                m_config.get_peer_cert(),
+                                m_config.get_peer_ca()
+                                );
+                        }
+                        else
+                        {
+                            message = match[1].str();
+                        }
+
+                        if (std::regex_match(message, match, std::regex("^PLEXUS 3.0 (\\S+) (\\d+) (\\d+)$")))
+                        {
+                            peer.first = utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str());
+                            peer.second = boost::lexical_cast<uint64_t>(match[3].str());
+                        }
                     }
-                    else
+                    catch(const std::exception& ex)
                     {
-                        m_message = match[1].str();
+                        _err_ << ex.what();
                     }
                 }
-                catch(const std::exception& ex)
-                {
-                    _err_ << ex.what();
-                }
+                return true;
             }
-            return true;
-        }
-        return false;
-    };
+            return false;
+        };
+    }
 
 public:
 
@@ -453,7 +460,7 @@ public:
         {
             uint64_t last = m_uid;
             session->request(
-                utils::format("%u UID SEARCH UNANSWERED (Subject %s) (Subject %s)\r\n", ++seq, m_config.app.c_str(), invite_token.c_str()),
+                utils::format("%u UID SEARCH (UID %d:*) (Subject %s) (Subject %s)\r\n", ++seq, last + 1, m_config.app.c_str(), invite_token.c_str()),
                 search_parser(true)
             );
 
@@ -482,7 +489,7 @@ public:
         session->request(utils::format("%u LOGOUT\r\n", ++seq), success_checker);
     }
 
-    std::string pull(const std::string& subject) noexcept(false)
+    reference pull(const std::string& subject) noexcept(false)
     {
         auto elapsed = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -501,10 +508,11 @@ public:
         session->request(utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
         session->request(utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
 
+        reference peer;
         do
         {
             uint64_t last = m_uid;
-            session->request(utils::format("%u UID SEARCH UNANSWERED (Subject %s) (Subject %s) (From %s) (From %s) (To %s) (To %s)\r\n",
+            session->request(utils::format("%u UID SEARCH UNDELETED (Subject %s) (Subject %s) (From %s) (From %s) (To %s) (To %s)\r\n",
                     ++seq,
                     m_config.app.c_str(), subject.c_str(),
                     m_config.peer.second.c_str(),
@@ -533,16 +541,16 @@ public:
             else
             {
                 session->request(
-                    utils::format("%u UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++seq, m_uid), fetch_parser
+                    utils::format("%u UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++seq, m_uid), fetch_parser(peer)
                     );
             }
         }
-        while (m_message.empty());
+        while (peer.first.port() == 0);
 
-        session->request(utils::format("%u UID STORE %d +flags (\\SEEN \\ANSWERED)\r\n", ++seq, m_uid), success_checker);
+        session->request(utils::format("%u UID STORE %d +flags \\DELETED\r\n", ++seq, m_uid), success_checker);
         session->request(utils::format("%u LOGOUT\r\n", ++seq), success_checker);
 
-        return std::move(m_message);
+        return peer;
     }
 
     subscriber host() const noexcept(true) override
@@ -561,7 +569,6 @@ private:
     bool m_idle;
     uint64_t m_validity = 0;
     uint64_t m_uid = 0;
-    std::string m_message;
 };
 
 
@@ -569,21 +576,6 @@ class mediator_impl : public mediator
 {
     smtp m_smtp;
     imap m_imap;
-
-    reference receive(const std::string& subject)
-    {
-        std::smatch match;
-        std::string message = m_imap.pull(subject);
-        if (std::regex_match(message, match, std::regex("^PLEXUS 3.0 (\\S+) (\\d+) (\\d+)$")))
-        {
-            return std::make_pair(
-                utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str()),
-                boost::lexical_cast<uint64_t>(match[3].str())
-            );
-        }
-
-        throw plexus::bad_message();
-    }
 
 public:
 
@@ -595,7 +587,7 @@ public:
     {
         _inf_ << "waiting plexus request...";
 
-        reference peer = receive(invite_token);
+        reference peer = m_imap.pull(invite_token);
 
         _inf_ << "received plexus request " << peer.first;
         return peer;
@@ -605,7 +597,7 @@ public:
     {
         _inf_ << "waiting plexus response...";
 
-        reference peer = receive(accept_token);
+        reference peer = m_imap.pull(accept_token);
 
         _inf_ << "received plexus response " << peer.first;
         return peer;
@@ -615,7 +607,7 @@ public:
     {
         _inf_ << "sending plexus request...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), invite_token);
+        m_smtp.push(host, invite_token);
 
         _inf_ << "sent plexus request " << host.first;
     }
@@ -624,7 +616,7 @@ public:
     {
         _inf_ << "sending plexus response...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), accept_token);
+        m_smtp.push(host, accept_token);
 
         _inf_ << "sent plexus response " << host.first;
     }
