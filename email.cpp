@@ -28,8 +28,8 @@ namespace plexus {
 const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
 const int64_t max_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
 const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 10000);
-constexpr const char* request_subject = "invite";
-constexpr const char* response_subject = "accept";
+const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
+const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
 
 namespace email {
 
@@ -453,7 +453,7 @@ public:
         {
             uint64_t last = m_uid;
             session->request(
-                utils::format("%u UID SEARCH UNANSWERED (Subject %s) (Subject %s)\r\n", ++seq, m_config.app.c_str(), request_subject),
+                utils::format("%u UID SEARCH UNANSWERED (Subject %s) (Subject %s)\r\n", ++seq, m_config.app.c_str(), invite_token.c_str()),
                 search_parser(true)
             );
 
@@ -595,7 +595,7 @@ public:
     {
         _inf_ << "waiting plexus request...";
 
-        reference peer = receive(request_subject);
+        reference peer = receive(invite_token);
 
         _inf_ << "received plexus request " << peer.first;
         return peer;
@@ -605,7 +605,7 @@ public:
     {
         _inf_ << "waiting plexus response...";
 
-        reference peer = receive(response_subject);
+        reference peer = receive(accept_token);
 
         _inf_ << "received plexus response " << peer.first;
         return peer;
@@ -615,7 +615,7 @@ public:
     {
         _inf_ << "sending plexus request...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), request_subject);
+        m_smtp.push(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), invite_token);
 
         _inf_ << "sent plexus request " << host.first;
     }
@@ -624,7 +624,7 @@ public:
     {
         _inf_ << "sending plexus response...";
 
-        m_smtp.push(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), response_subject);
+        m_smtp.push(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), accept_token);
 
         _inf_ << "sent plexus response " << host.first;
     }
