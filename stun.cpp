@@ -273,13 +273,15 @@ public:
 
 class client : public stun_client
 {
+    boost::asio::io_service& m_io;
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
 
 public:
 
-    client(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) 
-        : m_stun(stun)
+    client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) 
+        : m_io(io)
+        , m_stun(stun)
         , m_bind(bind)
     {}
 
@@ -315,8 +317,8 @@ public:
                         auto ce = resp.changed_endpoint();
 
                         _dbg_ << "mapped_endpoint=" << me
-                            << " source_endpoint=" << se
-                            << " changed_endpoint=" << ce;
+                              << " source_endpoint=" << se
+                              << " changed_endpoint=" << ce;
                         break;
                     }
                     case msg::binding_request:
@@ -349,7 +351,7 @@ public:
     {
         _dbg_ << "reflecting endpoint...";
 
-        return exec_binding(plexus::network::create_udp_transport(m_bind), m_stun, m_stun).mapped_endpoint();
+        return exec_binding(plexus::network::create_udp_transport(m_io, m_bind), m_stun, m_stun).mapped_endpoint();
     }
 
     traverse explore_network() noexcept(false) override
@@ -358,7 +360,7 @@ public:
         
         traverse state = {0};
 
-        auto mapper = plexus::network::create_udp_transport(m_bind);
+        auto mapper = plexus::network::create_udp_transport(m_io, m_bind);
 
         auto response = exec_binding(mapper, m_stun, m_stun);
         auto mapped = response.mapped_endpoint();
@@ -411,7 +413,7 @@ public:
             state.mapping = binding::independent;
         }
 
-        auto filter = plexus::network::create_udp_transport();
+        auto filter = plexus::network::create_udp_transport(m_io);
         try
         {
             _dbg_ << "first filtering test...";
@@ -467,9 +469,9 @@ public:
 
 }
 
-std::shared_ptr<plexus::stun_client> create_stun_client(const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local)
+std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local)
 {
-    return std::make_shared<plexus::stun::client>(server, local);
+    return std::make_shared<plexus::stun::client>(io, server, local);
 }
 
 }

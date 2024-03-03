@@ -11,6 +11,7 @@
 #include "features.h"
 #include "network.h"
 #include "utils.h"
+#include <cstdint>
 #include <filesystem>
 #include <logger.h>
 #include <string>
@@ -27,9 +28,60 @@ const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MIN_P
 const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
 const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
 
+std::ostream& operator<<(std::ostream& stream, const reference& value)
+{
+    if (stream.rdbuf())
+        return stream << value.endpoint << "/" << value.puzzle;
+    return stream;
+}
+
+std::ostream& operator<<(std::ostream& stream, const identity& value)
+{
+    if (stream.rdbuf())
+        return stream << value.owner << "/" << value.pin;
+    return stream;
+}
+
+std::istream& operator>>(std::istream& in, reference& value)
+{
+    std::string str;
+    in >> str;
+
+    std::smatch match;
+    if (std::regex_match(str, match, std::regex("^([\\S]*)/([\\S]*)$")))
+    {
+        value.endpoint = plexus::utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), "");
+        value.puzzle = boost::lexical_cast<uint64_t>(match[2].str());
+        return in;
+    }
+
+    throw boost::bad_lexical_cast();
+}
+
+std::istream& operator>>(std::istream& in, identity& value)
+{
+    std::string str;
+    in >> str;
+
+    std::smatch match;
+    if (std::regex_match(str, match, std::regex("^([\\S]*)/([\\S]*)$")))
+    {
+        value.owner = match[1].str();
+        value.pin = match[2].str();
+    }
+    else
+    {
+        value.owner = str;
+        value.pin = "";
+    }
+    return in;
+}
+
 namespace email {
 
-struct config
+using namespace wormhole;
+
+struct context
 {
     boost::asio::ip::tcp::endpoint smtp;
     boost::asio::ip::tcp::endpoint imap;
@@ -40,49 +92,41 @@ struct config
     std::string ca;
     std::string app;
     std::string repo;
-    subscriber host;
-    subscriber peer;
 
-    bool is_absent() const
+    bool is_defined(const identity& host, const identity& peer) const
     {
-        return host.first.empty() || host.second.empty() || peer.first.empty() || peer.second.empty();
+        return !host.owner.empty() && !host.pin.empty() && !peer.owner.empty() && !peer.pin.empty();
     }
 
-    bool is_permissible() const
+    bool is_existent(const identity& host, const identity& peer) const
     {
-        return !is_absent()
-            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.first / host.second))
-            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / peer.first / peer.second));
+        return is_defined(host, peer)
+            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.owner / host.pin))
+            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / peer.owner / peer.pin));
     }
 
-    bool is_encryptable() const
+    bool is_encryptable(const identity& host, const identity& peer) const
     {
-        return std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.first / host.second / "cert.crt"))
-            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.first / host.second / "private.key"))
-            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / peer.first / peer.second / "cert.crt"));
+        return std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.owner / host.pin / "cert.crt"))
+            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.owner / host.pin / "private.key"))
+            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / peer.owner / peer.pin / "cert.crt"));
     }
 
-    std::string get_host_cert() const 
+    std::string get_cert(const identity& info) const 
     {
-        std::filesystem::path cert(std::filesystem::path(repo) / host.first / host.second / "cert.crt");
+        std::filesystem::path cert(std::filesystem::path(repo) / info.owner / info.pin / "cert.crt");
         return std::filesystem::exists(cert) ? cert.generic_u8string() : "";
     }
 
-    std::string get_host_key() const 
+    std::string get_key(const identity& info) const 
     {
-        std::filesystem::path key(std::filesystem::path(repo) / host.first / host.second / "private.key");
+        std::filesystem::path key(std::filesystem::path(repo) / info.owner / info.pin / "private.key");
         return std::filesystem::exists(key) ? key.generic_u8string() : "";
     }
 
-    std::string get_peer_cert() const 
+    std::string get_ca(const identity& info) const 
     {
-        std::filesystem::path cert(std::filesystem::path(repo) / peer.first / peer.second / "cert.crt");
-        return std::filesystem::exists(cert) ? cert.generic_u8string() : "";
-    }
-
-    std::string get_peer_ca() const 
-    {
-        std::filesystem::path ca(std::filesystem::path(repo) / peer.first / peer.second / "ca.crt");
+        std::filesystem::path ca(std::filesystem::path(repo) / info.owner / info.pin / "ca.crt");
         return std::filesystem::exists(ca) ? ca.generic_u8string() : "";
     }
 };
@@ -93,8 +137,8 @@ class channel
 
 public:
 
-    channel(const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
-        : m_ssl(network::create_ssl_client(remote, cert, key, ca))
+    channel(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+        : m_ssl(network::create_ssl_client(io, remote, cert, key, ca))
     {
     }
 
@@ -174,9 +218,9 @@ class smtp
         };
     }
 
-    std::string build_data(const std::string& message, const std::string& subject)
+    std::string build_data(const std::string& subject, const std::string& message)
     {
-        if (!m_config.is_encryptable())
+        if (!m_config.is_encryptable(m_host, m_peer))
         {
             static const char* SIMPLE_EMAIL =
                 "From: %s <%s>\r\n"
@@ -188,10 +232,10 @@ class smtp
 
             return utils::format(
                 SIMPLE_EMAIL,
-                m_config.host.second.c_str(),
-                m_config.host.first.c_str(),
-                m_config.peer.second.c_str(),
-                m_config.peer.first.c_str(),
+                m_host.pin.c_str(),
+                m_host.owner.c_str(),
+                m_peer.pin.c_str(),
+                m_peer.owner.c_str(),
                 m_config.app.c_str(),
                 subject.c_str(),
                 message.c_str()
@@ -210,18 +254,18 @@ class smtp
             "------%s--\r\n"
             ".\r\n";
 
-        std::string bound = plexus::utils::to_hexadecimal(m_config.host.first.data(), m_config.host.first.size());
+        std::string bound = plexus::utils::to_hexadecimal(m_host.owner.data(), m_host.owner.size());
         std::string content = plexus::utils::smime_encrypt(
-            plexus::utils::smime_sign(message, m_config.get_host_cert(), m_config.get_host_key()),
-            m_config.get_peer_cert()
+            plexus::utils::smime_sign(message, m_config.get_cert(m_host), m_config.get_key(m_host)),
+            m_config.get_cert(m_peer)
             );
 
         return utils::format(
             MULTIPART_EMAIL,
-            m_config.host.second.c_str(),
-            m_config.host.first.c_str(),
-            m_config.peer.second.c_str(),
-            m_config.peer.first.c_str(),
+            m_host.pin.c_str(),
+            m_host.owner.c_str(),
+            m_peer.pin.c_str(),
+            m_peer.owner.c_str(),
             m_config.app.c_str(),
             subject.c_str(),
             bound.c_str(),
@@ -233,13 +277,21 @@ class smtp
 
 public:
     
-    smtp(const config& conf) : m_config(conf)
+    smtp(boost::asio::io_service& io, const context& conf, const identity& host, const identity& peer)
+        : m_io(io)
+        , m_config(conf)
+        , m_host(host)
+        , m_peer(peer)
     {
     }
 
-    void push(const reference& host, const std::string& subject) noexcept(false)
+    void push(const std::string& subject, const reference& data) noexcept(false)
     {
+        if (!m_config.is_defined(m_host, m_peer))
+            throw bad_identity();
+
         std::unique_ptr<channel> session = std::make_unique<channel>(
+            m_io,
             m_config.smtp,
             m_config.cert,
             m_config.key,
@@ -251,19 +303,42 @@ public:
         session->request("AUTH LOGIN\r\n", code_checker(334));
         session->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.login.c_str(), m_config.login.size()).c_str()), code_checker(334));
         session->request(utils::format("%s\r\n", utils::to_base64_no_nl(m_config.passwd.c_str(), m_config.passwd.size()).c_str()), code_checker(235));
-        session->request(utils::format("MAIL FROM: %s\r\n", m_config.host.first.c_str()), code_checker(250));
-        session->request(utils::format("RCPT TO: %s\r\n", m_config.peer.first.c_str()), code_checker(250));
+        session->request(utils::format("MAIL FROM: %s\r\n", m_host.owner.c_str()), code_checker(250));
+        session->request(utils::format("RCPT TO: %s\r\n", m_peer.owner.c_str()), code_checker(250));
         session->request("DATA\r\n", code_checker(354));
-        session->request(build_data(plexus::utils::format("PLEXUS 3.0 %s %u %llu", host.first.address().to_string().c_str(), host.first.port(), host.second), subject), code_checker(250));
+        session->request(build_data(subject, plexus::utils::format("PLEXUS 3.0 %s %u %llu", data.endpoint.address().to_string().c_str(), data.endpoint.port(), data.puzzle)), code_checker(250));
         session->request("QUIT\r\n", code_checker(221));
+    }
+
+    const identity& host() const noexcept(true)
+    {
+        return m_host;
+    }
+
+    const identity& peer() const noexcept(true)
+    {
+        return m_peer;
+    }
+
+    void host(const identity& info) noexcept(true)
+    {
+        m_host = info;
+    }
+
+    void peer(const identity& info) noexcept(true)
+    {
+        m_peer = info;
     }
 
 private:
 
-    config m_config;
+    boost::asio::io_service& m_io;
+    context m_config;
+    identity m_host;
+    identity m_peer;
 };
 
-class imap : public listener
+class imap
 {
     typedef channel::response_parser_t response_parser_t;
 
@@ -306,7 +381,7 @@ class imap : public listener
                 ss >> validity;
 
                 if (validity != m_validity)
-                    m_uid = 0;
+                    m_position = 0;
 
                 m_validity = validity;
             }
@@ -315,35 +390,31 @@ class imap : public listener
         return false;
     };
 
-    response_parser_t search_parser(bool first)
-    {
-        return [=](const std::string& response) -> bool {
-            if (success_checker(response))
+    const response_parser_t search_parser = [=](const std::string& response) -> bool {
+        if (success_checker(response))
+        {
+            std::smatch match;
+            if (std::regex_search(response, match, std::regex("\\* SEARCH ([\\d ]+)\\r\\n.*")))
             {
-                std::smatch match;
-                if (std::regex_search(response, match, std::regex("\\* SEARCH ([\\d ]+)\\r\\n.*")))
-                {
-                    std::stringstream stream;
-                    stream << match[1].str();
+                std::stringstream stream;
+                stream << match[1].str();
 
-                    uint64_t uid = 0;
-                    while (stream >> uid)
+                uint64_t uid = 0;
+                while (stream >> uid)
+                {
+                    if (uid > m_position)
                     {
-                        if (uid > m_uid)
-                        {
-                            m_uid = uid;
-                            if (first)
-                                break;
-                        }
+                        m_position = uid;
+                        break;
                     }
                 }
-                return true;
             }
-            return false;
-        };
-    }
+            return true;
+        }
+        return false;
+    };
 
-    const response_parser_t uid_parser = [this](const std::string& response) -> bool {
+    const response_parser_t end_parser = [this](const std::string& response) -> bool {
         if (success_checker(response))
         {
             std::smatch match;
@@ -351,7 +422,7 @@ class imap : public listener
             {
                 std::stringstream ss;
                 ss << match[1].str();
-                ss >> m_uid;
+                ss >> m_position;
             }
             return true;
         }
@@ -365,22 +436,43 @@ class imap : public listener
         return std::regex_search(response, match, std::regex("\\+ idling\\r\\n.+\\r\\n"));
     };
 
-    const response_parser_t listen_parser = [&](const std::string& response) -> bool
+    const response_parser_t fetch_parser = [&](const std::string& response) -> bool
     {
         if (success_checker(response))
         {
-            static const std::regex pattern(".*\\r\\nFrom: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n\\r\\n.*\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n\\r\\n.*");
+            static const std::regex pattern(".*\\r\\nFrom: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n\\r\\n"
+                                            ".*\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n\\r\\n"
+                                            "[^\\r\\n]+\\r\\n([\\s\\S]+)\\r\\n\\)\\r\\n.*");
 
             std::smatch match;
             if (std::regex_search(response, match, pattern))
             {
-                m_config.peer = std::make_pair(match[2].str(), match[1].str());
-                m_config.host = std::make_pair(match[4].str(), match[3].str());
+                identity peer = { match[1].str(), match[2].str() };
+                identity host = { match[3].str(), match[4].str() };
 
-                if (!m_config.is_permissible())
+                if (m_config.is_defined(m_host, m_peer) || m_config.is_existent(host, peer))
                 {
-                    m_config.peer = subscriber();
-                    m_config.host = subscriber();
+                    std::string message;
+                    if (m_config.is_encryptable(host, peer))
+                    {
+                        message = plexus::utils::smime_verify(
+                            plexus::utils::smime_decrypt(match[1].str(), m_config.get_cert(m_host), m_config.get_key(m_host)),
+                            m_config.get_cert(m_peer),
+                            m_config.get_ca(m_peer)
+                            );
+                    }
+                    else
+                    {
+                        message = match[1].str();
+                    }
+
+                    if (std::regex_match(message, match, std::regex("^PLEXUS 3.0 (\\S+) (\\d+) (\\d+)$")))
+                    {
+                        m_data.endpoint = utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str());
+                        m_data.puzzle = boost::lexical_cast<uint64_t>(match[3].str());
+                        m_host = host;
+                        m_peer = peer;
+                    }
                 }
             }
             return true;
@@ -388,60 +480,57 @@ class imap : public listener
         return false;
     };
 
-    response_parser_t fetch_parser(reference& peer)
+     std::string make_filter(const std::string& subject)
     {
-        return [&](const std::string& response) -> bool
-        {
-            if (success_checker(response))
-            {
-                std::smatch match;
-                if (std::regex_search(response, match, std::regex("^[^\\r\\n]+\\r\\n([\\s\\S]+)\\r\\n\\)\\r\\n.*")))
-                {
-                    try
-                    {
-                        std::string message;
-                        if (m_config.is_encryptable())
-                        {
-                            message = plexus::utils::smime_verify(
-                                plexus::utils::smime_decrypt(match[1].str(), m_config.get_host_cert(), m_config.get_host_key()),
-                                m_config.get_peer_cert(),
-                                m_config.get_peer_ca()
-                                );
-                        }
-                        else
-                        {
-                            message = match[1].str();
-                        }
+        std::string filter = utils::format("(UID %d:*) (Subject %s) (Subject %s)", m_position + 1, m_config.app.c_str(), subject.c_str());
 
-                        if (std::regex_match(message, match, std::regex("^PLEXUS 3.0 (\\S+) (\\d+) (\\d+)$")))
-                        {
-                            peer.first = utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str());
-                            peer.second = boost::lexical_cast<uint64_t>(match[3].str());
-                        }
-                    }
-                    catch(const std::exception& ex)
-                    {
-                        _err_ << ex.what();
-                    }
-                }
-                return true;
-            }
-            return false;
-        };
+        if (!m_peer.pin.empty())
+            filter += utils::format(" (From %s)", m_peer.pin.c_str());
+        if (!m_peer.owner.empty())
+            filter += utils::format(" (From %s)", m_peer.owner.c_str());
+        if (!m_host.pin.empty())
+            filter += utils::format(" (To %s)", m_host.pin.c_str());
+        if (!m_host.owner.empty())
+            filter += utils::format(" (To %s)", m_host.owner.c_str());
+
+        return filter;
     }
 
 public:
 
-    imap(const config& conf) : m_config(conf)
+    imap(boost::asio::io_service& io, const context& conf, const identity& host, const identity& peer)
+        : m_io(io)
+        , m_config(conf)
+        , m_host(host)
+        , m_peer(peer)
     {
+        std::unique_ptr<channel> session = std::make_unique<channel>(
+            m_io,
+            m_config.imap,
+            m_config.cert,
+            m_config.key,
+            m_config.ca
+        );
+
+        uint8_t seq = 0;
+        session->connect(connect_checker);
+        session->request(utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
+        session->request(utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
+        session->request(utils::format("%u FETCH * UID\r\n", ++seq), end_parser);
+        session->request(utils::format("%u LOGOUT\r\n", ++seq), success_checker);
     }
 
-    void listen() noexcept(false) override
+    void wait(const std::string& subject, bool infinite = true) noexcept(false)
     {
-        m_config.peer = subscriber();
-        m_config.host = subscriber();
+        m_data = {};
+
+        auto elapsed = [infinite, start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return infinite == false && (boost::posix_time::microsec_clock::universal_time() - start).total_milliseconds() > response_timeout;
+        };
 
         std::unique_ptr<channel> session = std::make_unique<channel>(
+            m_io,
             m_config.imap,
             m_config.cert,
             m_config.key,
@@ -453,207 +542,225 @@ public:
         session->request(utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
         session->request(utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
 
-        if (m_uid == 0)
-            session->request(utils::format("%u FETCH * UID\r\n", ++seq), uid_parser);
+        if (m_position == 0)
+            session->request(utils::format("%u FETCH * UID\r\n", ++seq), end_parser);
 
         do
         {
-            uint64_t last = m_uid;
-            session->request(
-                utils::format("%u UID SEARCH (UID %d:*) (Subject %s) (Subject %s)\r\n", ++seq, last + 1, m_config.app.c_str(), invite_token.c_str()),
-                search_parser(true)
-            );
+            uint64_t end = m_position;
+            session->request(utils::format("%u UID SEARCH %s\r\n", ++seq, make_filter(subject).c_str()), search_parser);
 
-            if (last == m_uid)
+            if (m_position == end)
             {
+                if (elapsed())
+                    throw timeout_error();
+
                 if (m_idle)
                 {
-                    session->request(utils::format("%u IDLE\r\n", ++seq), idle_parser, max_polling_timeout);
+                    session->request(utils::format("%u IDLE\r\n", ++seq), idle_parser, infinite ? max_polling_timeout : min_polling_timeout);
                     session->request("DONE\r\n", success_checker);
                 }
                 else
                 {
-                    session->snooze(max_polling_timeout);
+                    session->snooze(infinite ? max_polling_timeout : min_polling_timeout);
                 }
             }
             else
             {
                 session->request(
-                    utils::format("%u UID FETCH %d (BODY[HEADER.FIELDS (From)] BODY[HEADER.FIELDS (To)])\r\n", ++seq, m_uid),
-                    listen_parser
+                    utils::format("%u UID FETCH %d (BODY[HEADER.FIELDS (From)] BODY[HEADER.FIELDS (To)] BODY.PEEK[TEXT])\r\n", ++seq, m_position),
+                    fetch_parser
                 );
             }
         }
-        while (m_config.is_absent());
+        while (m_data.endpoint.port() == 0);
 
+        session->request(utils::format("%u UID STORE %d +flags \\DELETED\r\n", ++seq, m_position), success_checker);
         session->request(utils::format("%u LOGOUT\r\n", ++seq), success_checker);
     }
 
-    reference pull(const std::string& subject) noexcept(false)
+    const reference& pull(const std::string& subject)
     {
-        auto elapsed = [start = boost::posix_time::microsec_clock::universal_time()]()
-        {
-            return (boost::posix_time::microsec_clock::universal_time() - start).total_milliseconds();
-        };
-        
-        std::unique_ptr<channel> session = std::make_unique<channel>(
-            m_config.imap,
-            m_config.cert,
-            m_config.key,
-            m_config.ca
-        );
+        if (m_data.endpoint.port() == 0)
+            wait(subject, false);
 
-        uint8_t seq = 0;
-        session->connect(connect_checker);
-        session->request(utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
-        session->request(utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
-
-        reference peer;
-        do
-        {
-            uint64_t last = m_uid;
-            session->request(utils::format("%u UID SEARCH UNDELETED (Subject %s) (Subject %s) (From %s) (From %s) (To %s) (To %s)\r\n",
-                    ++seq,
-                    m_config.app.c_str(), subject.c_str(),
-                    m_config.peer.second.c_str(),
-                    m_config.peer.first.c_str(),
-                    m_config.host.second.c_str(),
-                    m_config.host.first.c_str()
-                ),
-                search_parser(false)
-            );
-
-            if (last == m_uid)
-            {
-                if (elapsed() > response_timeout)
-                    throw plexus::timeout_error();
-
-                if (m_idle)
-                {
-                    session->request(utils::format("%u IDLE\r\n", ++seq), idle_parser, std::min(min_polling_timeout, response_timeout - elapsed()));
-                    session->request("DONE\r\n", success_checker);
-                }
-                else
-                {
-                    session->snooze(std::min(min_polling_timeout, response_timeout - elapsed()));
-                }
-            }
-            else
-            {
-                session->request(
-                    utils::format("%u UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++seq, m_uid), fetch_parser(peer)
-                    );
-            }
-        }
-        while (peer.first.port() == 0);
-
-        session->request(utils::format("%u UID STORE %d +flags \\DELETED\r\n", ++seq, m_uid), success_checker);
-        session->request(utils::format("%u LOGOUT\r\n", ++seq), success_checker);
-
-        return peer;
+        return m_data;
     }
 
-    subscriber host() const noexcept(true) override
+    const identity& host() const noexcept(true)
     {
-        return m_config.host;
+        return m_host;
     }
 
-    subscriber peer() const noexcept(true) override
+    const identity& peer() const noexcept(true)
     {
-        return m_config.peer;
+        return m_peer;
+    }
+
+    void host(const identity& info) noexcept(true)
+    {
+        m_host = info;
+        m_data = {};
+    }
+
+    void peer(const identity& info) noexcept(true)
+    {
+        m_peer = info;
+        m_data = {};
     }
 
 private:
 
-    config m_config;
-    bool m_idle;
+    boost::asio::io_service& m_io;
+    context m_config;
+    bool m_idle = false;
     uint64_t m_validity = 0;
-    uint64_t m_uid = 0;
+    uint64_t m_position = 0;
+    identity m_host;
+    identity m_peer;
+    reference m_data;
 };
 
-
-class mediator_impl : public mediator
+class pipe_impl : public pipe
 {
-    smtp m_smtp;
-    imap m_imap;
+    smtp m_pusher;
+    imap m_puller;
 
 public:
 
-    mediator_impl(const config& conf) : m_smtp(conf), m_imap(conf)
+    pipe_impl(const smtp& pusher, const imap& puller) : m_pusher(pusher), m_puller(puller)
     {
     }
 
-    reference pull_request() noexcept(false) override
+    const reference& pull_request() noexcept(false) override
     {
-        _inf_ << "waiting plexus request...";
-
-        reference peer = m_imap.pull(invite_token);
-
-        _inf_ << "received plexus request " << peer.first;
-        return peer;
+        const reference& faraway = m_puller.pull(invite_token);
+        _inf_ << "pulled request " << faraway;
+        return faraway;
     }
 
-    reference pull_response() noexcept(false) override
+    const reference& pull_response() noexcept(false) override
     {
-        _inf_ << "waiting plexus response...";
-
-        reference peer = m_imap.pull(accept_token);
-
-        _inf_ << "received plexus response " << peer.first;
-        return peer;
+        const reference& faraway = m_puller.pull(accept_token);
+        _inf_ << "pulled response " << faraway;
+        return faraway;
     }
 
-    void push_request(const reference& host) noexcept(false) override
+    void push_request(const reference& gateway) noexcept(false) override
     {
-        _inf_ << "sending plexus request...";
-
-        m_smtp.push(host, invite_token);
-
-        _inf_ << "sent plexus request " << host.first;
+        m_pusher.push(invite_token, gateway);
+        _inf_ << "pushed request " << gateway;
     }
 
-    void push_response(const reference& host) noexcept(false) override
+    void push_response(const reference& gateway) noexcept(false) override
     {
-        _inf_ << "sending plexus response...";
+        m_pusher.push(accept_token, gateway);
+        _inf_ << "pushed response " << gateway;
+    }
 
-        m_smtp.push(host, accept_token);
+    const identity& host() const noexcept(true) override
+    {
+        return m_pusher.host();
+    }
 
-        _inf_ << "sent plexus response " << host.first;
+    const identity& peer() const noexcept(true) override
+    {
+        return m_puller.peer();
+    }
+};
+
+class broker_impl : public broker
+{
+    boost::asio::io_service& m_io;
+    smtp m_smtp;
+    imap m_imap;
+    identity m_host;
+    identity m_peer;
+
+public:
+
+    broker_impl(boost::asio::io_service& io, const context& conf, const identity& host, const identity& peer)
+        : m_io(io)
+        , m_smtp(io, conf, host, peer)
+        , m_imap(io, conf, host, peer)
+        , m_host(host)
+        , m_peer(peer)
+    {
+    }
+
+    void accept(const broker_handler& handler) noexcept(false) override
+    {
+        try
+        {
+            do
+            {
+                m_imap.wait(invite_token);
+
+                m_smtp.host(m_imap.host());
+                m_smtp.peer(m_imap.peer());
+
+                m_io.post([handler, pipe = std::make_shared<pipe_impl>(m_smtp, m_imap)]()
+                {
+                    try
+                    {
+                        _inf_ << "accepting peer=" << pipe->peer() << " for host=" << pipe->host();
+
+                        handler(pipe);
+                    }
+                    catch (const std::exception &e)
+                    {
+                        _err_ << e.what();
+                    }
+                });
+
+                m_imap.host(m_host);
+                m_imap.peer(m_peer);
+            }
+            while (true);
+        }
+        catch (const std::exception &e)
+        {
+            _err_ << e.what();
+        }
+    }
+
+    void invite(const broker_handler& handler) noexcept(false) override
+    {
+        m_io.post([handler, pipe = std::make_shared<pipe_impl>(m_smtp, m_imap)]()
+        {
+            try
+            {
+                _inf_ << "infiting peer=" << pipe->peer() << " for host=" << pipe->host();
+
+                handler(pipe);
+            }
+            catch (const std::exception& e)
+            {
+                _err_ << e.what();
+            }
+        });
     }
 };
 
 }
 
-std::shared_ptr<listener> create_email_listener(const boost::asio::ip::tcp::endpoint& imap,
-                                                const std::string& login,
-                                                const std::string& passwd,
-                                                const std::string& cert,
-                                                const std::string& key,
-                                                const std::string& ca,
-                                                const std::string& app,
-                                                const std::string& repo)
-{
-    _dbg_ << "imap server: " << imap;
-
-    return std::make_shared<email::imap>(email::config{{}, imap, login, passwd, cert, key, ca, app, repo, {}, {}});
-}
-
-std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
-                                                const boost::asio::ip::tcp::endpoint& imap,
-                                                const std::string& login,
-                                                const std::string& passwd,
-                                                const std::string& cert,
-                                                const std::string& key,
-                                                const std::string& ca,
-                                                const std::string& app,
-                                                const std::string& repo,
-                                                const subscriber& host,
-                                                const subscriber& peer)
+std::shared_ptr<broker> create_email_broker(boost::asio::io_service& io,
+                                            const boost::asio::ip::tcp::endpoint& smtp,
+                                            const boost::asio::ip::tcp::endpoint& imap,
+                                            const std::string& login,
+                                            const std::string& passwd,
+                                            const std::string& cert,
+                                            const std::string& key,
+                                            const std::string& ca,
+                                            const std::string& app,
+                                            const std::string& repo,
+                                            const identity& host,
+                                            const identity& peer)
 {
     _dbg_ << "smtp server: " << smtp;
     _dbg_ << "imap server: " << imap;
 
-    return std::make_shared<email::mediator_impl>(email::config{smtp, imap, login, passwd, cert, key, ca, app, repo, host, peer});
+    return std::make_shared<email::broker_impl>(io, email::context{smtp, imap, login, passwd, cert, key, ca, app, repo}, host, peer);
 }
 
 }

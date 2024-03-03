@@ -86,16 +86,18 @@ protected:
 
 class ssl_echo_server
 {
-    std::future<void> m_work;
+    std::future<void> m_task;
     boost::asio::io_service m_io;
+    std::unique_ptr<boost::asio::io_context::work> m_work;
     boost::asio::ip::tcp::acceptor m_acceptor;
     boost::asio::ssl::context m_ssl;
 
 public:
 
     ssl_echo_server(unsigned short port, const std::string& cert, const std::string& key, const std::string& ca = "")
-        : m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)),
-          m_ssl(boost::asio::ssl::context::sslv23)
+        : m_work(new boost::asio::io_context::work(m_io))
+        , m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
+        , m_ssl(boost::asio::ssl::context::sslv23)
     {
         m_ssl.set_options(boost::asio::ssl::context::default_workarounds| boost::asio::ssl::context::sslv23_server);
         m_ssl.use_certificate_file(cert, boost::asio::ssl::context::pem);
@@ -116,7 +118,7 @@ public:
     {
         start_accept();
 
-        m_work = std::async(std::launch::async, [this]()
+        m_task = std::async(std::launch::async, [this]()
         {
             m_io.run();
         });
@@ -124,13 +126,20 @@ public:
 
     void stop()
     {
+        m_work.reset();
+
         if (!m_io.stopped())
             m_io.stop();
 
-        if (m_work.valid())
-            m_work.wait();
+        if (m_task.valid())
+            m_task.wait();
 
         m_acceptor.close();
+    }
+
+    boost::asio::io_service& io()
+    {
+        return m_io;
     }
 
 protected:
@@ -168,7 +177,7 @@ BOOST_AUTO_TEST_CASE(no_check_certs)
     auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key");
     server->start();
 
-    auto client = plexus::network::create_ssl_client(SSL_SERVER);
+    auto client = plexus::network::create_ssl_client(server->io(), SSL_SERVER);
     client->connect();
 
     char buffer[1024];
@@ -192,7 +201,7 @@ BOOST_AUTO_TEST_CASE(check_certs)
     auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
     BOOST_REQUIRE_NO_THROW(server->start());
 
-    auto client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+    auto client = plexus::network::create_ssl_client(server->io(), SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
     BOOST_REQUIRE_NO_THROW(client->connect());
 
     char buffer[1024];
@@ -212,22 +221,23 @@ BOOST_AUTO_TEST_CASE(check_certs)
 
 BOOST_AUTO_TEST_CASE(wrong_certs)
 {
-    auto failed = plexus::network::create_ssl_client(SSL_SERVER);
-    BOOST_REQUIRE_THROW(failed->connect(), boost::system::system_error);
-
     auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
+
+    auto failed = plexus::network::create_ssl_client(server->io(), SSL_SERVER);
+    BOOST_REQUIRE_THROW(failed->connect(2000), boost::system::system_error);
+
     server->start();
 
-    auto client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+    auto client = plexus::network::create_ssl_client(server->io(), SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
     client->connect();
 
     char buffer[1024];
-    BOOST_REQUIRE_THROW(client->read((uint8_t*)buffer, sizeof(buffer)), boost::system::system_error);
+    BOOST_REQUIRE_THROW(client->read((uint8_t*)buffer, sizeof(buffer), 2000), boost::system::system_error);
 
     client->shutdown();
 
-    client = plexus::network::create_ssl_client(SSL_SERVER, "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
-    BOOST_REQUIRE_THROW(client->connect(), boost::system::system_error);
+    client = plexus::network::create_ssl_client(server->io(), SSL_SERVER, "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
+    BOOST_REQUIRE_THROW(client->connect(2000), boost::system::system_error);
 
     client->shutdown();
     server->stop();

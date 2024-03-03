@@ -19,6 +19,7 @@ namespace plexus {
 
 class puncher : public plexus::nat_puncher
 {
+    boost::asio::io_service& m_io;
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
     std::shared_ptr<network::udp>  m_pin;
@@ -71,10 +72,17 @@ class puncher : public plexus::nat_puncher
 
 public:
 
-    puncher(const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind)
-        : m_stun(stun)
+    puncher(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind)
+        : m_io(io)
+        , m_stun(stun)
         , m_bind(bind)
     {
+        _dbg_ << "stun server: " << stun;
+        _dbg_ << "stun client: " << bind;
+
+        plexus::traverse state = explore_network();
+        if (state.mapping != plexus::independent)
+            throw plexus::bad_network();
     }
 
     void reach_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
@@ -88,7 +96,9 @@ public:
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        auto pin = plexus::network::create_udp_transport(m_bind);
+        if (!m_pin)
+            m_pin = plexus::network::create_udp_transport(m_io, m_bind);
+
         handshake out(0, mask);
         handshake in(mask);
 
@@ -96,7 +106,7 @@ public:
         {
             try
             {
-                pin->send(peer, out);
+                m_pin->send(peer, out);
 
                 if (out.flag() == 1)
                 {
@@ -104,7 +114,7 @@ public:
                     return;
                 }
 
-                in.truncate(pin->receive(peer, in));
+                in.truncate(m_pin->receive(peer, in));
 
                 if (in.flag() == 1)
                 {
@@ -134,7 +144,9 @@ public:
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        m_pin = plexus::network::create_udp_transport(m_bind);
+        if (!m_pin)
+            m_pin = plexus::network::create_udp_transport(m_io, m_bind);
+
         handshake out(1, mask);
         handshake in(mask);
 
@@ -172,7 +184,7 @@ public:
 
         auto ep = reflect_endpoint();
 
-        m_pin = plexus::network::create_udp_transport(m_bind);
+        m_pin = plexus::network::create_udp_transport(m_io, m_bind);
         m_pin->send(peer, handshake(0, 0), 2000, hops);
 
         return ep;
@@ -180,27 +192,26 @@ public:
 
     boost::asio::ip::udp::endpoint reflect_endpoint() noexcept(false) override
     {
-        auto stun = plexus::create_stun_client(m_stun, m_bind);
+        auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
         return stun->reflect_endpoint();
     }
 
     traverse explore_network() noexcept(false) override
     {
-        auto stun = plexus::create_stun_client(m_stun, m_bind);
+        auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
         return stun->explore_network();
     }
 };
 
-std::shared_ptr<plexus::nat_puncher> create_nat_puncher(const boost::asio::ip::udp::endpoint& stun, boost::asio::ip::udp::endpoint& bind)
+std::shared_ptr<plexus::nat_puncher> create_nat_puncher(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, boost::asio::ip::udp::endpoint& bind)
 {
-    boost::asio::io_service io;
     boost::asio::ip::udp::socket socket(io, bind.protocol());
 
     socket.set_option(boost::asio::socket_base::reuse_address(true));
     socket.bind(bind);
     bind = socket.local_endpoint();
 
-    return std::make_shared<plexus::puncher>(stun, bind);
+    return std::make_shared<plexus::puncher>(io, stun, bind);
 }
 
 }

@@ -72,14 +72,16 @@ namespace {
 
 class tcp_echo_server
 {
-    std::future<void> m_work;
+    std::future<void> m_task;
     boost::asio::io_service m_io;
+    std::unique_ptr<boost::asio::io_context::work> m_work;
     boost::asio::ip::tcp::acceptor m_acceptor;
 
 public:
 
     tcp_echo_server(unsigned short port)
-        : m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
+        : m_work(new boost::asio::io_context::work(m_io))
+        , m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
     {
     }
 
@@ -92,7 +94,7 @@ public:
     {
         start_accept();
 
-        m_work = std::async(std::launch::async, [this]()
+        m_task = std::async(std::launch::async, [this]()
         {
             m_io.run();
         });
@@ -100,13 +102,20 @@ public:
 
     void stop()
     {
+        m_work.reset();
+
         if (!m_io.stopped())
             m_io.stop();
 
-        if (m_work.valid())
-            m_work.wait();
+        if (m_task.valid())
+            m_task.wait();
 
         m_acceptor.close();
+    }
+
+    boost::asio::io_service& io()
+    {
+        return m_io;
     }
 
 protected:
@@ -147,14 +156,15 @@ const boost::asio::ip::tcp::endpoint TCP_REMOTE_SERVER(boost::asio::ip::address:
 
 BOOST_AUTO_TEST_CASE(tcp_echo_exchange)
 {
+    auto server = create_tcp_server(TCP_SERVER_PORT);
+
     char buffer[1024];
 
-    auto shorty = plexus::network::create_tcp_client(TCP_REMOTE_SERVER, TCP_CLIENT, 3);
+    auto shorty = plexus::network::create_tcp_client(server->io(), TCP_REMOTE_SERVER, TCP_CLIENT, 3);
     BOOST_REQUIRE_THROW(shorty->connect(2000), boost::system::system_error);
     BOOST_REQUIRE_NO_THROW(shorty->shutdown());
 
-    auto server = create_tcp_server(TCP_SERVER_PORT);
-    auto client = plexus::network::create_tcp_client(TCP_SERVER, TCP_CLIENT);
+    auto client = plexus::network::create_tcp_client(server->io(), TCP_SERVER, TCP_CLIENT);
 
     BOOST_REQUIRE_NO_THROW(server->start());
     BOOST_REQUIRE_NO_THROW(client->connect());

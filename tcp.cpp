@@ -26,8 +26,8 @@ template<class socket>
 struct asio_tcp_client_base : public tcp
 {
     template <typename ...socket_args>
-    asio_tcp_client_base(const boost::asio::ip::tcp::endpoint& remote, socket_args& ...options)
-        : m_socket(m_io, options...)
+    asio_tcp_client_base(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, socket_args& ...options)
+        : m_socket(io, options...)
         , m_remote(remote)
     {
         static const size_t SOCKET_BUFFER_SIZE = 1048576;
@@ -92,7 +92,6 @@ struct asio_tcp_client_base : public tcp
 
 protected:
 
-    boost::asio::io_service         m_io;
     asio_socket<socket>             m_socket;
     boost::asio::ip::tcp::endpoint  m_remote;
 };
@@ -103,8 +102,8 @@ class asio_tcp_client : public asio_tcp_client_base<asio_socket<boost::asio::ip:
 
 public:
 
-    asio_tcp_client(const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops)
-        : asio_tcp_client_base(remote)
+    asio_tcp_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops)
+        : asio_tcp_client_base(io, remote)
     {
         m_socket.set_option(boost::asio::ip::unicast::hops(hops));
 
@@ -119,8 +118,8 @@ class asio_ssl_client : public asio_tcp_client_base<asio_socket<boost::asio::ssl
 
 public:
 
-    asio_ssl_client(const boost::asio::ip::tcp::endpoint& remote, boost::asio::ssl::context&& ssl)
-        : asio_tcp_client_base(remote, ssl)
+    asio_ssl_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, boost::asio::ssl::context&& ssl)
+        : asio_tcp_client_base(io, remote, ssl)
         , m_ssl(std::move(ssl))
     {
     }
@@ -136,12 +135,12 @@ private:
     boost::asio::ssl::context m_ssl;
 };
 
-std::shared_ptr<tcp> create_tcp_client(const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops)
+std::shared_ptr<tcp> create_tcp_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops)
 {
-    return std::make_shared<asio_tcp_client>(remote, local, hops);
+    return std::make_shared<asio_tcp_client>(io, remote, local, hops);
 }
 
-std::shared_ptr<tcp> create_ssl_client(const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+std::shared_ptr<tcp> create_ssl_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
 {
     boost::asio::ssl::context ssl = boost::asio::ssl::context(boost::asio::ssl::context::sslv23);
     
@@ -158,7 +157,7 @@ std::shared_ptr<tcp> create_ssl_client(const boost::asio::ip::tcp::endpoint& rem
         ssl.load_verify_file(ca);
     }
 
-    return std::make_shared<asio_ssl_client>(remote, std::move(ssl));
+    return std::make_shared<asio_ssl_client>(io, remote, std::move(ssl));
 }
 
 }}

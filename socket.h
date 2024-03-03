@@ -61,10 +61,8 @@ template<typename socket_impl> class asio_socket : public socket_impl
         });
 
         do {
-            m_io.run_one();
+            m_io.poll_one();
         } while (code == boost::asio::error::would_block);
-
-        m_io.reset();
 
         if (code)
             throw boost::system::system_error(code);

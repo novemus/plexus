@@ -21,7 +21,6 @@ namespace plexus { namespace network {
 
 class asio_udp_channel : public udp
 {
-    boost::asio::io_service                   m_io;
     asio_socket<boost::asio::ip::udp::socket> m_socket;
 
     static bool is_matched(const boost::asio::ip::udp::endpoint& source, const boost::asio::ip::udp::endpoint& match)
@@ -31,8 +30,8 @@ class asio_udp_channel : public udp
 
 public:
 
-    asio_udp_channel(const boost::asio::ip::udp::endpoint& bind)
-        : m_socket(m_io)
+    asio_udp_channel(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& bind)
+        : m_socket(io)
     {
         m_socket.open(bind.protocol());
 
@@ -93,9 +92,9 @@ public:
     }
 };
 
-std::shared_ptr<udp> create_udp_transport(const boost::asio::ip::udp::endpoint& bind)
+std::shared_ptr<udp> create_udp_transport(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& bind)
 {
-    return std::make_shared<asio_udp_channel>(bind);
+    return std::make_shared<asio_udp_channel>(io, bind);
 }
 
 }}

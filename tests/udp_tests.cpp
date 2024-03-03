@@ -9,19 +9,19 @@
  */
 
 #include <future>
-#include <iostream>
 #include <boost/system/system_error.hpp>
 #include <boost/test/unit_test.hpp>
 #include "../network.h"
-#include "../utils.h"
 
 BOOST_AUTO_TEST_CASE(sync_udp_exchange)
 {
+    boost::asio::io_service io;
+
     const boost::asio::ip::udp::endpoint lep(boost::asio::ip::address::from_string("127.0.0.1"), 1234);
     const boost::asio::ip::udp::endpoint rep(boost::asio::ip::address::from_string("127.0.0.1"), 4321);
 
-    auto lend = plexus::network::create_udp_transport(lep);
-    auto rend = plexus::network::create_udp_transport(rep);
+    auto lend = plexus::network::create_udp_transport(io, lep);
+    auto rend = plexus::network::create_udp_transport(io, rep);
 
     tubus::mutable_buffer out("plexus");
     tubus::mutable_buffer in(512);
@@ -41,11 +41,13 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
 
 BOOST_AUTO_TEST_CASE(async_udp_exchange)
 {
+    boost::asio::io_service io;
+
     const boost::asio::ip::udp::endpoint lep(boost::asio::ip::address::from_string("127.0.0.1"), 1234);
     const boost::asio::ip::udp::endpoint rep(boost::asio::ip::address::from_string("127.0.0.1"), 4321);
 
-    auto lend = plexus::network::create_udp_transport(lep);
-    auto rend = plexus::network::create_udp_transport(rep);
+    auto lend = plexus::network::create_udp_transport(io, lep);
+    auto rend = plexus::network::create_udp_transport(io, rep);
 
     auto work = [](std::shared_ptr<plexus::network::udp> udp, const boost::asio::ip::udp::endpoint& peer)
     {
