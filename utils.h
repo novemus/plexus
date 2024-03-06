@@ -92,15 +92,3 @@ std::ostream& operator<<(std::ostream& stream, const boost::asio::ip::basic_endp
 }
 
 }
-
-namespace std {
-
-template<class byte>
-std::ostream& operator<<(std::ostream& stream, const std::pair<byte*, size_t>& buffer)
-{
-    if (stream.rdbuf())
-        return stream << plexus::utils::to_hexadecimal(buffer.first, buffer.second);
-    return stream;
-}
-
-}

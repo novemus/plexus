@@ -10,37 +10,24 @@
 
 #pragma once
 
-#include <tubus/buffer.h>
+#include "socket.h"
 #include <string>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ip/udp.hpp>
+#include <boost/asio/ssl.hpp>
 
 namespace plexus { namespace network {
 
 constexpr int64_t default_tcp_timeout_ms = 10000;
 constexpr int64_t default_udp_timeout_ms = 1600;
 
-struct tcp
-{
-    virtual ~tcp() {}
-    virtual void connect(int64_t timeout_ms = default_tcp_timeout_ms) noexcept(false) = 0;
-    virtual void shutdown() noexcept(true) = 0;
-    virtual void wait(boost::asio::socket_base::wait_type what, int64_t timeout_ms = default_tcp_timeout_ms) noexcept(false) = 0;
-    virtual size_t read(uint8_t* buffer, size_t len, int64_t timeout_ms = default_tcp_timeout_ms) noexcept(false) = 0;
-    virtual size_t write(const uint8_t* buffer, size_t len, int64_t timeout_ms = default_tcp_timeout_ms) noexcept(false) = 0;
-};
+using tcp_socket = asio_socket<boost::asio::ip::tcp::socket, boost::asio::ip::tcp::endpoint, default_tcp_timeout_ms>;
+using ssl_socket = asio_socket<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>, boost::asio::ip::tcp::endpoint, default_tcp_timeout_ms>;
+using udp_socket = asio_socket<boost::asio::ip::udp::socket, boost::asio::ip::udp::endpoint, default_udp_timeout_ms>;
 
-std::shared_ptr<tcp> create_ssl_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert = "", const std::string& key = "", const std::string& ca = "");
-std::shared_ptr<tcp> create_tcp_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops = 64);
-
-struct udp
-{
-    virtual ~udp() {}
-    virtual size_t send(const boost::asio::ip::udp::endpoint& remote, const tubus::const_buffer& buffer, int64_t timeout_ms = default_udp_timeout_ms, uint8_t hops = 64) noexcept(false) = 0;
-    virtual size_t receive(const boost::asio::ip::udp::endpoint& remote, const tubus::mutable_buffer& buffer, int64_t timeout_ms = default_udp_timeout_ms) noexcept(false) = 0;
-};
-
-std::shared_ptr<udp> create_udp_transport(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& local = boost::asio::ip::udp::endpoint());
+std::shared_ptr<ssl_socket> create_ssl_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert = "", const std::string& key = "", const std::string& ca = "");
+std::shared_ptr<tcp_socket> create_tcp_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops = 128);
+std::shared_ptr<udp_socket> create_udp_transport(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& local = boost::asio::ip::udp::endpoint());
 
 }}

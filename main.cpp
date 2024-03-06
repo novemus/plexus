@@ -59,8 +59,8 @@ int main(int argc, char** argv)
         ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate connection")
         ("app-id", boost::program_options::value<std::string>()->required(), "identifier of the application")
         ("app-repo", boost::program_options::value<std::string>()->default_value(""), "path to application repository")
-        ("host-info", boost::program_options::value<plexus::identity>()->required(), "identifier of the host: <email>/<pin>")
-        ("peer-info", boost::program_options::value<plexus::identity>()->required(), "identifier of the peer: <email>/<pin>")
+        ("host-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the host: <email>/<pin>")
+        ("peer-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email>/<pin>")
         ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of public stun server")
         ("stun-client", boost::program_options::value<stun_client_endpoint>()->required(), "endpoint of local stun client")
         ("email-smtps", boost::program_options::value<smtp_server_endpoint>()->required(), "smtps server used to send reference to the peer")
@@ -103,98 +103,92 @@ int main(int argc, char** argv)
 
     try
     {
-        auto engine = std::make_shared<wormhole::reactor>();
-        engine->io().post([&]()
+        wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), false, vm["log-file"].as<std::string>());
+
+        auto broker = plexus::create_email_mediator(
+            vm["email-smtps"].as<smtp_server_endpoint>(),
+            vm["email-imaps"].as<imap_server_endpoint>(),
+            vm["email-login"].as<std::string>(),
+            vm["email-passwd"].as<std::string>(),
+            vm["email-cert"].as<std::string>(),
+            vm["email-key"].as<std::string>(),
+            vm["email-ca"].as<std::string>(),
+            vm["app-id"].as<std::string>(),
+            vm["app-repo"].as<std::string>(),
+            vm["host-info"].as<plexus::identity>(),
+            vm["peer-info"].as<plexus::identity>()
+            );
+
+        auto launch = [&](const plexus::identity& host, const plexus::identity& peer, const boost::asio::ip::udp::endpoint& bind, const plexus::reference& gateway, const plexus::reference& faraway)
         {
-            wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), true, vm["log-file"].as<std::string>());
-
-            auto broker = plexus::create_email_broker(engine->io(),
-                vm["email-smtps"].as<smtp_server_endpoint>(),
-                vm["email-imaps"].as<imap_server_endpoint>(),
-                vm["email-login"].as<std::string>(),
-                vm["email-passwd"].as<std::string>(),
-                vm["email-cert"].as<std::string>(),
-                vm["email-key"].as<std::string>(),
-                vm["email-ca"].as<std::string>(),
-                vm["app-id"].as<std::string>(),
-                vm["app-repo"].as<std::string>(),
-                vm["host-info"].as<plexus::identity>(),
-                vm["peer-info"].as<plexus::identity>()
-                );
-
-            auto launch = [&](const plexus::identity& host, const plexus::identity& peer, const boost::asio::ip::udp::endpoint& bind, const plexus::reference& gateway, const plexus::reference& faraway)
+            auto format = [&](const std::string& line)
             {
-                auto format = [&](const std::string& line)
-                {
-                    return boost::regex_replace(line,
-                        boost::regex("(%innerip%)|(%innerport%)|(%outerip%)|(%outerport%)|(%peerip%)|(%peerport%)|(%secret%)|(%hostpin%)|(%peerpin%)|(%hostemail%)|(%peeremail%)"),
-                        plexus::utils::format("(?{1}%s)(?{2}%u)(?{3}%s)(?{4}%u)(?{5}%s)(?{6}%u)(?{7}%llu)(?{8}%s)(?{9}%s)(?{10}%s)(?{11}%s)",
-                            bind.address().to_string().c_str(),
-                            bind.port(),
-                            gateway.endpoint.address().to_string().c_str(),
-                            gateway.endpoint.port(),
-                            faraway.endpoint.address().to_string().c_str(),
-                            faraway.endpoint.port(),
-                            gateway.puzzle ^ faraway.puzzle,
-                            host.pin.c_str(),
-                            peer.pin.c_str(),
-                            host.owner.c_str(),
-                            peer.owner.c_str()),
-                        boost::match_posix | boost::format_all
-                        );
-                };
-
-                plexus::exec(
-                    vm["exec-command"].as<std::string>(),
-                    format(vm["exec-args"].as<std::string>()),
-                    format(vm["exec-pwd"].as<std::string>()),
-                    format(vm["exec-log"].as<std::string>())
+                return boost::regex_replace(line,
+                    boost::regex("(%innerip%)|(%innerport%)|(%outerip%)|(%outerport%)|(%peerip%)|(%peerport%)|(%secret%)|(%hostpin%)|(%peerpin%)|(%hostemail%)|(%peeremail%)"),
+                    plexus::utils::format("(?{1}%s)(?{2}%u)(?{3}%s)(?{4}%u)(?{5}%s)(?{6}%u)(?{7}%llu)(?{8}%s)(?{9}%s)(?{10}%s)(?{11}%s)",
+                        bind.address().to_string().c_str(),
+                        bind.port(),
+                        gateway.endpoint.address().to_string().c_str(),
+                        gateway.endpoint.port(),
+                        faraway.endpoint.address().to_string().c_str(),
+                        faraway.endpoint.port(),
+                        gateway.puzzle ^ faraway.puzzle,
+                        host.pin.c_str(),
+                        peer.pin.c_str(),
+                        host.owner.c_str(),
+                        peer.owner.c_str()),
+                    boost::match_posix | boost::format_all
                     );
             };
 
-            boost::asio::ip::udp::endpoint stun = vm["stun-server"].as<stun_server_endpoint>();
-            boost::asio::ip::udp::endpoint bind = vm["stun-client"].as<stun_client_endpoint>();
+            plexus::exec(
+                vm["exec-command"].as<std::string>(),
+                format(vm["exec-args"].as<std::string>()),
+                format(vm["exec-pwd"].as<std::string>()),
+                format(vm["exec-log"].as<std::string>())
+                );
+        };
 
-            if (vm["accept"].as<bool>())
+        boost::asio::ip::udp::endpoint stun = vm["stun-server"].as<stun_server_endpoint>();
+        boost::asio::ip::udp::endpoint bind = vm["stun-client"].as<stun_client_endpoint>();
+
+        if (vm["accept"].as<bool>())
+        {
+            broker->accept([&](boost::asio::io_service& io, boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
             {
-                broker->accept([&](std::shared_ptr<plexus::pipe> pipe)
-                {
-                    auto host = pipe->host();
-                    auto peer = pipe->peer();
-                    auto puncher = plexus::create_nat_puncher(engine->io(), stun, bind);
+                auto host = pipe->host();
+                auto peer = pipe->peer();
+                auto puncher = plexus::create_nat_puncher(io, stun, bind);
 
-                    plexus::reference faraway = pipe->pull_request();
-                    plexus::reference gateway = {
-                        puncher->punch_hole_to_peer(faraway.endpoint, static_cast<uint8_t>(vm["punch-hops"].as<uint16_t>())),
-                        plexus::utils::random<uint64_t>()
-                    };
-                    pipe->push_response(gateway);
+                plexus::reference faraway = pipe->pull_request(yield);
+                plexus::reference gateway = {
+                    puncher->punch_hole_to_peer(yield, faraway.endpoint, static_cast<uint8_t>(vm["punch-hops"].as<uint16_t>())),
+                    plexus::utils::random<uint64_t>()
+                };
+                pipe->push_response(yield, gateway);
 
-                    puncher->await_peer(faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
+                puncher->await_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
 
-                    launch(host, peer, bind, gateway, faraway);
-                });
-            }
-            else
+                launch(host, peer, bind, gateway, faraway);
+            });
+        }
+        else
+        {
+            broker->invite([&](boost::asio::io_service& io, boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
             {
-                broker->invite([&](std::shared_ptr<plexus::pipe> pipe)
-                {
-                    auto host = pipe->host();
-                    auto peer = pipe->peer();
-                    auto puncher = plexus::create_nat_puncher(engine->io(), stun, bind);
+                auto host = pipe->host();
+                auto peer = pipe->peer();
+                auto puncher = plexus::create_nat_puncher(io, stun, bind);
 
-                    plexus::reference gateway = { puncher->reflect_endpoint(), plexus::utils::random<uint64_t>() };
-                    pipe->push_request(gateway);
-                    plexus::reference faraway = pipe->pull_response();
+                plexus::reference gateway = { puncher->reflect_endpoint(yield), plexus::utils::random<uint64_t>() };
+                pipe->push_request(yield, gateway);
+                plexus::reference faraway = pipe->pull_response(yield);
 
-                    puncher->reach_peer(faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
+                puncher->reach_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
 
-                    launch(host, peer, bind, gateway, faraway);
-                });
-            }
-        });
-
-        engine->execute();
+                launch(host, peer, bind, gateway, faraway);
+            });
+        }
     }
     catch(const std::exception& e)
     {

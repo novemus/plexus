@@ -12,6 +12,7 @@
 
 #include <string>
 #include <boost/asio.hpp>
+#include <boost/asio/spawn.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ip/udp.hpp>
 
@@ -24,56 +25,6 @@ struct bad_network : public std::runtime_error { bad_network() : std::runtime_er
 struct bad_identity : public std::runtime_error { bad_identity() : std::runtime_error("bad identity") {} };
 
 void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", bool wait = false);
-
-struct reference
-{
-    boost::asio::ip::udp::endpoint endpoint;
-    uint64_t puzzle = 0;
-};
-
-struct identity
-{
-    std::string owner;
-    std::string pin;
-};
-
-std::ostream& operator<<(std::ostream& stream, const reference& value);
-std::ostream& operator<<(std::ostream& stream, const identity& value);
-std::istream& operator>>(std::istream& in, reference& level);
-std::istream& operator>>(std::istream& in, identity& level);
-
-struct pipe
-{
-    virtual ~pipe() {}
-    virtual const reference& pull_request() noexcept(false) = 0;
-    virtual const reference& pull_response() noexcept(false) = 0;
-    virtual void push_response(const reference& gateway) noexcept(false) = 0;
-    virtual void push_request(const reference& gateway) noexcept(false) = 0;
-    virtual const identity& host() const noexcept(true) = 0;
-    virtual const identity& peer() const noexcept(true) = 0;
-};
-
-using broker_handler = std::function<void(std::shared_ptr<pipe>)>;
-
-struct broker
-{
-    virtual ~broker() {}
-    virtual void accept(const broker_handler& handler) noexcept(false) = 0;
-    virtual void invite(const broker_handler& handler) noexcept(false) = 0;
-};
-
-std::shared_ptr<broker> create_email_broker(boost::asio::io_service& io,
-                                            const boost::asio::ip::tcp::endpoint& smtp,
-                                            const boost::asio::ip::tcp::endpoint& imap,
-                                            const std::string& login,
-                                            const std::string& passwd,
-                                            const std::string& cert,
-                                            const std::string& key,
-                                            const std::string& ca,
-                                            const std::string& app,
-                                            const std::string& repo,
-                                            const identity& host,
-                                            const identity& peer);
 
 enum binding
 {
@@ -96,19 +47,67 @@ struct traverse
 struct stun_client
 {
     virtual ~stun_client() {}
-    virtual boost::asio::ip::udp::endpoint reflect_endpoint() noexcept(false) = 0;
-    virtual traverse explore_network() noexcept(false) = 0;
+    virtual boost::asio::ip::udp::endpoint reflect_endpoint(boost::asio::yield_context yield) noexcept(false) = 0;
+    virtual traverse explore_network(boost::asio::yield_context yield) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind);
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local);
 
 struct nat_puncher : public stun_client
 {
-    virtual boost::asio::ip::udp::endpoint punch_hole_to_peer(const boost::asio::ip::udp::endpoint& peer, uint8_t hops) noexcept(false) = 0;
-    virtual void reach_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
-    virtual void await_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual boost::asio::ip::udp::endpoint punch_hole_to_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint8_t hops) noexcept(false) = 0;
+    virtual void reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
 std::shared_ptr<nat_puncher> create_nat_puncher(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, boost::asio::ip::udp::endpoint& bind);
 
+struct reference
+{
+    boost::asio::ip::udp::endpoint endpoint;
+    uint64_t puzzle = 0;
+};
+
+struct identity
+{
+    std::string owner;
+    std::string pin;
+};
+
+std::ostream& operator<<(std::ostream& stream, const reference& value);
+std::ostream& operator<<(std::ostream& stream, const identity& value);
+std::istream& operator>>(std::istream& in, reference& level);
+std::istream& operator>>(std::istream& in, identity& level);
+
+struct pipe
+{
+    virtual ~pipe() {}
+    virtual const reference& pull_request(boost::asio::yield_context yield) noexcept(false) = 0;
+    virtual const reference& pull_response(boost::asio::yield_context yield) noexcept(false) = 0;
+    virtual void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) = 0;
+    virtual void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) = 0;
+    virtual const identity& host() const noexcept(true) = 0;
+    virtual const identity& peer() const noexcept(true) = 0;
+};
+
+using plexus_coro = std::function<void(boost::asio::io_service& io, boost::asio::yield_context yield, std::shared_ptr<pipe> pipe)>;
+
+struct mediator
+{
+    virtual ~mediator() {}
+    virtual void accept(const plexus_coro& handler) noexcept(false) = 0;
+    virtual void invite(const plexus_coro& handler) noexcept(false) = 0;
+};
+
+std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
+                                                const boost::asio::ip::tcp::endpoint& imap,
+                                                const std::string& login,
+                                                const std::string& passwd,
+                                                const std::string& cert,
+                                                const std::string& key,
+                                                const std::string& ca,
+                                                const std::string& app,
+                                                const std::string& repo,
+                                                const identity& host,
+                                                const identity& peer);
 }

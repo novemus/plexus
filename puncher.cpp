@@ -12,17 +12,18 @@
 #include "features.h"
 #include "utils.h"
 #include <logger.h>
+#include <tubus/buffer.h>
 #include <boost/asio/error.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 
-namespace plexus {
+namespace plexus { namespace stun {
 
-class puncher : public plexus::nat_puncher
+class puncher_impl : public plexus::nat_puncher
 {
     boost::asio::io_service& m_io;
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
-    std::shared_ptr<network::udp>  m_pin;
+    std::shared_ptr<network::udp_socket> m_pin;
 
     class handshake : public tubus::mutable_buffer
     {
@@ -72,20 +73,16 @@ class puncher : public plexus::nat_puncher
 
 public:
 
-    puncher(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind)
+    puncher_impl(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind)
         : m_io(io)
         , m_stun(stun)
         , m_bind(bind)
     {
         _dbg_ << "stun server: " << stun;
         _dbg_ << "stun client: " << bind;
-
-        plexus::traverse state = explore_network();
-        if (state.mapping != plexus::independent)
-            throw plexus::bad_network();
     }
 
-    void reach_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
+    void reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "reaching peer...";
 
@@ -106,7 +103,7 @@ public:
         {
             try
             {
-                m_pin->send(peer, out);
+                m_pin->send_to(out, peer, yield);
 
                 if (out.flag() == 1)
                 {
@@ -114,7 +111,7 @@ public:
                     return;
                 }
 
-                in.truncate(m_pin->receive(peer, in));
+                in.truncate(m_pin->receive_from(in, peer, yield));
 
                 if (in.flag() == 1)
                 {
@@ -133,7 +130,7 @@ public:
         throw plexus::timeout_error();
     }
 
-    void await_peer(const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
+    void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "awaiting peer...";
 
@@ -154,11 +151,11 @@ public:
         {
             try
             {
-                in.truncate(m_pin->receive(peer, in));
+                in.truncate(m_pin->receive_from(in, peer, yield));
 
                 if (in.flag() == 0)
                 {
-                    m_pin->send(peer, out);
+                    m_pin->send_to(out, peer, yield);
                 }
                 else
                 {
@@ -178,40 +175,43 @@ public:
         throw plexus::timeout_error();
     }
 
-    boost::asio::ip::udp::endpoint punch_hole_to_peer(const boost::asio::ip::udp::endpoint& peer, uint8_t hops) noexcept(false) override
+    boost::asio::ip::udp::endpoint punch_hole_to_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint8_t hops) noexcept(false) override
     {
         _dbg_ << "punching udp hole to peer...";
 
-        auto ep = reflect_endpoint();
+        auto ep = reflect_endpoint(yield);
 
         m_pin = plexus::network::create_udp_transport(m_io, m_bind);
-        m_pin->send(peer, handshake(0, 0), 2000, hops);
-
+        m_pin->set_option(boost::asio::ip::unicast::hops(hops));
+        m_pin->send_to(handshake(0, 0), peer, yield, 2000);
+        
         return ep;
     }
 
-    boost::asio::ip::udp::endpoint reflect_endpoint() noexcept(false) override
+    boost::asio::ip::udp::endpoint reflect_endpoint(boost::asio::yield_context yield) noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
-        return stun->reflect_endpoint();
+        return stun->reflect_endpoint(yield);
     }
 
-    traverse explore_network() noexcept(false) override
+    traverse explore_network(boost::asio::yield_context yield) noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
-        return stun->explore_network();
+        return stun->explore_network(yield);
     }
 };
 
+}
+
 std::shared_ptr<plexus::nat_puncher> create_nat_puncher(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, boost::asio::ip::udp::endpoint& bind)
 {
-    boost::asio::ip::udp::socket socket(io, bind.protocol());
+    boost::asio::ip::udp::socket socket(io, stun.protocol());
 
     socket.set_option(boost::asio::socket_base::reuse_address(true));
     socket.bind(bind);
     bind = socket.local_endpoint();
 
-    return std::make_shared<plexus::puncher>(io, stun, bind);
+    return std::make_shared<plexus::stun::puncher_impl>(io, stun, bind);
 }
 
 }

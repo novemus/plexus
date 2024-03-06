@@ -8,7 +8,6 @@
  * 
  */
 
-#include <future>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -72,50 +71,16 @@ namespace {
 
 class tcp_echo_server
 {
-    std::future<void> m_task;
-    boost::asio::io_service m_io;
-    std::unique_ptr<boost::asio::io_context::work> m_work;
+    boost::asio::io_service& m_io;
     boost::asio::ip::tcp::acceptor m_acceptor;
 
 public:
 
-    tcp_echo_server(unsigned short port)
-        : m_work(new boost::asio::io_context::work(m_io))
+    tcp_echo_server(boost::asio::io_service& io, unsigned short port)
+        : m_io(io)
         , m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
     {
-    }
-
-    ~tcp_echo_server()
-    {
-        stop();
-    }
-
-    void start()
-    {
-        start_accept();
-
-        m_task = std::async(std::launch::async, [this]()
-        {
-            m_io.run();
-        });
-    }
-
-    void stop()
-    {
-        m_work.reset();
-
-        if (!m_io.stopped())
-            m_io.stop();
-
-        if (m_task.valid())
-            m_task.wait();
-
-        m_acceptor.close();
-    }
-
-    boost::asio::io_service& io()
-    {
-        return m_io;
+        m_io.post(boost::bind(&tcp_echo_server::start_accept, this));
     }
 
 protected:
@@ -138,14 +103,12 @@ protected:
     }
 };
 
-std::shared_ptr<tcp_echo_server> create_tcp_server(unsigned short port)
+std::shared_ptr<tcp_echo_server> create_tcp_server(boost::asio::io_service& io, unsigned short port)
 {
-    return std::make_shared<tcp_echo_server>(port);
+    return std::make_shared<tcp_echo_server>(io, port);
 }
 
-
 const char HELLO[] = "Hello, Plexus!";
-
 const uint16_t TCP_SERVER_PORT = 8765;
 
 const boost::asio::ip::tcp::endpoint TCP_SERVER(boost::asio::ip::address::from_string("127.0.0.1"), TCP_SERVER_PORT);
@@ -156,27 +119,32 @@ const boost::asio::ip::tcp::endpoint TCP_REMOTE_SERVER(boost::asio::ip::address:
 
 BOOST_AUTO_TEST_CASE(tcp_echo_exchange)
 {
-    auto server = create_tcp_server(TCP_SERVER_PORT);
+    boost::asio::io_service io;
+    auto server = create_tcp_server(io, TCP_SERVER_PORT);
+    
+    boost::asio::spawn(io, [&](boost::asio::yield_context yield)
+    {
+        char buffer[1024];
 
-    char buffer[1024];
+        auto shorty = plexus::network::create_tcp_client(io, TCP_REMOTE_SERVER, TCP_CLIENT, 3);
+        BOOST_REQUIRE_THROW(shorty->connect(yield, 2000), boost::system::system_error);
+        BOOST_REQUIRE_NO_THROW(shorty->shutdown());
 
-    auto shorty = plexus::network::create_tcp_client(server->io(), TCP_REMOTE_SERVER, TCP_CLIENT, 3);
-    BOOST_REQUIRE_THROW(shorty->connect(2000), boost::system::system_error);
-    BOOST_REQUIRE_NO_THROW(shorty->shutdown());
+        auto client = plexus::network::create_tcp_client(io, TCP_SERVER, TCP_CLIENT);
+        BOOST_REQUIRE_NO_THROW(client->connect(yield));
 
-    auto client = plexus::network::create_tcp_client(server->io(), TCP_SERVER, TCP_CLIENT);
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(client->write(boost::asio::buffer(HELLO), yield), sizeof(HELLO)));
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(client->read(boost::asio::buffer(buffer, sizeof(HELLO)), yield), sizeof(HELLO)));
+        BOOST_REQUIRE_EQUAL(std::memcmp(buffer, HELLO, sizeof(HELLO)), 0);
 
-    BOOST_REQUIRE_NO_THROW(server->start());
-    BOOST_REQUIRE_NO_THROW(client->connect());
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(client->write(boost::asio::buffer(HELLO), yield), sizeof(HELLO)));
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(client->read(boost::asio::buffer(buffer, sizeof(HELLO)), yield), sizeof(HELLO)));
+        BOOST_REQUIRE_EQUAL(std::memcmp(buffer, HELLO, sizeof(HELLO)), 0);
 
-    BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(client->write((const uint8_t*)HELLO, sizeof(HELLO)), sizeof(HELLO)));
-    BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), sizeof(HELLO)));
-    BOOST_REQUIRE_EQUAL(std::memcmp(buffer, HELLO, sizeof(HELLO)), 0);
+        BOOST_REQUIRE_NO_THROW(client->shutdown());
 
-    BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(client->write((const uint8_t*)HELLO, sizeof(HELLO)), sizeof(HELLO)));
-    BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), sizeof(HELLO)));
-    BOOST_REQUIRE_EQUAL(std::memcmp(buffer, HELLO, sizeof(HELLO)), 0);
+        io.stop();
+    });
 
-    BOOST_REQUIRE_NO_THROW(client->shutdown());
-    BOOST_REQUIRE_NO_THROW(server->stop());
+    io.run();
 }

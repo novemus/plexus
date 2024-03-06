@@ -8,7 +8,6 @@
  * 
  */
 
-#include <future>
 #include <cstdlib>
 #include <stdio.h>
 #include <string.h>
@@ -17,7 +16,6 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/test/unit_test.hpp>
 #include "../network.h"
-
 
 namespace {
 
@@ -30,7 +28,7 @@ class ssl_echo_session : public std::enable_shared_from_this<ssl_echo_session>
 
 public:
 
-    ssl_echo_session(boost::asio::io_service &io, boost::asio::ssl::context &ssl)
+    ssl_echo_session(boost::asio::io_service& io, boost::asio::ssl::context &ssl)
         : m_socket(io, ssl)
     {
     }
@@ -86,16 +84,14 @@ protected:
 
 class ssl_echo_server
 {
-    std::future<void> m_task;
-    boost::asio::io_service m_io;
-    std::unique_ptr<boost::asio::io_context::work> m_work;
+    boost::asio::io_service& m_io;
     boost::asio::ip::tcp::acceptor m_acceptor;
     boost::asio::ssl::context m_ssl;
 
 public:
 
-    ssl_echo_server(unsigned short port, const std::string& cert, const std::string& key, const std::string& ca = "")
-        : m_work(new boost::asio::io_context::work(m_io))
+    ssl_echo_server(boost::asio::io_service& io, unsigned short port, const std::string& cert, const std::string& key, const std::string& ca = "")
+        : m_io(io)
         , m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
         , m_ssl(boost::asio::ssl::context::sslv23)
     {
@@ -107,39 +103,8 @@ public:
             m_ssl.set_verify_mode(boost::asio::ssl::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert | boost::asio::ssl::verify_client_once);
             m_ssl.load_verify_file(ca);
         }
-    }
 
-    ~ssl_echo_server()
-    {
-        stop();
-    }
-
-    void start()
-    {
-        start_accept();
-
-        m_task = std::async(std::launch::async, [this]()
-        {
-            m_io.run();
-        });
-    }
-
-    void stop()
-    {
-        m_work.reset();
-
-        if (!m_io.stopped())
-            m_io.stop();
-
-        if (m_task.valid())
-            m_task.wait();
-
-        m_acceptor.close();
-    }
-
-    boost::asio::io_service& io()
-    {
-        return m_io;
+        m_io.post(boost::bind(&ssl_echo_server::start_accept, this));
     }
 
 protected:
@@ -162,83 +127,106 @@ protected:
     }
 };
 
-std::shared_ptr<ssl_echo_server> create_ssl_server(unsigned short port, const std::string& cert = "", const std::string& key = "", const std::string& ca = "")
+std::shared_ptr<ssl_echo_server> create_ssl_server(boost::asio::io_service& io, unsigned short port, const std::string& cert = "", const std::string& key = "", const std::string& ca = "")
 {
-    return std::make_shared<ssl_echo_server>(port, cert, key, ca);
+    return std::make_shared<ssl_echo_server>(io, port, cert, key, ca);
 }
 
 const uint16_t SSL_PORT = 4433;
 const boost::asio::ip::tcp::endpoint SSL_SERVER(boost::asio::ip::address::from_string("127.0.0.1"), SSL_PORT);
+const boost::asio::ip::tcp::endpoint WRONG_SSL_SERVER(boost::asio::ip::address::from_string("1.2.3.4"), SSL_PORT);
 
 }
 
 BOOST_AUTO_TEST_CASE(no_check_certs)
 {
-    auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key");
-    server->start();
+    boost::asio::io_service io;
+    auto server = create_ssl_server(io, SSL_PORT, "./certs/server.crt", "./certs/server.key");
 
-    auto client = plexus::network::create_ssl_client(server->io(), SSL_SERVER);
-    client->connect();
+    boost::asio::spawn(io, [&](boost::asio::yield_context yield)
+    {
+        auto client = plexus::network::create_ssl_client(io, SSL_SERVER);
+        BOOST_REQUIRE_NO_THROW(client->connect(yield));
+        BOOST_REQUIRE_NO_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield));
 
-    char buffer[1024];
+        char buffer[1024];
 
-    std::strcpy(buffer, "hello");
-    BOOST_CHECK_EQUAL(client->write((uint8_t *)buffer, strlen(buffer) + 1), strlen(buffer) + 1);
-    BOOST_CHECK_EQUAL(client->read((uint8_t *)buffer, sizeof(buffer)), strlen(buffer) + 1);
-    BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
+        std::strcpy(buffer, "hello");
+        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
+        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
+        BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
 
-    std::strcpy(buffer, "bye bye");
-    BOOST_CHECK_EQUAL(client->write((uint8_t *)buffer, strlen(buffer) + 1), strlen(buffer) + 1);
-    BOOST_CHECK_EQUAL(client->read((uint8_t *)buffer, sizeof(buffer)), strlen(buffer) + 1);
-    BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
+        std::strcpy(buffer, "bye bye");
+        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
+        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
+        BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
 
-    client->shutdown();
-    server->stop();
+        BOOST_REQUIRE_NO_THROW(client->shutdown());
+
+        io.stop();
+    });
+
+    io.run();
 }
 
 BOOST_AUTO_TEST_CASE(check_certs)
 {
-    auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
-    BOOST_REQUIRE_NO_THROW(server->start());
+    boost::asio::io_service io;
+    auto server = create_ssl_server(io, SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
+    
+    boost::asio::spawn(io, [&](boost::asio::yield_context yield)
+    {
+        auto client = plexus::network::create_ssl_client(io, SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+        BOOST_REQUIRE_NO_THROW(client->connect(yield));
+        BOOST_REQUIRE_NO_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield));
 
-    auto client = plexus::network::create_ssl_client(server->io(), SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
-    BOOST_REQUIRE_NO_THROW(client->connect());
+        char buffer[1024];
 
-    char buffer[1024];
-    std::strcpy(buffer, "hello");
-    BOOST_CHECK_EQUAL(client->write((uint8_t*)buffer, strlen(buffer) + 1), strlen(buffer) + 1);
-    BOOST_CHECK_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), strlen(buffer) + 1);
-    BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
+        std::strcpy(buffer, "hello");
+        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
+        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
+        BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
 
-    std::strcpy(buffer, "bye bye");
-    BOOST_CHECK_EQUAL(client->write((uint8_t*)buffer, strlen(buffer) + 1), strlen(buffer) + 1);
-    BOOST_CHECK_EQUAL(client->read((uint8_t*)buffer, sizeof(buffer)), strlen(buffer) + 1);
-    BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
+        std::strcpy(buffer, "bye bye");
+        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
+        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
+        BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
 
-    BOOST_REQUIRE_NO_THROW(client->shutdown());
-    server->stop();
+        BOOST_REQUIRE_NO_THROW(client->shutdown());
+
+        io.stop();
+    });
+
+    io.run();
 }
 
 BOOST_AUTO_TEST_CASE(wrong_certs)
 {
-    auto server = create_ssl_server(SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
+    boost::asio::io_service io;
+    auto server = create_ssl_server(io, SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
+    
+    boost::asio::spawn(io, [&](boost::asio::yield_context yield)
+    {
+        auto failed = plexus::network::create_ssl_client(io, WRONG_SSL_SERVER);
+        BOOST_REQUIRE_THROW(failed->connect(yield, 2000), boost::system::system_error);
 
-    auto failed = plexus::network::create_ssl_client(server->io(), SSL_SERVER);
-    BOOST_REQUIRE_THROW(failed->connect(2000), boost::system::system_error);
+        auto client = plexus::network::create_ssl_client(io, SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+        BOOST_REQUIRE_NO_THROW(client->connect(yield));
+        BOOST_REQUIRE_NO_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield));
 
-    server->start();
+        char buffer[1024];
+        BOOST_REQUIRE_THROW(client->read(boost::asio::buffer(buffer, sizeof(buffer)), yield, 2000), boost::system::system_error);
 
-    auto client = plexus::network::create_ssl_client(server->io(), SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
-    client->connect();
+        BOOST_REQUIRE_NO_THROW(client->shutdown());
 
-    char buffer[1024];
-    BOOST_REQUIRE_THROW(client->read((uint8_t*)buffer, sizeof(buffer), 2000), boost::system::system_error);
+        client = plexus::network::create_ssl_client(io, SSL_SERVER, "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
+        BOOST_REQUIRE_NO_THROW(client->connect(yield));
+        BOOST_REQUIRE_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield), boost::system::system_error);
 
-    client->shutdown();
+        BOOST_REQUIRE_NO_THROW(client->shutdown());
 
-    client = plexus::network::create_ssl_client(server->io(), SSL_SERVER, "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
-    BOOST_REQUIRE_THROW(client->connect(2000), boost::system::system_error);
+        io.stop();
+    });
 
-    client->shutdown();
-    server->stop();
+    io.run();
 }
