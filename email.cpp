@@ -12,6 +12,7 @@
 #include "network.h"
 #include "utils.h"
 #include <boost/asio/spawn.hpp>
+#include <boost/regex.hpp>
 #include <filesystem>
 #include <logger.h>
 #include <string>
@@ -133,9 +134,8 @@ struct context
 
 class channel
 {
-    static constexpr size_t BUFFER_SIZE = 8192;
+    static constexpr size_t BUFFER_SIZE = 4096;
 
-    std::array<char, BUFFER_SIZE> m_buffer;
     std::shared_ptr<network::ssl_socket> m_ssl;
 
 public:
@@ -155,8 +155,9 @@ public:
         std::string response;
         do
         {
-			size_t read = m_ssl->read_some(boost::asio::buffer(m_buffer), yield);
-            response.append(m_buffer.data(), read);
+            auto end = response.size();
+            response.resize(end + BUFFER_SIZE);
+            response.resize(end + m_ssl->read_some(boost::asio::buffer(response.data() + end, BUFFER_SIZE), yield));
         } 
         while (!parse(response));
 
@@ -174,8 +175,9 @@ public:
         {
             do
             {
-                size_t read = m_ssl->read_some(boost::asio::buffer(m_buffer), yield, timeout == 0 ? network::default_tcp_timeout_ms : timeout);
-                response.append(m_buffer.data(), read);
+                auto end = response.size();
+                response.resize(end + BUFFER_SIZE);
+                response.resize(end + m_ssl->read_some(boost::asio::buffer(response.data() + end, BUFFER_SIZE), yield, timeout == 0 ? network::default_tcp_timeout_ms : timeout));
             }
             while (!parse(response));
         }
@@ -341,145 +343,160 @@ class imap
 {
     typedef channel::response_parser_t response_parser_t;
 
-    const response_parser_t connect_checker = [](const std::string& response) -> bool {
+    response_parser_t connect_checker;
+    response_parser_t success_checker;
+    response_parser_t idle_parser;
+    response_parser_t login_parser;
+    response_parser_t select_parser;
+    response_parser_t search_parser;
+    response_parser_t end_parser;
+    response_parser_t fetch_parser;
+
+    void make_parsers()
+    {
+        connect_checker = [](const std::string& response) -> bool {
+                std::smatch match;
+                bool done = std::regex_search(response, match, std::regex("^\\* (OK|NO) .*\\r\\n$"));
+                if (done && match[1] != "OK")
+                    throw std::runtime_error(response);
+                return done;
+            };
+
+        success_checker = [](const std::string& response) -> bool {
             std::smatch match;
-            bool done = std::regex_search(response, match, std::regex("^\\* (OK|NO) .*\\r\\n$"));
-            if (done && match[1] != "OK")
+            bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (OK|NO) .*\\r\\n$"));
+            if (done && match[2] != "OK")
                 throw std::runtime_error(response);
             return done;
         };
 
-    const response_parser_t success_checker = [](const std::string& response) -> bool {
-        std::smatch match;
-        bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (OK|NO) .*\\r\\n$"));
-        if (done && match[2] != "OK")
-            throw std::runtime_error(response);
-        return done;
-    };
-
-    const response_parser_t login_parser = [this](const std::string& response) -> bool {
-        if (success_checker(response))
-        {
+        idle_parser = [](const std::string& response) -> bool {
             std::smatch match;
-            m_idle = std::regex_search(response, match, std::regex("\\* CAPABILITY[^\\r\\n]+IDLE.*"));
-            return true;
-        }
-        return false;
-    };
+            if (std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (NO|BAD) .*\\r\\n")))
+                throw std::runtime_error(response);
+            return std::regex_search(response, match, std::regex("\\+ idling\\r\\n.+\\r\\n"));
+        };
 
-    const response_parser_t select_parser = [this](const std::string& response) -> bool {
-        if (success_checker(response))
-        {
-            std::smatch match;
-            if (std::regex_search(response, match, std::regex("\\[UIDVALIDITY (\\d+)\\]")))
+        login_parser = [this](const std::string& response) -> bool {
+            if (success_checker(response))
             {
-                std::stringstream ss;
-                ss << match[1].str();
-
-                uint64_t validity;
-                ss >> validity;
-
-                if (validity != m_validity)
-                    m_position = 0;
-
-                m_validity = validity;
+                std::smatch match;
+                m_idle = std::regex_search(response, match, std::regex("\\* CAPABILITY[^\\r\\n]+IDLE.*"));
+                return true;
             }
-            return true;
-        }
-        return false;
-    };
+            return false;
+        };
 
-    const response_parser_t search_parser = [=](const std::string& response) -> bool {
-        if (success_checker(response))
-        {
-            std::smatch match;
-            if (std::regex_search(response, match, std::regex("\\* SEARCH ([\\d ]+)\\r\\n.*")))
+        select_parser = [this](const std::string& response) -> bool {
+            if (success_checker(response))
             {
-                std::stringstream stream;
-                stream << match[1].str();
-
-                uint64_t uid = 0;
-                while (stream >> uid)
+                std::smatch match;
+                if (std::regex_search(response, match, std::regex("\\[UIDVALIDITY (\\d+)\\]")))
                 {
-                    if (uid > m_position)
+                    std::stringstream ss;
+                    ss << match[1].str();
+
+                    uint64_t validity;
+                    ss >> validity;
+
+                    if (validity != m_validity)
+                        m_position = 0;
+
+                    m_validity = validity;
+                }
+                return true;
+            }
+            return false;
+        };
+
+        search_parser = [this](const std::string& response) -> bool {
+            if (success_checker(response))
+            {
+                std::smatch match;
+                if (std::regex_search(response, match, std::regex("\\* SEARCH ([\\d ]+)\\r\\n.*")))
+                {
+                    std::stringstream stream;
+                    stream << match[1].str();
+
+                    uint64_t uid = 0;
+                    while (stream >> uid)
                     {
-                        m_position = uid;
-                        break;
+                        if (uid > m_position)
+                        {
+                            m_position = uid;
+                            break;
+                        }
                     }
                 }
+                return true;
             }
-            return true;
-        }
-        return false;
-    };
+            return false;
+        };
 
-    const response_parser_t end_parser = [this](const std::string& response) -> bool {
-        if (success_checker(response))
-        {
-            std::smatch match;
-            if (std::regex_search(response, match, std::regex("\\* \\d+ FETCH +\\(UID (\\d+)\\)\\r\\n.*")))
+        end_parser = [this](const std::string& response) -> bool {
+            if (success_checker(response))
             {
-                std::stringstream ss;
-                ss << match[1].str();
-                ss >> m_position;
-            }
-            return true;
-        }
-        return false;
-    };
-
-    const response_parser_t idle_parser = [](const std::string& response) -> bool {
-        std::smatch match;
-        if (std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (NO|BAD) .*\\r\\n")))
-            throw std::runtime_error(response);
-        return std::regex_search(response, match, std::regex("\\+ idling\\r\\n.+\\r\\n"));
-    };
-
-    const response_parser_t fetch_parser = [&](const std::string& response) -> bool
-    {
-        if (success_checker(response))
-        {
-            static const std::regex pattern(".*\\r\\nFrom: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n\\r\\n"
-                                            ".*\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n\\r\\n"
-                                            "[^\\r\\n]+\\r\\n([\\s\\S]+)\\r\\n\\)\\r\\n.*");
-
-            std::smatch match;
-            if (std::regex_search(response, match, pattern))
-            {
-                identity peer = { match[1].str(), match[2].str() };
-                identity host = { match[3].str(), match[4].str() };
-
-                if (m_config.are_defined(m_host, m_peer) || m_config.are_allowed(host, peer))
+                m_position = 0;
+                std::smatch match;
+                if (std::regex_search(response, match, std::regex("\\* \\d+ FETCH +\\(UID (\\d+)\\)\\r\\n.*")))
                 {
-                    std::string message;
-                    if (m_config.are_encryptable(host, peer))
-                    {
-                        message = plexus::utils::smime_verify(
-                            plexus::utils::smime_decrypt(match[1].str(), m_config.get_cert(m_host), m_config.get_key(m_host)),
-                            m_config.get_cert(m_peer),
-                            m_config.get_ca(m_peer)
-                            );
-                    }
-                    else
-                    {
-                        message = match[1].str();
-                    }
+                    std::stringstream ss;
+                    ss << match[1].str();
+                    ss >> m_position;
+                }
+                return true;
+            }
+            return false;
+        };
 
-                    if (std::regex_match(message, match, std::regex("^PLEXUS 3.0 (\\S+) (\\d+) (\\d+)$")))
+        fetch_parser = [this](const std::string& response) -> bool {
+            if (success_checker(response))
+            {
+                static const boost::regex pattern("[^\\r\\n]+TEXT[^\\r\\n]+"
+                                                "\\r\\n(.+)\\r\\n"
+                                                "[^\\r\\n]+HEADER[^\\r\\n]+"
+                                                "\\r\\nFrom: ([^\\r\\n]+) <([^\\r\\n]+)>"
+                                                "\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>");
+
+                boost::smatch match;
+                if (boost::regex_search(response, match, pattern))
+                {
+                    identity peer = { match[3].str(), match[2].str() };
+                    identity host = { match[5].str(), match[4].str() };
+
+                    if (m_config.are_defined(m_host, m_peer) || m_config.are_allowed(host, peer))
                     {
-                        m_data.endpoint = utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str());
-                        m_data.puzzle = boost::lexical_cast<uint64_t>(match[3].str());
-                        m_host = host;
-                        m_peer = peer;
+                        std::string message;
+                        if (m_config.are_encryptable(host, peer))
+                        {
+                            message = plexus::utils::smime_verify(
+                                plexus::utils::smime_decrypt(match[1].str(), m_config.get_cert(m_host), m_config.get_key(m_host)),
+                                m_config.get_cert(m_peer),
+                                m_config.get_ca(m_peer)
+                                );
+                        }
+                        else
+                        {
+                            message = match[1].str();
+                        }
+
+                        std::smatch match;
+                        if (std::regex_match(message, match, std::regex("^PLEXUS 3.0 (\\S+) (\\d+) (\\d+)$")))
+                        {
+                            m_data.endpoint = utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str());
+                            m_data.puzzle = boost::lexical_cast<uint64_t>(match[3].str());
+                            m_host = host;
+                            m_peer = peer;
+                        }
                     }
                 }
+                return true;
             }
-            return true;
-        }
-        return false;
-    };
+            return false;
+        };
+    }
 
-     std::string make_filter(const std::string& subject)
+    std::string make_filter(const std::string& subject)
     {
         std::string filter = utils::format("(UID %d:*) (Subject %s) (Subject %s)", m_position + 1, m_config.app.c_str(), subject.c_str());
 
@@ -503,6 +520,20 @@ public:
         , m_host(host)
         , m_peer(peer)
     {
+        make_parsers();
+    }
+
+    imap(const imap& other)
+        : m_io(other.m_io)
+        , m_config(other.m_config)
+        , m_idle(other.m_idle)
+        , m_validity(other.m_validity)
+        , m_position(other.m_position)
+        , m_host(other.m_host)
+        , m_peer(other.m_peer)
+        , m_data(other.m_data)
+    {
+        make_parsers();
     }
 
     void init(boost::asio::yield_context yield)
@@ -520,6 +551,7 @@ public:
         session->request(yield, utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
         session->request(yield, utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
         session->request(yield, utils::format("%u FETCH * UID\r\n", ++seq), end_parser);
+        session->request(yield, utils::format("%u LOGOUT\r\n", ++seq), success_checker);
     }
 
     void wait(boost::asio::yield_context yield, const std::string& subject, bool infinite = true) noexcept(false)
@@ -539,13 +571,15 @@ public:
             m_config.ca
         );
 
+        uint64_t validity = m_validity;
+
         uint8_t seq = 0;
         session->connect(yield, connect_checker);
         session->request(yield, utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
         session->request(yield, utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
 
-        if (m_position == 0)
-            session->request(yield, utils::format("%u FETCH * UID\r\n", ++seq), end_parser);
+        if (validity != m_validity)
+             session->request(yield, utils::format("%u FETCH * UID\r\n", ++seq), end_parser);
 
         do
         {
@@ -570,7 +604,7 @@ public:
             else
             {
                 session->request(yield,
-                    utils::format("%u UID FETCH %d (BODY[HEADER.FIELDS (From)] BODY[HEADER.FIELDS (To)] BODY.PEEK[TEXT])\r\n", ++seq, m_position),
+                    utils::format("%u UID FETCH %d (BODY.PEEK[TEXT] BODY[HEADER.FIELDS (From To)])\r\n", ++seq, m_position),
                     fetch_parser
                 );
             }
