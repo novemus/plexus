@@ -21,8 +21,8 @@ class ssl_socket_impl : public ssl_socket
 
 public:
 
-    ssl_socket_impl(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, boost::asio::ssl::context&& ssl)
-        : ssl_socket(boost::asio::ssl::stream<boost::asio::ip::tcp::socket>(boost::asio::ip::tcp::socket(io), ssl), io, remote)
+    ssl_socket_impl(const boost::asio::ip::tcp::endpoint& remote, boost::asio::io_service& io, boost::asio::ssl::context&& ssl)
+        : ssl_socket(remote, io, ssl)
         , m_ssl(std::move(ssl))
     {
         ssl_socket::lowest_layer().set_option(boost::asio::socket_base::keep_alive(true));
@@ -31,10 +31,9 @@ public:
 
 std::shared_ptr<tcp_socket> create_tcp_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops)
 {
-    auto socket = std::make_shared<tcp_socket>(io, remote);
-
-    socket->set_option(boost::asio::socket_base::keep_alive(true));
+    auto socket = std::make_shared<tcp_socket>(remote, io);
     socket->set_option(boost::asio::ip::unicast::hops(hops));
+    socket->set_option(boost::asio::socket_base::keep_alive(true));
 
     return socket;
 }
@@ -56,7 +55,7 @@ std::shared_ptr<ssl_socket> create_ssl_client(boost::asio::io_service& io, const
         ssl.load_verify_file(ca);
     }
 
-    return std::make_shared<ssl_socket_impl>(io, remote, std::move(ssl));
+    return std::make_shared<ssl_socket_impl>(remote, io, std::move(ssl));
 }
 
 }}

@@ -21,68 +21,13 @@
 
 namespace plexus { namespace network {
 
-template<typename socket_impl, typename endpoint_type, int64_t timeout_ms> class asio_socket : public socket_impl
+template<typename socket_impl, int64_t timeout_ms> struct asio_socket : public socket_impl
 {
-    static bool is_matched(const endpoint_type& source, const endpoint_type& match)
-    {
-        return (match.address().is_unspecified() || match.address() == source.address()) && (match.port() == 0 || match.port() == source.port());
-    }
+    typedef typename socket_impl::lowest_layer_type::endpoint_type endpoint_type;
 
-    size_t execute(const std::function<size_t()>& function, int64_t timeout = timeout_ms) noexcept(false)
-    {
-        boost::asio::deadline_timer timer(m_io);
-        if (timeout > 0)
-        {
-            timer.expires_from_now(boost::posix_time::milliseconds(timeout));
-            timer.async_wait([&](const boost::system::error_code& error)
-            {
-                if(error)
-                {
-                    if (error == boost::asio::error::operation_aborted)
-                        return;
-
-                    _err_ << error.message();
-                }
-
-                try
-                {
-                    socket_impl::lowest_layer().cancel();
-                }
-                catch (const std::exception &ex)
-                {
-                    _err_ << ex.what();
-                }
-            });
-        }
-
-        size_t res = function();
-
-        timer.cancel();
-
-        return res;
-    }
-
-public:
-
-    template<typename protocol_type>
-    asio_socket(boost::asio::io_service& io, const protocol_type& protocol)
-        : asio_socket(socket_impl(io), io, protocol)
-    {
-    }
-
-    asio_socket(boost::asio::io_service& io, const endpoint_type& remote)
-        : asio_socket(socket_impl(io), io, remote.protocol(), remote)
-    {
-    }
-
-    asio_socket(socket_impl&& impl, boost::asio::io_service& io, const endpoint_type& remote) 
-        : asio_socket(std::move(impl), io, remote.protocol(), remote)
-    {
-    }
-
-    template<typename protocol_type>
-    asio_socket(socket_impl&& impl, boost::asio::io_service& io, const protocol_type& protocol, const endpoint_type& remote = endpoint_type()) 
-        : socket_impl(std::move(impl)), m_io(io), m_remote(remote)
+    template<typename protocol_type, typename ...arguments>
+    asio_socket(const protocol_type& protocol, boost::asio::io_service& io, arguments&... args)
+        : socket_impl(io, args...), m_io(io)
     {
         socket_impl::lowest_layer().open(protocol);
 
@@ -92,6 +37,13 @@ public:
         socket_impl::lowest_layer().set_option(boost::asio::socket_base::reuse_address(true));
         socket_impl::lowest_layer().set_option(boost::asio::socket_base::send_buffer_size(SOCKET_BUFFER_SIZE));
         socket_impl::lowest_layer().set_option(boost::asio::socket_base::receive_buffer_size(SOCKET_BUFFER_SIZE));
+    }
+
+    template<typename ...arguments>
+    asio_socket(const endpoint_type& remote, boost::asio::io_service& io, arguments&... args)
+        : asio_socket(remote.protocol(), io, args...)
+    {
+        m_remote = remote;
     }
 
     void wait(boost::asio::socket_base::wait_type type, boost::asio::yield_context yield, int64_t timeout = timeout_ms) noexcept(false)
@@ -194,8 +146,47 @@ public:
 
 private:
 
+    static bool is_matched(const endpoint_type& source, const endpoint_type& match)
+    {
+        return (match.address().is_unspecified() || match.address() == source.address()) && (match.port() == 0 || match.port() == source.port());
+    }
+
+    size_t execute(const std::function<size_t()>& function, int64_t timeout = timeout_ms) noexcept(false)
+    {
+        boost::asio::deadline_timer timer(m_io);
+        if (timeout > 0)
+        {
+            timer.expires_from_now(boost::posix_time::milliseconds(timeout));
+            timer.async_wait([&](const boost::system::error_code& error)
+            {
+                if(error)
+                {
+                    if (error == boost::asio::error::operation_aborted)
+                        return;
+
+                    _err_ << error.message();
+                }
+
+                try
+                {
+                    socket_impl::lowest_layer().cancel();
+                }
+                catch (const std::exception &ex)
+                {
+                    _err_ << ex.what();
+                }
+            });
+        }
+
+        size_t res = function();
+
+        timer.cancel();
+
+        return res;
+    }
+
     boost::asio::io_service& m_io;
-    endpoint_type m_remote;
+    endpoint_type m_remote; 
 };
 
 }}

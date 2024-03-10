@@ -13,6 +13,7 @@
 #include <string.h>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
+#include <boost/asio/spawn.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/test/unit_test.hpp>
 #include "../network.h"
@@ -149,17 +150,21 @@ BOOST_AUTO_TEST_CASE(no_check_certs)
         BOOST_REQUIRE_NO_THROW(client->connect(yield));
         BOOST_REQUIRE_NO_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield));
 
-        char buffer[1024];
+        std::string wb = "hello";
+        std::string rb;
 
-        std::strcpy(buffer, "hello");
-        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
-        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
-        BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
+        rb.resize(wb.size());
 
-        std::strcpy(buffer, "bye bye");
-        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
-        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
-        BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
+        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(wb), yield), wb.size());
+        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(rb), yield), rb.size());
+        BOOST_CHECK_EQUAL(wb, rb);
+
+        wb = "bye bye";
+        rb.resize(wb.size());
+
+        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(wb), yield), wb.size());
+        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(rb), yield), rb.size());
+        BOOST_CHECK_EQUAL(wb, rb);
 
         BOOST_REQUIRE_NO_THROW(client->shutdown());
 
@@ -180,17 +185,21 @@ BOOST_AUTO_TEST_CASE(check_certs)
         BOOST_REQUIRE_NO_THROW(client->connect(yield));
         BOOST_REQUIRE_NO_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield));
 
-        char buffer[1024];
+        std::string wb = "hello";
+        std::string rb;
 
-        std::strcpy(buffer, "hello");
-        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
-        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
-        BOOST_CHECK_EQUAL(std::strncmp(buffer, "hello", 1024), 0);
+        rb.resize(wb.size());
 
-        std::strcpy(buffer, "bye bye");
-        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
-        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(buffer, strlen(buffer) + 1), yield), strlen(buffer) + 1);
-        BOOST_CHECK_EQUAL(std::strncmp(buffer, "bye bye", 1024), 0);
+        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(wb), yield), wb.size());
+        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(rb), yield), rb.size());
+        BOOST_CHECK_EQUAL(wb, rb);
+
+        wb = "bye bye";
+        rb.resize(wb.size());
+
+        BOOST_CHECK_EQUAL(client->write(boost::asio::buffer(wb), yield), wb.size());
+        BOOST_CHECK_EQUAL(client->read(boost::asio::buffer(rb), yield), rb.size());
+        BOOST_CHECK_EQUAL(wb, rb);
 
         BOOST_REQUIRE_NO_THROW(client->shutdown());
 
@@ -214,8 +223,8 @@ BOOST_AUTO_TEST_CASE(wrong_certs)
         BOOST_REQUIRE_NO_THROW(client->connect(yield));
         BOOST_REQUIRE_NO_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield));
 
-        char buffer[1024];
-        BOOST_REQUIRE_THROW(client->read(boost::asio::buffer(buffer, sizeof(buffer)), yield, 2000), boost::system::system_error);
+        char rb;
+        BOOST_REQUIRE_THROW(client->read(boost::asio::buffer(&rb, 1), yield, 2000), boost::system::system_error);
 
         BOOST_REQUIRE_NO_THROW(client->shutdown());
 

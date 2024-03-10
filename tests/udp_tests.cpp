@@ -9,8 +9,8 @@
  */
 
 #include "../network.h"
-#include <tubus/buffer.h>
-#include <future>
+#include <boost/asio.hpp>
+#include <boost/asio/spawn.hpp>
 #include <boost/system/system_error.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -25,20 +25,22 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
         auto lend = plexus::network::create_udp_transport(io, lep);
         auto rend = plexus::network::create_udp_transport(io, rep);
 
-        tubus::mutable_buffer out("plexus");
-        tubus::mutable_buffer in(512);
+        std::string wb = "Hello, Plexus!";
+        std::string rb;
 
-        BOOST_REQUIRE_NO_THROW(lend->send_to(out, rep, yield));
+        rb.resize(wb.size());
 
-        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(out.size(), rend->receive_from(in, lep, yield)));
-        BOOST_REQUIRE_EQUAL(std::memcmp(out.data(), in.data(), out.size()), 0);
+        BOOST_REQUIRE_NO_THROW(lend->send_to(boost::asio::buffer(wb), rep, yield));
 
-        BOOST_REQUIRE_NO_THROW(rend->send_to(out, lep, yield));
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), rend->receive_from(boost::asio::buffer(rb), lep, yield)));
+        BOOST_REQUIRE_EQUAL(wb, rb);
 
-        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(out.size(), lend->receive_from(in, rep, yield)));
-        BOOST_REQUIRE_EQUAL(std::memcmp(out.data(), in.data(), out.size()), 0);
+        BOOST_REQUIRE_NO_THROW(rend->send_to(boost::asio::buffer(wb), lep, yield));
 
-        BOOST_REQUIRE_THROW(lend->receive_from(in, rep, yield), boost::system::system_error);
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), lend->receive_from(boost::asio::buffer(rb), rep, yield)));
+        BOOST_REQUIRE_EQUAL(wb, rb);
+
+        BOOST_REQUIRE_THROW(lend->receive_from(boost::asio::buffer(rb), rep, yield), boost::system::system_error);
     });
 
     io.run();
@@ -56,21 +58,23 @@ BOOST_AUTO_TEST_CASE(async_udp_exchange)
 
     auto work = [](boost::asio::yield_context yield, std::shared_ptr<plexus::network::udp_socket> udp, const boost::asio::ip::udp::endpoint& peer)
     {
-        tubus::mutable_buffer out("plexus");
-        tubus::mutable_buffer in(512);
+        std::string wb = "Hello, Plexus!";
+        std::string rb;
 
-        BOOST_REQUIRE_NO_THROW(udp->send_to(out, peer, yield));
-        BOOST_REQUIRE_NO_THROW(udp->send_to(out, peer, yield));
-        BOOST_REQUIRE_NO_THROW(udp->send_to(out, peer, yield));
+        rb.resize(wb.size());
 
-        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(out.size(), udp->receive_from(in, peer, yield)));
-        BOOST_REQUIRE_EQUAL(std::memcmp(out.data(), in.data(), out.size()), 0);
+        BOOST_REQUIRE_NO_THROW(udp->send_to(boost::asio::buffer(wb), peer, yield));
+        BOOST_REQUIRE_NO_THROW(udp->send_to(boost::asio::buffer(wb), peer, yield));
+        BOOST_REQUIRE_NO_THROW(udp->send_to(boost::asio::buffer(wb), peer, yield));
 
-        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(out.size(), udp->receive_from(in, peer, yield)));
-        BOOST_REQUIRE_EQUAL(std::memcmp(out.data(), in.data(), out.size()), 0);
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), peer, yield)));
+        BOOST_REQUIRE_EQUAL(wb, rb);
 
-        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(out.size(), udp->receive_from(in, peer, yield)));
-        BOOST_REQUIRE_EQUAL(std::memcmp(out.data(), in.data(), out.size()), 0);
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), peer, yield)));
+        BOOST_REQUIRE_EQUAL(wb, rb);
+
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), peer, yield)));
+        BOOST_REQUIRE_EQUAL(wb, rb);
     };
 
     boost::asio::spawn(io, [work, lend, rep](boost::asio::yield_context yield)
