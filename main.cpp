@@ -103,7 +103,7 @@ int main(int argc, char** argv)
 
     try
     {
-        wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), false, vm["log-file"].as<std::string>());
+        wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), vm["log-file"].as<std::string>());
 
         auto broker = plexus::create_email_mediator(
             vm["email-smtps"].as<smtp_server_endpoint>(),

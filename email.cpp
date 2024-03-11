@@ -180,14 +180,15 @@ public:
                 response.resize(end + m_ssl->read_some(boost::asio::buffer(response.data() + end, BUFFER_SIZE), yield, timeout == 0 ? network::default_tcp_timeout_ms : timeout));
             }
             while (!parse(response));
+
+            _trc_ << ">>>>>\n" << response << "\n*****";
         }
         catch (const boost::system::system_error& ex)
         {
             if (timeout == 0 || ex.code() != boost::asio::error::operation_aborted)
                 throw;
+            
         }
-
-        _trc_ << ">>>>>\n" << response << "\n*****";
     }
 
     void snooze(boost::asio::yield_context yield, int64_t timeout)
