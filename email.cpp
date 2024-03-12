@@ -721,9 +721,8 @@ public:
     {
     }
 
-    void accept(const plexus_coro& handler) noexcept(false) override
+    void accept(boost::asio::io_service& io, const plexus_coro& handler) noexcept(false) override
     {
-        boost::asio::io_service io;
         boost::asio::spawn(io, [&](boost::asio::yield_context yield)
         {
             smtp pusher(io, m_config, m_host, m_peer);
@@ -744,7 +743,7 @@ public:
                     {
                         _inf_ << "accepting peer=" << pipe->peer() << " for host=" << pipe->host();
 
-                        handler(io, yield, pipe);
+                        handler(yield, pipe);
                     }
                     catch (const std::exception &e)
                     {
@@ -757,13 +756,10 @@ public:
             }
             while (true);
         });
-
-        io.run();
     }
 
-    void invite(const plexus_coro& handler) noexcept(false) override
+    void invite(boost::asio::io_service& io, const plexus_coro& handler) noexcept(false) override
     {
-        boost::asio::io_service io;
         boost::asio::spawn(io, [&](boost::asio::yield_context yield)
         {
             smtp pusher(io, m_config, m_host, m_peer);
@@ -775,10 +771,8 @@ public:
 
             _inf_ << "infiting peer=" << pipe->peer() << " for host=" << pipe->host();
 
-            handler(io, yield, pipe);
+            handler(yield, pipe);
         });
-
-        io.run();
     }
 };
 

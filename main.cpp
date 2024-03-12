@@ -105,7 +105,7 @@ int main(int argc, char** argv)
     {
         wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), vm["log-file"].as<std::string>());
 
-        auto broker = plexus::create_email_mediator(
+        auto mediator = plexus::create_email_mediator(
             vm["email-smtps"].as<smtp_server_endpoint>(),
             vm["email-imaps"].as<imap_server_endpoint>(),
             vm["email-login"].as<std::string>(),
@@ -152,9 +152,11 @@ int main(int argc, char** argv)
         boost::asio::ip::udp::endpoint stun = vm["stun-server"].as<stun_server_endpoint>();
         boost::asio::ip::udp::endpoint bind = vm["stun-client"].as<stun_client_endpoint>();
 
+        boost::asio::io_service io;
+
         if (vm["accept"].as<bool>())
         {
-            broker->accept([&](boost::asio::io_service& io, boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
+            mediator->accept(io, [&](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
             {
                 auto host = pipe->host();
                 auto peer = pipe->peer();
@@ -174,7 +176,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            broker->invite([&](boost::asio::io_service& io, boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
+            mediator->invite(io, [&](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
             {
                 auto host = pipe->host();
                 auto peer = pipe->peer();
@@ -189,6 +191,8 @@ int main(int argc, char** argv)
                 launch(host, peer, bind, gateway, faraway);
             });
         }
+
+        io.run();
     }
     catch(const std::exception& e)
     {

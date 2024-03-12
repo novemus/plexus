@@ -90,13 +90,13 @@ struct pipe
     virtual const identity& peer() const noexcept(true) = 0;
 };
 
-using plexus_coro = std::function<void(boost::asio::io_service& io, boost::asio::yield_context yield, std::shared_ptr<pipe> pipe)>;
+using plexus_coro = std::function<void(boost::asio::yield_context yield, std::shared_ptr<pipe> pipe)>;
 
 struct mediator
 {
     virtual ~mediator() {}
-    virtual void accept(const plexus_coro& handler) noexcept(false) = 0;
-    virtual void invite(const plexus_coro& handler) noexcept(false) = 0;
+    virtual void accept(boost::asio::io_service& io, const plexus_coro& handler) noexcept(false) = 0;
+    virtual void invite(boost::asio::io_service& io, const plexus_coro& handler) noexcept(false) = 0;
 };
 
 std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
