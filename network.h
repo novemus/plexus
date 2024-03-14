@@ -19,6 +19,31 @@
 
 namespace plexus { namespace network {
 
+struct traverse
+{
+    enum binding
+    {
+        independent = 0,
+        port_dependent = 1,
+        address_dependent = 2,
+        address_and_port_dependent = 3
+    };
+
+    struct
+    {
+        bool nat : 1;
+        bool hairpin : 1;
+        bool random_port : 1;
+        bool variable_address : 1;
+        binding mapping : 2;
+        binding filtering : 2;
+    }
+    traits;
+
+    boost::asio::ip::udp::endpoint inner_endpoint;
+    boost::asio::ip::udp::endpoint outer_endpoint;
+};
+
 constexpr int64_t default_tcp_timeout_ms = 10000;
 constexpr int64_t default_udp_timeout_ms = 1600;
 

@@ -18,11 +18,12 @@
 
 namespace plexus { namespace stun {
 
-class puncher_impl : public plexus::nat_puncher
+class tracer_impl : public plexus::stun_tracer
 {
     boost::asio::io_service& m_io;
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
+    uint16_t m_punch;
     std::shared_ptr<network::udp_socket> m_pin;
 
     class handshake : public tubus::mutable_buffer
@@ -36,7 +37,7 @@ class puncher_impl : public plexus::nat_puncher
 
     public:
 
-        handshake(uint8_t flag, uint64_t mask) : mutable_buffer(60), m_mask(mask)
+        handshake(uint8_t flag, uint64_t mask) : mutable_buffer(8), m_mask(mask)
         {
             uint8_t sum = 0;
             for (size_t i = 0; i < 7; ++i)
@@ -53,7 +54,7 @@ class puncher_impl : public plexus::nat_puncher
             set<uint8_t>(7, sum ^ get_mask_byte(7));
         }
 
-        handshake(uint64_t mask) : mutable_buffer(60), m_mask(mask)
+        handshake(uint64_t mask) : mutable_buffer(8), m_mask(mask)
         {
         }
 
@@ -73,10 +74,12 @@ class puncher_impl : public plexus::nat_puncher
 
 public:
 
-    puncher_impl(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind)
+    tracer_impl(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch)
         : m_io(io)
         , m_stun(stun)
         , m_bind(bind)
+        , m_punch(punch)
+        , m_pin(plexus::network::create_udp_transport(m_io, m_bind))
     {
         _dbg_ << "stun server: " << stun;
         _dbg_ << "stun client: " << bind;
@@ -92,9 +95,6 @@ public:
         };
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
-
-        if (!m_pin)
-            m_pin = plexus::network::create_udp_transport(m_io, m_bind);
 
         handshake out(0, mask);
         handshake in(mask);
@@ -132,8 +132,6 @@ public:
 
     void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
-        _dbg_ << "awaiting peer...";
-
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
@@ -141,8 +139,15 @@ public:
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        if (!m_pin)
-            m_pin = plexus::network::create_udp_transport(m_io, m_bind);
+        _dbg_ << "punching upd hole to peer...";
+
+        boost::asio::ip::unicast::hops old;
+        m_pin->get_option(old);
+        m_pin->set_option(boost::asio::ip::unicast::hops(m_punch));
+        m_pin->send_to(handshake(0, 0), peer, yield, 2000);
+        m_pin->set_option(old);
+
+        _dbg_ << "awaiting peer...";
 
         handshake out(1, mask);
         handshake in(mask);
@@ -175,43 +180,22 @@ public:
         throw plexus::timeout_error();
     }
 
-    boost::asio::ip::udp::endpoint punch_hole_to_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint8_t hops) noexcept(false) override
-    {
-        _dbg_ << "punching udp hole to peer...";
-
-        auto ep = reflect_endpoint(yield);
-
-        m_pin = plexus::network::create_udp_transport(m_io, m_bind);
-        m_pin->set_option(boost::asio::ip::unicast::hops(hops));
-        m_pin->send_to(handshake(0, 0), peer, yield, 2000);
-        
-        return ep;
-    }
-
-    boost::asio::ip::udp::endpoint reflect_endpoint(boost::asio::yield_context yield) noexcept(false) override
+    network::traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
-        return stun->reflect_endpoint(yield);
-    }
-
-    traverse explore_network(boost::asio::yield_context yield) noexcept(false) override
-    {
-        auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
-        return stun->explore_network(yield);
+        return stun->punch_hole(yield);
     }
 };
 
 }
 
-std::shared_ptr<plexus::nat_puncher> create_nat_puncher(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, boost::asio::ip::udp::endpoint& bind)
+std::shared_ptr<plexus::stun_tracer> create_stun_tracer(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(true)
 {
     boost::asio::ip::udp::socket socket(io, stun.protocol());
-
     socket.set_option(boost::asio::socket_base::reuse_address(true));
     socket.bind(bind);
-    bind = socket.local_endpoint();
 
-    return std::make_shared<plexus::stun::puncher_impl>(io, stun, bind);
+    return std::make_shared<plexus::stun::tracer_impl>(io, stun, socket.local_endpoint(), punch);
 }
 
 }

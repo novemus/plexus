@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "plexus.h"
+#include "network.h"
 #include <string>
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
@@ -18,66 +20,26 @@
 
 namespace plexus {
 
-struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
-struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
-struct bad_message : public std::runtime_error { bad_message() : std::runtime_error("bad message") {} };
-struct bad_network : public std::runtime_error { bad_network() : std::runtime_error("bad network") {} };
-struct bad_identity : public std::runtime_error { bad_identity() : std::runtime_error("bad identity") {} };
-
-void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", bool wait = false);
-
-enum binding
-{
-    address_and_port_dependent = 0,
-    address_dependent = 1,
-    port_dependent = 2,
-    independent = 3
-};
-
-struct traverse
-{
-    unsigned int nat : 1,
-                 hairpin : 1,
-                 random_port : 1,
-                 variable_address : 1,
-                 mapping : 2, // enum binding
-                 filtering : 2; // enum binding
-};
-
-struct stun_client
-{
-    virtual ~stun_client() {}
-    virtual boost::asio::ip::udp::endpoint reflect_endpoint(boost::asio::yield_context yield) noexcept(false) = 0;
-    virtual traverse explore_network(boost::asio::yield_context yield) noexcept(false) = 0;
-};
-
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local);
-
-struct nat_puncher : public stun_client
-{
-    virtual boost::asio::ip::udp::endpoint punch_hole_to_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint8_t hops) noexcept(false) = 0;
-    virtual void reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
-    virtual void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
-};
-
-std::shared_ptr<nat_puncher> create_nat_puncher(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, boost::asio::ip::udp::endpoint& bind);
-
-struct reference
-{
-    boost::asio::ip::udp::endpoint endpoint;
-    uint64_t puzzle = 0;
-};
-
-struct identity
-{
-    std::string owner;
-    std::string pin;
-};
-
 std::ostream& operator<<(std::ostream& stream, const reference& value);
 std::ostream& operator<<(std::ostream& stream, const identity& value);
 std::istream& operator>>(std::istream& in, reference& level);
 std::istream& operator>>(std::istream& in, identity& level);
+
+struct stun_client
+{
+    virtual ~stun_client() {}
+    virtual network::traverse punch_hole(boost::asio::yield_context yield) noexcept(false) = 0;
+};
+
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_service& io, const udp_endpoint& stun, const boost::asio::ip::udp::endpoint& bind) noexcept(true);
+
+struct stun_tracer : public stun_client
+{
+    virtual void reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
+};
+
+std::shared_ptr<stun_tracer> create_stun_tracer(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(true);
 
 struct pipe
 {
@@ -90,16 +52,17 @@ struct pipe
     virtual const identity& peer() const noexcept(true) = 0;
 };
 
-using plexus_coro = std::function<void(boost::asio::yield_context yield, std::shared_ptr<pipe> pipe)>;
-
 struct mediator
 {
+    using coroutine = std::function<void(boost::asio::yield_context yield, std::shared_ptr<pipe> pipe)>;
+
     virtual ~mediator() {}
-    virtual void accept(boost::asio::io_service& io, const plexus_coro& handler) noexcept(false) = 0;
-    virtual void invite(boost::asio::io_service& io, const plexus_coro& handler) noexcept(false) = 0;
+    virtual void accept(const coroutine& handler) noexcept(false) = 0;
+    virtual void invite(const coroutine& handler) noexcept(false) = 0;
 };
 
-std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endpoint& smtp,
+std::shared_ptr<mediator> create_email_mediator(boost::asio::io_service& io,
+                                                const boost::asio::ip::tcp::endpoint& smtp,
                                                 const boost::asio::ip::tcp::endpoint& imap,
                                                 const std::string& login,
                                                 const std::string& passwd,
@@ -109,5 +72,5 @@ std::shared_ptr<mediator> create_email_mediator(const boost::asio::ip::tcp::endp
                                                 const std::string& app,
                                                 const std::string& repo,
                                                 const identity& host,
-                                                const identity& peer);
+                                                const identity& peer) noexcept(true);
 }

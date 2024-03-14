@@ -21,7 +21,7 @@
 
 namespace plexus {
 
-void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait)
+void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait) noexcept(false)
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
@@ -106,7 +106,7 @@ extern char **environ;
 
 namespace plexus {
 
-void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait)
+void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait) noexcept(false)
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 

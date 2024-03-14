@@ -9,9 +9,8 @@
  */
 
 #include "features.h"
+#include "plexus.h"
 #include "utils.h"
-#include <memory>
-#include <reactor.h>
 #include <logger.h>
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
@@ -59,14 +58,14 @@ int main(int argc, char** argv)
         ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate connection")
         ("app-id", boost::program_options::value<std::string>()->required(), "identifier of the application")
         ("app-repo", boost::program_options::value<std::string>()->default_value(""), "path to application repository")
-        ("host-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the host: <email>/<pin>")
-        ("peer-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email>/<pin>")
+        ("host-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the host: <email/pin>")
+        ("peer-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email/pin>")
         ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of public stun server")
         ("stun-client", boost::program_options::value<stun_client_endpoint>()->required(), "endpoint of local stun client")
         ("email-smtps", boost::program_options::value<smtp_server_endpoint>()->required(), "smtps server used to send reference to the peer")
         ("email-imaps", boost::program_options::value<imap_server_endpoint>()->required(), "imaps server used to receive reference from the peer")
         ("email-login", boost::program_options::value<std::string>()->required(), "login of email account")
-        ("email-passwd", boost::program_options::value<std::string>()->required(), "password of email account")
+        ("email-password", boost::program_options::value<std::string>()->required(), "password of email account")
         ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to X509 certificate of email client")
         ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to Private Key of email client")
         ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to email Certification Authority")
@@ -105,19 +104,7 @@ int main(int argc, char** argv)
     {
         wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), vm["log-file"].as<std::string>());
 
-        auto mediator = plexus::create_email_mediator(
-            vm["email-smtps"].as<smtp_server_endpoint>(),
-            vm["email-imaps"].as<imap_server_endpoint>(),
-            vm["email-login"].as<std::string>(),
-            vm["email-passwd"].as<std::string>(),
-            vm["email-cert"].as<std::string>(),
-            vm["email-key"].as<std::string>(),
-            vm["email-ca"].as<std::string>(),
-            vm["app-id"].as<std::string>(),
-            vm["app-repo"].as<std::string>(),
-            vm["host-info"].as<plexus::identity>(),
-            vm["peer-info"].as<plexus::identity>()
-            );
+        _inf_ << "********** starting plexus **********";
 
         auto launch = [&](const plexus::identity& host, const plexus::identity& peer, const boost::asio::ip::udp::endpoint& bind, const plexus::reference& gateway, const plexus::reference& faraway)
         {
@@ -149,50 +136,24 @@ int main(int argc, char** argv)
                 );
         };
 
-        boost::asio::ip::udp::endpoint stun = vm["stun-server"].as<stun_server_endpoint>();
-        boost::asio::ip::udp::endpoint bind = vm["stun-client"].as<stun_client_endpoint>();
+        plexus::common::options config = {
+            vm["app-id"].as<std::string>(),
+            vm["app-repo"].as<std::string>(),
+            vm["email-smtps"].as<smtp_server_endpoint>(),
+            vm["email-imaps"].as<imap_server_endpoint>(),
+            vm["email-login"].as<std::string>(),
+            vm["email-password"].as<std::string>(),
+            vm["email-cert"].as<std::string>(),
+            vm["email-key"].as<std::string>(),
+            vm["email-ca"].as<std::string>(),
+            vm["stun-server"].as<stun_server_endpoint>(),
+            vm["stun-client"].as<stun_client_endpoint>(),
+            vm["punch-hops"].as<uint16_t>()
+            };
 
-        boost::asio::io_service io;
-
-        if (vm["accept"].as<bool>())
-        {
-            mediator->accept(io, [&](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
-            {
-                auto host = pipe->host();
-                auto peer = pipe->peer();
-                auto puncher = plexus::create_nat_puncher(io, stun, bind);
-
-                plexus::reference faraway = pipe->pull_request(yield);
-                plexus::reference gateway = {
-                    puncher->punch_hole_to_peer(yield, faraway.endpoint, static_cast<uint8_t>(vm["punch-hops"].as<uint16_t>())),
-                    plexus::utils::random<uint64_t>()
-                };
-                pipe->push_response(yield, gateway);
-
-                puncher->await_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
-
-                launch(host, peer, bind, gateway, faraway);
-            });
-        }
-        else
-        {
-            mediator->invite(io, [&](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
-            {
-                auto host = pipe->host();
-                auto peer = pipe->peer();
-                auto puncher = plexus::create_nat_puncher(io, stun, bind);
-
-                plexus::reference gateway = { puncher->reflect_endpoint(yield), plexus::utils::random<uint64_t>() };
-                pipe->push_request(yield, gateway);
-                plexus::reference faraway = pipe->pull_response(yield);
-
-                puncher->reach_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
-
-                launch(host, peer, bind, gateway, faraway);
-            });
-        }
-
-        io.run();
+        vm["accept"].as<bool>()
+            ? plexus::common::accept(config, vm["host-info"].as<plexus::identity>(), vm["peer-info"].as<plexus::identity>(), launch)
+            : plexus::common::invite(config, vm["host-info"].as<plexus::identity>(), vm["peer-info"].as<plexus::identity>(), launch);
     }
     catch(const std::exception& e)
     {

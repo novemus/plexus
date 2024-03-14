@@ -13,7 +13,6 @@
 #include "utils.h"
 #include <tubus/buffer.h>
 #include <logger.h>
-#include <logger.h>
 #include <boost/asio/error.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 
@@ -77,25 +76,23 @@
  *
  */
 
-namespace plexus { 
+namespace plexus { namespace stun {
 
-std::ostream& operator<<(std::ostream& stream, const binding& bind)
+std::string to_string(const network::traverse::binding& value)
 {
-    switch (bind)
+    switch (value)
     {
-        case binding::address_dependent:
-            return stream << "address dependent";
-        case binding::port_dependent:
-            return stream << "port dependent";
-        case binding::independent:
-            return stream << "independent";
+        case network::traverse::port_dependent:
+            return "port dependent";
+        case network::traverse::address_dependent:
+            return "address dependent";
+        case network::traverse::address_and_port_dependent:
+            return "address and port dependent";
         default:
-            return stream << "address and port dependent";
+            return "independent";
     }
-    return stream;
+    return "";
 }
-
-namespace stun {
 
 typedef std::array<uint8_t, 16> transaction_id;
 
@@ -349,70 +346,65 @@ public:
 
 public:
 
-    boost::asio::ip::udp::endpoint reflect_endpoint(boost::asio::yield_context yield) noexcept(false) override
+    network::traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
     {
-        _dbg_ << "reflecting endpoint...";
-
-        return exec_binding(plexus::network::create_udp_transport(m_io, m_bind), yield, m_stun, m_stun).mapped_endpoint();
-    }
-
-    traverse explore_network(boost::asio::yield_context yield) noexcept(false) override
-    {
-        _dbg_ << "testing network...";
+        _dbg_ << "punching udp hole to stun...";
         
-        traverse state = {0};
+        network::traverse hole = { { 0 } };
 
         auto mapper = plexus::network::create_udp_transport(m_io, m_bind);
-
         auto response = exec_binding(mapper, yield, m_stun, m_stun);
-        auto mapped = response.mapped_endpoint();
-        auto changed = response.changed_endpoint();
+        
+        hole.inner_endpoint = mapper->local_endpoint();
+        hole.outer_endpoint = response.mapped_endpoint();
+        
+        auto changed_stun = response.changed_endpoint();
 
-        if (mapped != m_bind)
+        if (hole.inner_endpoint != hole.outer_endpoint)
         {
-            state.nat = 1;
+            hole.traits.nat = true;
 
-            if (m_bind.port() != mapped.port())
+            if (m_bind.port() != hole.outer_endpoint.port())
             {
-                state.random_port = 1;
+                hole.traits.random_port = true;
             }
 
             _dbg_ << "first mapping test...";
 
-            auto first = exec_binding(mapper, yield, changed, changed).mapped_endpoint();
-            if (first == mapped)
+            auto first_endpoint = exec_binding(mapper, yield, changed_stun, changed_stun).mapped_endpoint();
+            if (first_endpoint == hole.outer_endpoint)
             {
-                state.mapping = binding::independent;
+                hole.traits.mapping = network::traverse::independent;
             }
             else
             {
                 _dbg_ << "second mapping test...";
 
-                boost::asio::ip::udp::endpoint stun(changed.address(), m_stun.port());
-                auto second = exec_binding(mapper, yield, stun, stun).mapped_endpoint();
+                boost::asio::ip::udp::endpoint stun(changed_stun.address(), m_stun.port());
+                auto second_endpoint = exec_binding(mapper, yield, stun, stun).mapped_endpoint();
                 
-                if (second == mapped)
+                if (second_endpoint == hole.outer_endpoint)
                 {
-                    state.mapping = binding::port_dependent;
+                    hole.traits.mapping = network::traverse::port_dependent;
                 }
-                else if (second == first)
+                else if (second_endpoint == first_endpoint)
                 {
-                    state.mapping = binding::address_dependent;
+                    hole.traits.mapping = network::traverse::address_dependent;
                 }
                 else
                 {
-                    state.mapping = binding::address_and_port_dependent;
+                    hole.traits.mapping = network::traverse::address_and_port_dependent;
                 }
 
-                if (second.address() != mapped.address() || second.address() != first.address())
+                if (second_endpoint.address() != hole.outer_endpoint.address() || second_endpoint.address() != first_endpoint.address())
                 {
-                    state.variable_address = 1;
+                    hole.traits.variable_address = true;
                 }
             }
         }
         else
         {
-            state.mapping = binding::independent;
+            hole.traits.mapping = network::traverse::independent;
         }
 
         auto filter = plexus::network::create_udp_transport(m_io);
@@ -420,8 +412,8 @@ public:
         {
             _dbg_ << "first filtering test...";
 
-            exec_binding(filter, yield, m_stun, changed, message(flag::change_address | flag::change_port), 1400);
-            state.filtering = binding::independent;
+            exec_binding(filter, yield, m_stun, changed_stun, message(flag::change_address | flag::change_port), 1400);
+            hole.traits.filtering = network::traverse::independent;
         }
         catch(const plexus::timeout_error&)
         {
@@ -429,8 +421,8 @@ public:
             {
                 _dbg_ << "second filtering test...";
 
-                exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(changed.address(), m_stun.port()), message(flag::change_address), 1400);
-                state.filtering = binding::port_dependent;
+                exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(changed_stun.address(), m_stun.port()), message(flag::change_address), 1400);
+                hole.traits.filtering = network::traverse::port_dependent;
             }
             catch(const plexus::timeout_error&)
             {
@@ -438,12 +430,12 @@ public:
                 {
                     _dbg_ << "third filtering test...";
 
-                    exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(m_stun.address(), changed.port()), message(flag::change_port), 1400);
-                    state.filtering = binding::address_dependent;
+                    exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(m_stun.address(), changed_stun.port()), message(flag::change_port), 1400);
+                    hole.traits.filtering = network::traverse::address_dependent;
                 }
                 catch(const plexus::timeout_error&)
                 {
-                    state.filtering = binding::address_and_port_dependent;
+                    hole.traits.filtering = network::traverse::address_and_port_dependent;
                 }
             }
         }
@@ -452,26 +444,28 @@ public:
         {
             _dbg_ << "hairpin test...";
 
-            exec_binding(mapper, yield, mapped, mapped, message(0), 1400);
-            state.hairpin = 1;
+            exec_binding(mapper, yield, hole.outer_endpoint , hole.outer_endpoint , message(0), 1400);
+            hole.traits.hairpin = true;
         }
         catch(const plexus::timeout_error&) { }
 
         _inf_ << "\ntraverse:"
-              << "\n\tnat: " << (state.nat ? "true" : "false")
-              << "\n\tmapping: " <<  (binding)state.mapping
-              << "\n\tfiltering: " << (binding)state.filtering
-              << "\n\trandom port: " << (state.random_port ? "true" : "false")
-              << "\n\tvariable address: " << (state.variable_address ? "true" : "false")
-              << "\n\thairpin: " << (state.hairpin ? "true" : "false");
+              << "\n\tnat: " << hole.traits.nat
+              << "\n\tmapping: " << to_string(hole.traits.mapping)
+              << "\n\tfiltering: " << to_string(hole.traits.filtering)
+              << "\n\trandom port: " << hole.traits.random_port 
+              << "\n\tvariable address: " << hole.traits.variable_address 
+              << "\n\thairpin: " << hole.traits.hairpin
+              << "\n\tinner endpoint: " << hole.inner_endpoint
+              << "\n\touter endpoint: " << hole.outer_endpoint;
 
-        return state;
+        return hole;
     }
 };
 
 }
 
-std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local)
+std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local) noexcept(true)
 {
     return std::make_shared<plexus::stun::client_impl>(io, server, local);
 }

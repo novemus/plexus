@@ -15,9 +15,7 @@ namespace plexus { namespace network {
 std::shared_ptr<udp_socket> create_udp_transport(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& bind)
 {
     auto socket = std::make_shared<udp_socket>(bind.protocol(), io);
-
-    if (bind.port())
-        socket->bind(bind);
+    socket->bind(bind);
 
     return socket;
 }
