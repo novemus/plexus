@@ -10,21 +10,14 @@
 
 #pragma once
 
+#include <tubus/socket.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ip/udp.hpp>
 
 namespace plexus {
 
-struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
-struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
-struct bad_message : public std::runtime_error { bad_message() : std::runtime_error("bad message") {} };
-struct bad_network : public std::runtime_error { bad_network() : std::runtime_error("bad network") {} };
-struct bad_identity : public std::runtime_error { bad_identity() : std::runtime_error("bad identity") {} };
-
-void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", bool wait = false) noexcept(false);
-
-using udp_endpoint = boost::asio::ip::udp::endpoint;
-using tcp_endpoint = boost::asio::ip::tcp::endpoint;
+using udp = boost::asio::ip::udp;
+using tcp = boost::asio::ip::tcp;
 
 struct identity
 {
@@ -34,35 +27,48 @@ struct identity
 
 struct reference
 {
-    udp_endpoint endpoint;
+    udp::endpoint endpoint;
     uint64_t puzzle = 0;
 };
 
-namespace common {
-
-struct options
+struct mediator
 {
     std::string app;
     std::string repo;
-    tcp_endpoint smtp;
-    tcp_endpoint imap;
+    tcp::endpoint smtp;
+    tcp::endpoint imap;
     std::string login;
     std::string password;
     std::string cert;
     std::string key;
     std::string ca;
-    udp_endpoint stun;
-    udp_endpoint bind;
+};
+
+struct options : public mediator
+{
+    udp::endpoint stun;
+    udp::endpoint bind;
     uint16_t hops;
 };
 
 using connector = std::function<void(const identity& /* host */,
                                      const identity& /* peer */,
-                                     const udp_endpoint& /* local */,
+                                     const udp::endpoint& /* local */,
                                      const reference& /* gateway */,
                                      const reference& /* faraway */)>;
 
-void accept(const options& config, const identity& host, const identity& peer, const connector& handler) noexcept(false);
-void invite(const options& config, const identity& host, const identity& peer, const connector& handler) noexcept(false);
+using collector = std::function<void(const identity& /* host */,
+                                     const identity& /* peer */,
+                                     tubus::socket&& /* socket */)>;
 
-}}
+using fallback = std::function<void(const identity& /* host */,
+                                    const identity& /* peer */,
+                                    const std::string& /* error */)>;
+
+void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify = nullptr) noexcept(true);
+void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify = nullptr) noexcept(true);
+
+void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify = nullptr) noexcept(true);
+void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify = nullptr) noexcept(true);
+
+}

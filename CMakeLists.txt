@@ -11,7 +11,7 @@ add_subdirectory(wormhole)
 
 include(GNUInstallDirs)
 
-set(SOURCES utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp stun.cpp tracer.cpp plexus.cpp main.cpp wormhole/logger.cpp)
+set(SOURCES utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp stun.cpp binder.cpp plexus.cpp main.cpp wormhole/logger.cpp wormhole/tubus/channel.cpp)
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")

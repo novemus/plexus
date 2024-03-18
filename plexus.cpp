@@ -14,7 +14,7 @@
 #include <logger.h>
 
 namespace plexus {
-    
+
 std::ostream& operator<<(std::ostream& stream, const reference& value)
 {
     if (stream.rdbuf())
@@ -61,56 +61,130 @@ std::istream& operator>>(std::istream& in, identity& value)
     throw boost::bad_lexical_cast();
 }
 
-namespace common {
-
-void accept(const options& config, const identity& host, const identity& peer, const connector& handler) noexcept(false)
+void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify) noexcept(true)
 {
-    boost::asio::io_service io;
-    auto mediator = plexus::create_email_mediator(io, config.smtp, config.imap, config.login, config.password, config.cert, config.key, config.ca, config.app, config.repo, host, peer);
-
-    mediator->accept([&](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
+    spawn_accept(io, config, host, peer, [&io, config, connect, notify](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
     {
-        auto tracer = plexus::create_stun_tracer(io, config.stun, config.bind, config.hops);
+        auto peer = pipe->peer();
+        auto host = pipe->host();
 
-        auto hole = tracer->punch_hole(yield);
-        if (hole.traits.mapping != network::traverse::independent)
-            throw plexus::bad_network();
+        _inf_ << "accepting " << peer << " for " << host;
 
-        reference faraway = pipe->pull_request(yield);
-        reference gateway = { hole.outer_endpoint, plexus::utils::random<uint64_t>() };
-        pipe->push_response(yield, gateway);
+        try
+        {
+            auto binder = plexus::create_stun_binder(io, config.stun, config.bind, config.hops);
 
-        tracer->await_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
+            auto hole = binder->punch_hole(yield);
+            if (hole.traits.mapping != network::traverse::independent)
+                throw plexus::bad_network();
 
-        handler(pipe->host(), pipe->peer(), hole.inner_endpoint, gateway, faraway);
+            reference faraway = pipe->pull_request(yield);
+            reference gateway = {hole.outer_endpoint, plexus::utils::random<uint64_t>()};
+            pipe->push_response(yield, gateway);
+
+            binder->await_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
+
+            connect(host, peer, hole.inner_endpoint, gateway, faraway);
+        }
+        catch (const std::exception& e)
+        {
+            _err_ << "accepting " << peer << " for " << host << " failed: " << e.what();
+
+            if (notify)
+                notify(host, peer, e.what());
+        }
     });
-
-    io.run();
 }
 
-void invite(const options& config, const identity& host, const identity& peer, const connector& handler) noexcept(false)
+void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify) noexcept(true)
 {
-    boost::asio::io_service io;
-    auto mediator = plexus::create_email_mediator(io, config.smtp, config.imap, config.login, config.password, config.cert, config.key, config.ca, config.app, config.repo, host, peer);
-
-    mediator->invite([&](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
+    spawn_invite(io, config, host, peer, [&io, config, connect, notify](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
     {
-        auto tracer = plexus::create_stun_tracer(io, config.stun, config.bind, config.hops);
+        auto peer = pipe->peer();
+        auto host = pipe->host();
 
-        auto hole = tracer->punch_hole(yield);
-        if (hole.traits.mapping != network::traverse::independent)
-            throw plexus::bad_network();
+        _inf_ << "inviting " << peer << " for " << host;
 
-        plexus::reference gateway = { hole.outer_endpoint, plexus::utils::random<uint64_t>() };
-        pipe->push_request(yield, gateway);
-        plexus::reference faraway = pipe->pull_response(yield);
+        try
+        {
+            auto binder = plexus::create_stun_binder(io, config.stun, config.bind, config.hops);
 
-        tracer->reach_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
+            auto hole = binder->punch_hole(yield);
+            if (hole.traits.mapping != network::traverse::independent)
+                throw plexus::bad_network();
 
-        handler(pipe->host(), pipe->peer(), hole.inner_endpoint, gateway, faraway);
+            plexus::reference gateway = { hole.outer_endpoint, plexus::utils::random<uint64_t>() };
+            pipe->push_request(yield, gateway);
+            plexus::reference faraway = pipe->pull_response(yield);
+
+            binder->reach_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
+
+            connect(host, peer, hole.inner_endpoint, gateway, faraway);
+        }
+        catch (const std::exception& e)
+        {
+            _err_ << "inviting " << peer << " for " << host << " failed: " << e.what();
+
+            if (notify)
+                notify(pipe->host(), pipe->peer(), e.what());
+        }
     });
-
-    io.run();
 }
 
-}}
+void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify) noexcept(true)
+{
+    spawn_accept(io, config, host, peer, [&io, collect, notify](const identity& host, const identity& peer, const udp::endpoint& bind, const reference& gateway, const reference& faraway)
+    {
+        auto socket = std::make_shared<tubus::socket>(io, faraway.puzzle ^ gateway.puzzle);
+
+        boost::system::error_code ec;
+        socket->open(bind, ec);
+
+        if (ec)
+        {
+            notify(host, peer, ec.message());
+            return;
+        }
+
+        socket->async_accept(faraway.endpoint, [socket, host, peer, collect, notify](const boost::system::error_code& ec)
+        {
+            if (ec)
+            {
+                notify(host, peer, ec.message());
+                return;
+            }
+
+            collect(host, peer, std::move(*socket));
+        });
+    }, notify);
+}
+
+void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify) noexcept(true)
+{
+    spawn_invite(io, config, host, peer, [&io, collect, notify](const identity& host, const identity& peer, const udp::endpoint& bind, const reference& gateway, const reference& faraway)
+    {
+        auto socket = std::make_shared<tubus::socket>(io, faraway.puzzle ^ gateway.puzzle);
+
+        boost::system::error_code ec;
+        socket->open(bind, ec);
+
+        if (ec)
+        {
+            notify(host, peer, ec.message());
+            return;
+        }
+
+        socket->async_connect(faraway.endpoint, [socket, host, peer, collect, notify](const boost::system::error_code& ec)
+        {
+            if (ec)
+            {
+                notify(host, peer, ec.message());
+                return;
+            }
+
+            collect(host, peer, std::move(*socket));
+        });
+    }, notify);
+}
+
+}

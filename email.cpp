@@ -29,17 +29,11 @@ const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MIN_P
 const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
 const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
 
-struct context
+struct context : public mediator
 {
-    boost::asio::ip::tcp::endpoint smtp;
-    boost::asio::ip::tcp::endpoint imap;
-    std::string login;
-    std::string passwd;
-    std::string cert;
-    std::string key;
-    std::string ca;
-    std::string app;
-    std::string repo;
+    context(const mediator& config) : mediator(config)
+    {
+    }
 
     bool are_defined(const identity& host, const identity& peer) const
     {
@@ -232,6 +226,7 @@ public:
         , m_host(host)
         , m_peer(peer)
     {
+        _dbg_ << "smtp server: " << m_config.smtp;
     }
 
     void push(boost::asio::yield_context yield, const std::string& subject, const reference& data) noexcept(false)
@@ -251,7 +246,7 @@ public:
         session->request(yield, "HELO smtp\r\n", code_checker(250));
         session->request(yield, "AUTH LOGIN\r\n", code_checker(334));
         session->request(yield, utils::format("%s\r\n", utils::to_base64_no_nl(m_config.login.c_str(), m_config.login.size()).c_str()), code_checker(334));
-        session->request(yield, utils::format("%s\r\n", utils::to_base64_no_nl(m_config.passwd.c_str(), m_config.passwd.size()).c_str()), code_checker(235));
+        session->request(yield, utils::format("%s\r\n", utils::to_base64_no_nl(m_config.password.c_str(), m_config.password.size()).c_str()), code_checker(235));
         session->request(yield, utils::format("MAIL FROM: %s\r\n", m_host.owner.c_str()), code_checker(250));
         session->request(yield, utils::format("RCPT TO: %s\r\n", m_peer.owner.c_str()), code_checker(250));
         session->request(yield, "DATA\r\n", code_checker(354));
@@ -468,6 +463,8 @@ public:
         , m_host(host)
         , m_peer(peer)
     {
+        _dbg_ << "imap server: " << m_config.smtp;
+
         make_parsers();
     }
 
@@ -496,7 +493,7 @@ public:
 
         uint8_t seq = 0;
         session->connect(yield, connect_checker);
-        session->request(yield, utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
+        session->request(yield, utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.password.c_str()), login_parser);
         session->request(yield, utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
         session->request(yield, utils::format("%u FETCH * UID\r\n", ++seq), end_parser);
         session->request(yield, utils::format("%u LOGOUT\r\n", ++seq), success_checker);
@@ -523,7 +520,7 @@ public:
 
         uint8_t seq = 0;
         session->connect(yield, connect_checker);
-        session->request(yield, utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.passwd.c_str()), login_parser);
+        session->request(yield, utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.password.c_str()), login_parser);
         session->request(yield, utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
 
         if (validity != m_validity)
@@ -653,108 +650,47 @@ public:
     }
 };
 
-class mediator_impl : public mediator
-{
-    boost::asio::io_service& m_io;
-    context m_config;
-    identity m_host;
-    identity m_peer;
-
-public:
-
-    mediator_impl(boost::asio::io_service& io, const context& conf, const identity& host, const identity& peer)
-        : m_io(io)
-        , m_config(conf)
-        , m_host(host)
-        , m_peer(peer)
-    {
-    }
-
-    void accept(const coroutine& handler) noexcept(false) override
-    {
-        boost::asio::spawn(m_io, [&, handler](boost::asio::yield_context yield)
-        {
-            smtp pusher(m_io, m_config, m_host, m_peer);
-            imap puller(m_io, m_config, m_host, m_peer);
-
-            do
-            {
-                puller.wait(yield, invite_token);
-
-                pusher.host(puller.host());
-                pusher.peer(puller.peer());
-
-                auto pipe = std::make_shared<pipe_impl>(pusher, puller);
-
-                boost::asio::spawn(m_io, [pipe, handler](boost::asio::yield_context yield)
-                {
-                    try
-                    {
-                        _inf_ << "accepting " << pipe->peer() << " for " << pipe->host();
-                        handler(yield, pipe);
-                    }
-                    catch(const plexus::timeout_error& e)
-                    {
-                        _err_ << "accepting " << pipe->peer() << " for " << pipe->host() << ": " << e.what();
-                    }
-                    catch (const std::exception& e)
-                    {
-                        _err_ << "accepting " << pipe->peer() << " for " << pipe->host() << ": " << e.what();
-                        throw;
-                    }
-                });
-
-                puller.host(m_host);
-                puller.peer(m_peer);
-            }
-            while (true);
-        });
-    }
-
-    void invite(const coroutine& handler) noexcept(false) override
-    {
-        boost::asio::spawn(m_io, [&, handler](boost::asio::yield_context yield)
-        {
-            smtp pusher(m_io, m_config, m_host, m_peer);
-            imap puller(m_io, m_config, m_host, m_peer);
-
-            puller.init(yield);
-
-            auto pipe = std::make_shared<pipe_impl>(pusher, puller);
-
-            try
-            {
-                _inf_ << "inviting " << pipe->peer() << " for " << pipe->host();
-                handler(yield, pipe);
-            }
-            catch (const std::exception& e)
-            {
-                _err_ << "inviting " << pipe->peer() << " for " << pipe->host() << ": " << e.what();
-                throw;
-            }
-        });
-    }
-};
-
 }
 
-std::shared_ptr<mediator> create_email_mediator(boost::asio::io_service& io,
-                                                const boost::asio::ip::tcp::endpoint& smtp,
-                                                const boost::asio::ip::tcp::endpoint& imap,
-                                                const std::string& login,
-                                                const std::string& passwd,
-                                                const std::string& cert,
-                                                const std::string& key,
-                                                const std::string& ca,
-                                                const std::string& app,
-                                                const std::string& repo,
-                                                const identity& host,
-                                                const identity& peer) noexcept(true)
-{
-    _dbg_ << "smtp server: " << smtp;
-    _dbg_ << "imap server: " << imap;
+using namespace email;
 
-    return std::make_shared<email::mediator_impl>(io, email::context{smtp, imap, login, passwd, cert, key, ca, app, repo}, host, peer);
+void spawn_accept(boost::asio::io_service& io, const mediator& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+{
+    boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
+    {
+        smtp pusher(io, conf, host, peer);
+        imap puller(io, conf, host, peer);
+        
+        do
+        {
+            puller.wait(yield, invite_token);
+
+            pusher.host(puller.host());
+            pusher.peer(puller.peer());
+
+            boost::asio::spawn(io, [pipe = std::make_shared<pipe_impl>(pusher, puller), handler](boost::asio::yield_context yield)
+            {
+                handler(yield, pipe);
+            });
+
+            puller.host(host);
+            puller.peer(peer);
+        }
+        while (true);
+    });
+}
+
+void spawn_invite(boost::asio::io_service& io, const mediator& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+{
+    boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
+    {
+        smtp pusher(io, conf, host, peer);
+        imap puller(io, conf, host, peer);
+
+        puller.init(yield);
+
+        handler(yield, std::make_shared<pipe_impl>(pusher, puller));
+    });
 }
 
 }

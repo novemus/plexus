@@ -20,6 +20,14 @@
 
 namespace plexus {
 
+struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
+struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
+struct bad_message : public std::runtime_error { bad_message() : std::runtime_error("bad message") {} };
+struct bad_network : public std::runtime_error { bad_network() : std::runtime_error("bad network") {} };
+struct bad_identity : public std::runtime_error { bad_identity() : std::runtime_error("bad identity") {} };
+
+void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", bool wait = false) noexcept(false);
+
 std::ostream& operator<<(std::ostream& stream, const reference& value);
 std::ostream& operator<<(std::ostream& stream, const identity& value);
 std::istream& operator>>(std::istream& in, reference& level);
@@ -31,15 +39,15 @@ struct stun_client
     virtual network::traverse punch_hole(boost::asio::yield_context yield) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_service& io, const udp_endpoint& stun, const boost::asio::ip::udp::endpoint& bind) noexcept(true);
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) noexcept(true);
 
-struct stun_tracer : public stun_client
+struct stun_binder : public stun_client
 {
     virtual void reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
     virtual void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_tracer> create_stun_tracer(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(true);
+std::shared_ptr<stun_binder> create_stun_binder(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(true);
 
 struct pipe
 {
@@ -52,25 +60,9 @@ struct pipe
     virtual const identity& peer() const noexcept(true) = 0;
 };
 
-struct mediator
-{
-    using coroutine = std::function<void(boost::asio::yield_context yield, std::shared_ptr<pipe> pipe)>;
+using coroutine = std::function<void(boost::asio::yield_context yield, std::shared_ptr<pipe> pipe)>;
 
-    virtual ~mediator() {}
-    virtual void accept(const coroutine& handler) noexcept(false) = 0;
-    virtual void invite(const coroutine& handler) noexcept(false) = 0;
-};
+void spawn_accept(boost::asio::io_service& io, const mediator& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
+void spawn_invite(boost::asio::io_service& io, const mediator& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
 
-std::shared_ptr<mediator> create_email_mediator(boost::asio::io_service& io,
-                                                const boost::asio::ip::tcp::endpoint& smtp,
-                                                const boost::asio::ip::tcp::endpoint& imap,
-                                                const std::string& login,
-                                                const std::string& passwd,
-                                                const std::string& cert,
-                                                const std::string& key,
-                                                const std::string& ca,
-                                                const std::string& app,
-                                                const std::string& repo,
-                                                const identity& host,
-                                                const identity& peer) noexcept(true);
 }

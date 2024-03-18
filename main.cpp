@@ -104,7 +104,7 @@ int main(int argc, char** argv)
     {
         wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), vm["log-file"].as<std::string>());
 
-        _inf_ << "********** starting plexus **********";
+        _inf_ << "********** plexus **********";
 
         auto launch = [&](const plexus::identity& host, const plexus::identity& peer, const boost::asio::ip::udp::endpoint& bind, const plexus::reference& gateway, const plexus::reference& faraway)
         {
@@ -136,24 +136,27 @@ int main(int argc, char** argv)
                 );
         };
 
-        plexus::common::options config = {
-            vm["app-id"].as<std::string>(),
-            vm["app-repo"].as<std::string>(),
-            vm["email-smtps"].as<smtp_server_endpoint>(),
-            vm["email-imaps"].as<imap_server_endpoint>(),
-            vm["email-login"].as<std::string>(),
-            vm["email-password"].as<std::string>(),
-            vm["email-cert"].as<std::string>(),
-            vm["email-key"].as<std::string>(),
-            vm["email-ca"].as<std::string>(),
+        plexus::options config = { plexus::mediator {
+                vm["app-id"].as<std::string>(),
+                vm["app-repo"].as<std::string>(),
+                vm["email-smtps"].as<smtp_server_endpoint>(),
+                vm["email-imaps"].as<imap_server_endpoint>(),
+                vm["email-login"].as<std::string>(),
+                vm["email-password"].as<std::string>(),
+                vm["email-cert"].as<std::string>(),
+                vm["email-key"].as<std::string>(),
+                vm["email-ca"].as<std::string>() 
+            },
             vm["stun-server"].as<stun_server_endpoint>(),
             vm["stun-client"].as<stun_client_endpoint>(),
             vm["punch-hops"].as<uint16_t>()
             };
 
+        boost::asio::io_service io;
         vm["accept"].as<bool>()
-            ? plexus::common::accept(config, vm["host-info"].as<plexus::identity>(), vm["peer-info"].as<plexus::identity>(), launch)
-            : plexus::common::invite(config, vm["host-info"].as<plexus::identity>(), vm["peer-info"].as<plexus::identity>(), launch);
+            ? plexus::spawn_accept(io, config, vm["host-info"].as<plexus::identity>(), vm["peer-info"].as<plexus::identity>(), launch)
+            : plexus::spawn_invite(io, config, vm["host-info"].as<plexus::identity>(), vm["peer-info"].as<plexus::identity>(), launch);
+        io.run();
     }
     catch(const std::exception& e)
     {
