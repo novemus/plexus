@@ -135,22 +135,29 @@ void spawn_accept(boost::asio::io_service& io, const options& config, const iden
 {
     spawn_accept(io, config, host, peer, [&io, collect, notify](const identity& host, const identity& peer, const udp::endpoint& bind, const reference& gateway, const reference& faraway)
     {
-        auto socket = std::make_shared<tubus::socket>(io, faraway.puzzle ^ gateway.puzzle);
+        _inf_ << "accepting from " << faraway.endpoint << " on " << bind;
 
+        auto socket = std::make_shared<tubus::socket>(io, faraway.puzzle ^ gateway.puzzle);
         boost::system::error_code ec;
         socket->open(bind, ec);
 
         if (ec)
         {
-            notify(host, peer, ec.message());
+            _err_ << "open socket " << bind << " failed: " << ec.message();
+
+            if (notify)
+                notify(host, peer, ec.message());
             return;
         }
 
-        socket->async_accept(faraway.endpoint, [socket, host, peer, collect, notify](const boost::system::error_code& ec)
+        socket->async_accept(faraway.endpoint, [socket, faraway, host, peer, collect, notify](const boost::system::error_code& ec)
         {
             if (ec)
             {
-                notify(host, peer, ec.message());
+                _err_ << "accepting from " << faraway.endpoint << " failed: " << ec.message();
+                
+                if (notify)
+                    notify(host, peer, ec.message());
                 return;
             }
 
@@ -163,22 +170,29 @@ void spawn_invite(boost::asio::io_service& io, const options& config, const iden
 {
     spawn_invite(io, config, host, peer, [&io, collect, notify](const identity& host, const identity& peer, const udp::endpoint& bind, const reference& gateway, const reference& faraway)
     {
-        auto socket = std::make_shared<tubus::socket>(io, faraway.puzzle ^ gateway.puzzle);
+        _inf_ << "connecting to " << faraway.endpoint << " from " << bind;
 
+        auto socket = std::make_shared<tubus::socket>(io, faraway.puzzle ^ gateway.puzzle);
         boost::system::error_code ec;
         socket->open(bind, ec);
 
         if (ec)
         {
-            notify(host, peer, ec.message());
+            _err_ << "open socket " << bind << " failed: " << ec.message();
+
+            if (notify)
+                notify(host, peer, ec.message());
             return;
         }
 
-        socket->async_connect(faraway.endpoint, [socket, host, peer, collect, notify](const boost::system::error_code& ec)
+        socket->async_connect(faraway.endpoint, [socket, faraway, host, peer, collect, notify](const boost::system::error_code& ec)
         {
             if (ec)
             {
-                notify(host, peer, ec.message());
+                _err_ << "connecting to " << faraway.endpoint << " failed: " << ec.message();
+
+                if (notify)
+                    notify(host, peer, ec.message());
                 return;
             }
 

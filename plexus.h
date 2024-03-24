@@ -10,6 +10,22 @@
 
 #pragma once
 
+#ifdef _MSC_VER
+#define PLEXUS_CLASS_EXPORT_DECLSPEC __declspec(dllexport)
+#define PLEXUS_CLASS_IMPORT_DECLSPEC
+#endif // _MSC_VER
+
+#ifdef __GNUC__
+#define PLEXUS_CLASS_EXPORT_DECLSPEC __attribute__ ((visibility("default")))
+#define PLEXUS_CLASS_IMPORT_DECLSPEC 
+#endif
+
+#ifdef PLEXUS_EXPORTS
+#define PLEXUS_CLASS_DECLSPEC PLEXUS_CLASS_EXPORT_DECLSPEC
+#else
+#define PLEXUS_CLASS_DECLSPEC PLEXUS_CLASS_IMPORT_DECLSPEC
+#endif
+
 #include <tubus/socket.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ip/udp.hpp>
@@ -65,10 +81,13 @@ using fallback = std::function<void(const identity& /* host */,
                                     const identity& /* peer */,
                                     const std::string& /* error */)>;
 
+PLEXUS_CLASS_DECLSPEC
 void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify = nullptr) noexcept(true);
+PLEXUS_CLASS_DECLSPEC
 void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify = nullptr) noexcept(true);
-
+PLEXUS_CLASS_DECLSPEC
 void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify = nullptr) noexcept(true);
+PLEXUS_CLASS_DECLSPEC
 void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify = nullptr) noexcept(true);
 
 }

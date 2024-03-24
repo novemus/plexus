@@ -23,7 +23,7 @@ To run the example below you need to install *openvpn*. Launch following command
 
 Command for remote machine:
 ```console
-plexus --accept --email-smtps=smtp.peermailer.com[:xxxx] --email-imaps=imap.peermailer.com[:xxxx] --email-login=peerlogin --email-passwd=peerpassword --email-from=peerhost@peermailer.com --email-to=yourhost@yourmailer.com --host-id=remote --peer-id=local --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/exec.sh
+plexus --accept --email-smtps=smtp.peermailer.com[:xxxx] --email-imaps=imap.peermailer.com[:xxxx] --email-login=peerlogin --email-passwd=peerpassword --email-from=peerhost@peermailer.com --email-to=yourhost@yourmailer.com --host-id=remote --peer-id=local --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/tests/exec.sh
 ```
 
 `--accept` key tells the app to accept punching initiations from other side. It must only be set for one side.
@@ -32,7 +32,7 @@ Some *NAT*s may drop mappings when receiving an incoming packet that does not me
 
 Command for local machine:
 ```console
-plexus --email-smtps=smtp.yourmailer.com[:xxxx] --email-imaps=imap.yourmailer.com[:xxxx] --email-login=yourlogin --email-passwd=yourpassword --email-from=yourhost@yourmailer.com --email-to=peerhost@peermailer.com --host-id=local --peer-id=remote --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/exec.sh
+plexus --email-smtps=smtp.yourmailer.com[:xxxx] --email-imaps=imap.yourmailer.com[:xxxx] --email-login=yourlogin --email-passwd=yourpassword --email-from=yourhost@yourmailer.com --email-to=peerhost@peermailer.com --host-id=local --peer-id=remote --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/tests/exec.sh
 ```
 
 As soon as both `plexus` instanses make the *passage* to each other the command specified by `--exec-command` will be started. By default, the executable gets the following parameters:
