@@ -1,19 +1,37 @@
-Source: antinat
+Source: plexus
 Section: utils
 Priority: optional
 Maintainer: Novemus Band <nineletters@mail.ru>
 Build-Depends: cmake, debhelper-compat (= 13)
 Standards-Version: 4.6.2
-Homepage: https://github.com/novemus
+Homepage: https://github.com/novemus/plexus
 Rules-Requires-Root: no
 
-Package: antinat
+Package: plexus
 Architecture: any
-Multi-Arch: foreign
+Multi-Arch: same
 Depends: ${misc:Depends}, ${shlibs:Depends}
-Description: Tools for connecting applications via NAT
- The plexus tool provides ability to connect network
+Description: Tool for connecting applications via NAT
+ The 'plexus' utility provides ability to connect network
  applications based on UDP protocol via NAT.
- .
- The wormhole tool provides ability to forward a remote TCP
- service to a local interface via UDP tunnel.
+
+Package: libplexus
+Section: libs
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: Runtime of the 'plexus' library
+ The plexus library provides ability to connect network
+ applications based on UDP protocol via NAT.
+
+Package: libplexus-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: libboost-dev (>= 1.74),
+         libtubus-dev (>= 1.2),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: Development files of the 'plexus' library
+ The plexus library provides ability to connect network
+ applications based on UDP protocol via NAT.

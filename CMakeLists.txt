@@ -83,12 +83,10 @@ add_library(${PLEXUS_STATIC} STATIC $<TARGET_OBJECTS:${PLEXUS_OBJECT}>)
 set_target_properties(${PLEXUS_STATIC} PROPERTIES DEBUG_POSTFIX "d")
 set_target_properties(${PLEXUS_STATIC} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
-if(BUILD_SHARED_LIBS)
-    add_library(${PLEXUS_SHARED} SHARED $<TARGET_OBJECTS:${PLEXUS_OBJECT}>)
-    target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS)
-    set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d")
-    set_target_properties(${PLEXUS_SHARED} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
-endif()
+add_library(${PLEXUS_SHARED} SHARED $<TARGET_OBJECTS:${PLEXUS_OBJECT}>)
+target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS)
+set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d")
+set_target_properties(${PLEXUS_SHARED} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 add_executable(${PROJECT_NAME} main.cpp)
 target_link_libraries(${PROJECT_NAME} ${TUBUS_OBJECT} ${WORMHOLE_OBJECT} ${PLEXUS_OBJECT} OpenSSL::Crypto OpenSSL::SSL)
@@ -99,10 +97,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
     target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine Boost::program_options)
-    target_link_libraries(${PLEXUS_STATIC} PUBLIC Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine)
-    if(BUILD_SHARED_LIBS)
-        target_link_libraries(${PLEXUS_SHARED} PUBLIC Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine)
-    endif()
 endif()
 
 if(APPLE AND Boost_USE_STATIC_LIBS)
@@ -126,27 +120,23 @@ else()
 endif()
 
 # install library
-if(NOT SKIP_INSTALL_PLEXUS_LIBRARY)
-    install(TARGETS ${PLEXUS_STATIC} DESTINATION ${PLEXUS_INSTALL_LIBDIR})
-    if(BUILD_SHARED_LIBS)
-        install(TARGETS ${PLEXUS_SHARED} DESTINATION ${PLEXUS_INSTALL_LIBDIR})
-    endif()
+install(TARGETS ${PLEXUS_STATIC} DESTINATION ${PLEXUS_INSTALL_LIBDIR})
+install(TARGETS ${PLEXUS_SHARED} DESTINATION ${PLEXUS_INSTALL_LIBDIR})
 
-    include(CMakePackageConfigHelpers)
+include(CMakePackageConfigHelpers)
 
-    write_basic_package_version_file(
-        "${CMAKE_CURRENT_BINARY_DIR}/plexus-config-version.cmake"
-        VERSION "${CMAKE_PROJECT_VERSION}"
-        COMPATIBILITY AnyNewerVersion)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/plexus-config-version.cmake"
+    VERSION "${CMAKE_PROJECT_VERSION}"
+    COMPATIBILITY AnyNewerVersion)
 
-    install(FILES ${HEADERS} DESTINATION ${PLEXUS_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
-    configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/plexus-config.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/plexus-config.cmake"
-        INSTALL_DESTINATION ${PLEXUS_INSTALL_CMAKEDIR}
-        PATH_VARS PLEXUS_INSTALL_CMAKEDIR_REVERSE PLEXUS_INSTALL_INCLUDEDIR PLEXUS_INSTALL_LIBDIR)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/plexus-config.cmake" "${CMAKE_CURRENT_BINARY_DIR}/plexus-config-version.cmake" DESTINATION ${PLEXUS_INSTALL_CMAKEDIR})
-    if(BUILD_SHARED_LIBS AND CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-        install(FILES $<TARGET_PDB_FILE:${PLEXUS_SHARED}> CONFIGURATIONS "Debug" "RelWithDebInfo" DESTINATION ${PLEXUS_INSTALL_LIBDIR})
-    endif()
+install(FILES ${HEADERS} DESTINATION ${PLEXUS_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/plexus-config.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/plexus-config.cmake"
+    INSTALL_DESTINATION ${PLEXUS_INSTALL_CMAKEDIR}
+    PATH_VARS PLEXUS_INSTALL_CMAKEDIR_REVERSE PLEXUS_INSTALL_INCLUDEDIR PLEXUS_INSTALL_LIBDIR)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/plexus-config.cmake" "${CMAKE_CURRENT_BINARY_DIR}/plexus-config-version.cmake" DESTINATION ${PLEXUS_INSTALL_CMAKEDIR})
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    install(FILES $<TARGET_PDB_FILE:${PLEXUS_SHARED}> CONFIGURATIONS "Debug" "RelWithDebInfo" DESTINATION ${PLEXUS_INSTALL_LIBDIR})
 endif()
 
 # build tests
@@ -162,7 +152,7 @@ if(BUILD_TESTING)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::filesystem Boost::coroutine Boost::unit_test_framework)
+        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine Boost::unit_test_framework)
     endif()
 
     if(APPLE AND Boost_USE_STATIC_LIBS)

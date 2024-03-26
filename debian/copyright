@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: libtubus
-Source: https://github.com/novemus
+Upstream-Name: plexus
+Source: https://github.com/novemus/plexus
 
 Files:     *
 Copyright: 2023 Novemus Band.

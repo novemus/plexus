@@ -11,8 +11,7 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
 override_dh_auto_configure:
 	dh_auto_configure -- \
-	      -DCMAKE_LIBRARY_ARCHITECTURE="$(DEB_TARGET_MULTIARCH)" \
-	      -DBUILD_SHARED_LIBS=OFF \
-	      -DSKIP_INSTALL_PLEXUS_LIBRARY=ON \
-		  -DSKIP_INSTALL_TUBUS_LIBRARY=ON \
-	      -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_LIBRARY_ARCHITECTURE="$(DEB_TARGET_MULTIARCH)" \
+          -DTUBUS_OBJECT_ONLY=ON \
+          -DWORMHOLE_OBJECT_ONLY=ON \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
