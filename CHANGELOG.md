@@ -1,5 +1,9 @@
 # Change Log
 
+## 3.0.0 (March 30, 2024)
+
+- Added the ability to accept several peers. Implemented the library build.
+
 ## 2.2.1 (December 18, 2023)
 
 - Added the debian build package files and improved CMake build scripts.

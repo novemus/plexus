@@ -13,9 +13,11 @@ cd ~
 git clone --recurse-submodules https://github.com/novemus/plexus.git
 cd ~/plexus
 cmake -B ./build [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
-cmake --build ./build --target plexus [wormhole]
+cmake --build ./build --target plexus [plexus_static] [plexus_shared]
 cmake --build ./build --target install
 ```
+
+To build libraries, specify the *plexus_static* and *plexus_shared* targets.
 
 ## Using
 
@@ -23,43 +25,45 @@ To run the example below you need to install *openvpn*. Launch following command
 
 Command for remote machine:
 ```console
-plexus --accept --email-smtps=smtp.peermailer.com[:xxxx] --email-imaps=imap.peermailer.com[:xxxx] --email-login=peerlogin --email-passwd=peerpassword --email-from=peerhost@peermailer.com --email-to=yourhost@yourmailer.com --host-id=remote --peer-id=local --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/tests/exec.sh
+plexus --accept --app-id=appname --email-smtps=smtp.mailer.com[:xxxx] --email-imaps=imap.mailer.com[:xxxx] --email-login=login --email-password=password --host-info=host@mailer.com/hostname --peer-info=peer@mailer.com/peername --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/tests/exec.sh
 ```
 
-`--accept` key tells the app to accept punching initiations from other side. It must only be set for one side.
+`--accept` key tells the app to cyclically accept initiations from other side. It must only be set for one side. If you want to accept several peers, create application repository and specify the path for each peer as *apprepo/peer@mailer.com/peername*. To use email encryption, you must place the X509 *cert.crt* peer certificates and, optionally, their CA *ca.crt* certificates in the appropriate folders. You must also make the same for the local host and additionally place its *private.key* key. The same must be done on every peer machine. Specify application repository with `--app-repo` argument.
 
 Some *NAT*s may drop mappings when receiving an incoming packet that does not meet the filtering policy. This package may be a punching package sent by `plexus` towards the peer. In this case, it is impossible to punch the *passage* between the machines. To avoid such situations, `plexus` sets a small *ttl* to the punching packet, by default 7. In general, this is enough for the packet to go beyond the host *NAT* to punch it, but not reach the peer *NAT* to not drop peer mapping. If necessary, you can set a more appropriate *ttl* using the `--punch-hops` argument, defining a suitable value by some routing utility. This only makes sense for the *accepting* side.
 
 Command for local machine:
 ```console
-plexus --email-smtps=smtp.yourmailer.com[:xxxx] --email-imaps=imap.yourmailer.com[:xxxx] --email-login=yourlogin --email-passwd=yourpassword --email-from=yourhost@yourmailer.com --email-to=peerhost@peermailer.com --host-id=local --peer-id=remote --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/tests/exec.sh
+plexus --app-id=appname --email-smtps=smtp.mailer.com[:xxxx] --email-imaps=imap.mailer.com[:xxxx] --email-login=login --email-password=password --host-info=host@mailer.com/hostname --peer-info=peer@mailer.com/peername --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/tests/exec.sh
 ```
 
-As soon as both `plexus` instanses make the *passage* to each other the command specified by `--exec-command` will be started. By default, the executable gets the following parameters:
+As soon as both `plexus` instanses make the *passage* to each other the command specified by `--exec-command` will be started. You can pass your arguments to the executable by `--exec-args` argument with the following wildcards:
 
-```console
-/path/to/exec/command innerip innerport outerip outerport peerip peerport
-```
+`%innerip%` - local address specified by `--stun-client` argument
 
-Alternatively you can pass your own arguments to executable by `--exec-args` and use `%innerip%`, `%innerport%`, `%outerip%`, `%outerport%`, `%peerip%`, `%peerport%`, `%secret%` wildcards.
+`%innerport%` - local port specified by the `--stun-client` argument
 
-`innerip` - local address specified by `--stun-client` argument
+`%outerip%` - public address issued by the NAT
 
-`innerport` - local port specified by the `--stun-client` argument
+`%outerport%` - port issued by the NAT
 
-`outerip` - public address issued by the NAT
+`%peerip%` - public address of the peer received by email
 
-`outerport` - port issued by the NAT
+`%peerport%` - port of the peer received by email
 
-`peerip` - public address of the peer received by email
+`%hostpin%` - name of the host
 
-`peerport` - port of the peer received by email
+`%peerpin%` - name of the peer
+
+`%hostmail%` - email of the host
+
+`%peermail%` - email of the peer
 
 To learn about additional parameters run tool with `--help` argument.
 
-## Extension
+## Library and Extension
 
-If you need to link *TCP* applications and for some reason cannot use *VPN*, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling extension as execution payload.
+If you need to link *TCP* applications and cannot use *VPN* for some reason, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling extension as execution payload. The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/plexus.h) header and provide the same functionality with additional streaming capability. To make streaming application with the `plexus` library, you will need at least the headers of the [tubus](https://github.com/novemus/tubus) library.
 
 ## Bugs and improvements
 

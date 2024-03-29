@@ -13,8 +13,6 @@
 
 namespace plexus { namespace network {
 
-static constexpr size_t SOCKET_BUFFER_SIZE = 1048576;
-
 class ssl_socket_impl : public ssl_socket
 {
     boost::asio::ssl::context m_ssl;
