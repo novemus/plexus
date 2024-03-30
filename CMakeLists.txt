@@ -98,6 +98,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
     target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine Boost::program_options)
+    target_link_libraries(${PLEXUS_SHARED} Boost::filesystem Boost::coroutine)
 endif()
 
 if(APPLE AND Boost_USE_STATIC_LIBS)
