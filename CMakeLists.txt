@@ -78,18 +78,19 @@ message("* OpenSSL Version: ${OPENSSL_VERSION}")
 message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
-add_library(${PLEXUS_OBJECT} OBJECT utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp stun.cpp binder.cpp plexus.cpp)
-add_library(${PLEXUS_STATIC} STATIC $<TARGET_OBJECTS:${PLEXUS_OBJECT}>)
-set_target_properties(${PLEXUS_STATIC} PROPERTIES DEBUG_POSTFIX "d")
-set_target_properties(${PLEXUS_STATIC} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
-
-add_library(${PLEXUS_SHARED} SHARED $<TARGET_OBJECTS:${PLEXUS_OBJECT}>)
+add_library(${PLEXUS_SHARED} SHARED utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp stun.cpp binder.cpp plexus.cpp)
+target_link_libraries(${PLEXUS_SHARED} ${TUBUS_SHARED} ${WORMHOLE_OBJECT} OpenSSL::Crypto OpenSSL::SSL)
 target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS)
 set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d")
 set_target_properties(${PLEXUS_SHARED} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
-add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} ${TUBUS_OBJECT} ${WORMHOLE_OBJECT} ${PLEXUS_OBJECT} OpenSSL::Crypto OpenSSL::SSL)
+add_library(${PLEXUS_STATIC} STATIC $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
+target_link_libraries(${PLEXUS_STATIC} ${WORMHOLE_OBJECT})
+set_target_properties(${PLEXUS_STATIC} PROPERTIES DEBUG_POSTFIX "d")
+set_target_properties(${PLEXUS_STATIC} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
+
+add_executable(${PROJECT_NAME} main.cpp $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
+target_link_libraries(${PROJECT_NAME} ${TUBUS_STATIC} ${WORMHOLE_OBJECT} OpenSSL::Crypto OpenSSL::SSL)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -147,8 +148,9 @@ if(BUILD_TESTING)
                                 tests/udp_tests.cpp
                                 tests/tcp_tests.cpp
                                 tests/smime_tests.cpp
-                                tests/exec_tests.cpp)
-    target_link_libraries(${PLEXUS_UT} ${WORMHOLE_OBJECT} ${TUBUS_OBJECT} ${PLEXUS_OBJECT} OpenSSL::Crypto OpenSSL::SSL)
+                                tests/exec_tests.cpp
+                                $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
+    target_link_libraries(${PLEXUS_UT} ${WORMHOLE_OBJECT} ${TUBUS_STATIC} OpenSSL::Crypto OpenSSL::SSL)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
