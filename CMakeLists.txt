@@ -79,7 +79,7 @@ message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
 add_library(${PLEXUS_SHARED} SHARED utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp stun.cpp binder.cpp plexus.cpp)
-target_link_libraries(${PLEXUS_SHARED} ${TUBUS_SHARED} ${WORMHOLE_OBJECT} OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(${PLEXUS_SHARED} ${WORMHOLE_OBJECT} ${TUBUS_SHARED} OpenSSL::Crypto OpenSSL::SSL)
 target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS)
 set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d")
 set_target_properties(${PLEXUS_SHARED} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
@@ -94,7 +94,7 @@ target_link_libraries(${PROJECT_NAME} ${TUBUS_STATIC} ${WORMHOLE_OBJECT} OpenSSL
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fPIC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fPIC -fvisibility=hidden")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
     target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine Boost::program_options)
@@ -150,8 +150,8 @@ if(BUILD_TESTING)
                                 tests/tcp_tests.cpp
                                 tests/smime_tests.cpp
                                 tests/exec_tests.cpp
-                                $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
-    target_link_libraries(${PLEXUS_UT} ${WORMHOLE_OBJECT} ${TUBUS_STATIC} OpenSSL::Crypto OpenSSL::SSL)
+                                tests/plexus_tests.cpp)
+    target_link_libraries(${PLEXUS_UT} ${PLEXUS_STATIC} ${TUBUS_STATIC} OpenSSL::Crypto OpenSSL::SSL)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")

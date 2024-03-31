@@ -63,7 +63,7 @@ To learn about additional parameters run tool with `--help` argument.
 
 ## Library and Extensions
 
-If you need to link *TCP* applications and cannot use *VPN* for some reason, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling extension as execution payload. The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/plexus.h) header and provide the same functionality with additional UDP streaming capability, so you will need [tubus](https://github.com/novemus/tubus) UDP library.
+If you need to link *TCP* applications and cannot use *VPN* for some reason, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling extension as execution payload. The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/plexus.h) header and provides the same functionality with additional UDP streaming capability, so you will need [tubus](https://github.com/novemus/tubus) UDP library.
 
 ## Bugs and improvements
 
