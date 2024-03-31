@@ -98,7 +98,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
     target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine Boost::program_options)
-    target_link_libraries(${PLEXUS_SHARED} Boost::filesystem Boost::coroutine)
 endif()
 
 if(APPLE AND Boost_USE_STATIC_LIBS)
@@ -109,6 +108,7 @@ if(APPLE AND Boost_USE_STATIC_LIBS)
     cmake_policy(POP)
     get_filename_component(ICU_LIBDATA_DIR "${ICU_DATA_LIBRARY}" DIRECTORY)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}")
+    target_link_libraries(${PLEXUS_SHARED} Boost::filesystem Boost::coroutine)
 endif()
 
 # install executable

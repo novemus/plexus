@@ -13,7 +13,7 @@ cd ~
 git clone --recurse-submodules https://github.com/novemus/plexus.git
 cd ~/plexus
 cmake -B ./build [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
-cmake --build ./build --target plexus [plexus_static] [plexus_shared]
+cmake --build ./build --target plexus [plexus_shared] [plexus_static] [plexus_ut]
 cmake --build ./build --target install
 ```
 
@@ -61,9 +61,9 @@ As soon as both `plexus` instanses make the *passage* to each other the command 
 
 To learn about additional parameters run tool with `--help` argument.
 
-## Library and Extension
+## Library and Extensions
 
-If you need to link *TCP* applications and cannot use *VPN* for some reason, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling extension as execution payload. The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/plexus.h) header and provide the same functionality with additional streaming capability. To make streaming application with the `plexus` library, you will need at least the headers of the [tubus](https://github.com/novemus/tubus) library.
+If you need to link *TCP* applications and cannot use *VPN* for some reason, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling extension as execution payload. The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/plexus.h) header and provide the same functionality with additional UDP streaming capability, so you will need [tubus](https://github.com/novemus/tubus) UDP library.
 
 ## Bugs and improvements
 
