@@ -9,21 +9,21 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include "../features.h"
 
 BOOST_AUTO_TEST_CASE(exec)
 {
-    boost::filesystem::remove("out.txt");
+    std::filesystem::remove("out.txt");
 #ifdef _WIN32
-    BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo line", boost::filesystem::current_path().string(), "out.txt", true));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo line", std::filesystem::current_path().string(), "out.txt", true));
 #else
-    BOOST_REQUIRE_NO_THROW(plexus::exec("echo", "line", boost::filesystem::current_path().string(), "out.txt", true));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("echo", "line", std::filesystem::current_path().string(), "out.txt", true));
 #endif
 
-    BOOST_REQUIRE(boost::filesystem::exists(boost::filesystem::path("out.txt")));
+    BOOST_REQUIRE(std::filesystem::exists(std::filesystem::path("out.txt")));
 
     std::ifstream file("out.txt");
     std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -31,5 +31,5 @@ BOOST_AUTO_TEST_CASE(exec)
     BOOST_REQUIRE_EQUAL(text, "line\n");
 
     file.close();
-    BOOST_REQUIRE(boost::filesystem::remove("out.txt"));
+    BOOST_REQUIRE(std::filesystem::remove("out.txt"));
 }

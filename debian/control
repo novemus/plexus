@@ -19,19 +19,24 @@ Package: libplexus
 Section: libs
 Architecture: any
 Multi-Arch: same
-Depends: ${misc:Depends}, ${shlibs:Depends}
+Depends: libtubus (>= 1.2),
+         libwormhole (>= 1.2),
+         ${misc:Depends},
+         ${shlibs:Depends}
 Description: Runtime of the 'plexus' library
- The plexus library provides the ability to connect network
+ The 'plexus' library provides the ability to connect network
  applications based on UDP protocol via NAT.
 
 Package: libplexus-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
-Depends: libboost-dev (>= 1.74),
+Depends: libboost-dev (>= 1.81),
+         libplexus (= ${binary:Version}),
+         libwormhole-dev (>= 1.2),
          libtubus-dev (>= 1.2),
          ${misc:Depends},
          ${shlibs:Depends}
 Description: Development files of the 'plexus' library
- The plexus library provides the ability to connect network
+ The 'plexus' library provides the ability to connect network
  applications based on UDP protocol via NAT.

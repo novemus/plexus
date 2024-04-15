@@ -5,13 +5,10 @@ cmake_minimum_required(VERSION 3.10)
 project(plexus)
 project(${PROJECT_NAME} VERSION 3.0)
 
-set(Boost_USE_STATIC_LIBS ON)
-
 add_subdirectory(wormhole)
 
 include(GNUInstallDirs)
 
-set(PLEXUS_OBJECT ${PROJECT_NAME}_object)
 set(PLEXUS_STATIC ${PROJECT_NAME}_static)
 set(PLEXUS_SHARED ${PROJECT_NAME}_shared)
 
@@ -23,6 +20,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     set(PLEXUS_INSTALL_CMAKEDIR ${PROJECT_NAME}-${${PROJECT_NAME}_VERSION}/${CMAKE_INSTALL_LIBDIR}/cmake)
     set(PLEXUS_INSTALL_INCLUDEDIR ${PROJECT_NAME}-${${PROJECT_NAME}_VERSION}/${CMAKE_INSTALL_INCLUDEDIR})
     set(CMAKE_STATIC_LIBRARY_SUFFIX "-static.lib")
+    set(CMAKE_STATIC_LIBRARY_PREFIX "lib")
+    set(CMAKE_SHARED_LIBRARY_PREFIX "lib")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
     add_definitions(
         -D_CRT_NO_VA_START_VALIDATION
@@ -57,10 +56,12 @@ endif()
 
 string(REGEX REPLACE "[^/\\]+" ".." PLEXUS_INSTALL_CMAKEDIR_REVERSE ${PLEXUS_INSTALL_CMAKEDIR})
 
+set(Boost_USE_STATIC_LIBS ON)
+
 if(BUILD_TESTING)
-    find_package(Boost REQUIRED COMPONENTS system thread regex filesystem program_options coroutine unit_test_framework)
+    find_package(Boost 1.81 REQUIRED COMPONENTS system regex program_options coroutine unit_test_framework)
 else()
-    find_package(Boost REQUIRED COMPONENTS system thread regex filesystem program_options coroutine)
+    find_package(Boost 1.81 REQUIRED COMPONENTS system regex program_options coroutine)
 endif()
 
 message("* Boost Version: ${Boost_VERSION}")
@@ -78,29 +79,31 @@ message("* OpenSSL Version: ${OPENSSL_VERSION}")
 message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
+include_directories(${OPENSSL_INCLUDE_DIR})
+
 add_library(${PLEXUS_SHARED} SHARED utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp stun.cpp binder.cpp plexus.cpp)
-target_link_libraries(${PLEXUS_SHARED} ${WORMHOLE_OBJECT} ${TUBUS_SHARED} OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(${PLEXUS_SHARED} ${WORMHOLE_SHARED} ${TUBUS_SHARED} OpenSSL::Crypto OpenSSL::SSL)
 target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS)
-set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d")
+set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d" IMPORT_PREFIX "lib")
 set_target_properties(${PLEXUS_SHARED} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 add_library(${PLEXUS_STATIC} STATIC $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
-target_link_libraries(${PLEXUS_STATIC} ${WORMHOLE_OBJECT})
 set_target_properties(${PLEXUS_STATIC} PROPERTIES DEBUG_POSTFIX "d")
 set_target_properties(${PLEXUS_STATIC} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 add_executable(${PROJECT_NAME} main.cpp $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
-target_link_libraries(${PROJECT_NAME} ${TUBUS_STATIC} ${WORMHOLE_OBJECT} OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(${PROJECT_NAME} ${TUBUS_STATIC} ${WORMHOLE_STATIC} OpenSSL::Crypto OpenSSL::SSL)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fPIC -fvisibility=hidden")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
-    target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine Boost::program_options)
+    target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::regex Boost::coroutine Boost::program_options)
+    target_link_libraries(${PLEXUS_SHARED} Boost::system Boost::regex Boost::coroutine)
 endif()
 
-if(APPLE AND Boost_USE_STATIC_LIBS)
+if(APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
     cmake_policy(PUSH)
     cmake_policy(SET CMP0074 NEW)
@@ -108,7 +111,8 @@ if(APPLE AND Boost_USE_STATIC_LIBS)
     cmake_policy(POP)
     get_filename_component(ICU_LIBDATA_DIR "${ICU_DATA_LIBRARY}" DIRECTORY)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}")
-    target_link_libraries(${PLEXUS_SHARED} Boost::filesystem Boost::coroutine)
+    set_target_properties(${PLEXUS_SHARED} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}") 
+    target_link_libraries(${PLEXUS_SHARED} Boost::system Boost::regex Boost::coroutine)
 endif()
 
 # install executable
@@ -151,11 +155,11 @@ if(BUILD_TESTING)
                                 tests/smime_tests.cpp
                                 tests/exec_tests.cpp
                                 tests/plexus_tests.cpp)
-    target_link_libraries(${PLEXUS_UT} ${PLEXUS_STATIC} ${TUBUS_STATIC} OpenSSL::Crypto OpenSSL::SSL)
+    target_link_libraries(${PLEXUS_UT} ${PLEXUS_STATIC} ${WORMHOLE_STATIC} ${TUBUS_STATIC} OpenSSL::Crypto OpenSSL::SSL)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::thread Boost::regex Boost::filesystem Boost::coroutine Boost::unit_test_framework)
+        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::regex Boost::coroutine Boost::unit_test_framework)
     endif()
 
     if(APPLE AND Boost_USE_STATIC_LIBS)
