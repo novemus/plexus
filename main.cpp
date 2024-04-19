@@ -100,6 +100,10 @@ int main(int argc, char** argv)
         return -1;
     }
 
+#ifndef _WIN32
+    signal(SIGCHLD, SIG_IGN);
+#endif
+
     try
     {
         wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), vm["log-file"].as<std::string>());

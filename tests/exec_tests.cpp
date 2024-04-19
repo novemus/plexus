@@ -20,7 +20,7 @@ BOOST_AUTO_TEST_CASE(exec)
 #ifdef _WIN32
     BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo line", std::filesystem::current_path().string(), "out.txt", true));
 #else
-    BOOST_REQUIRE_NO_THROW(plexus::exec("echo", "line", std::filesystem::current_path().string(), "out.txt", true));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("/bin/sh", "-c \"echo line\"", std::filesystem::current_path().string(), "out.txt", true));
 #endif
 
     BOOST_REQUIRE(std::filesystem::exists(std::filesystem::path("out.txt")));

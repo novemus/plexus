@@ -159,7 +159,7 @@ if(BUILD_TESTING)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::regex Boost::coroutine Boost::unit_test_framework)
+        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::regex Boost::coroutine Boost::program_options Boost::unit_test_framework)
     endif()
 
     if(APPLE AND Boost_USE_STATIC_LIBS)

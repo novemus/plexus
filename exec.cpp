@@ -53,19 +53,23 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         if (h == INVALID_HANDLE_VALUE)
             throw std::runtime_error(utils::format("CreateFile: error=%d", GetLastError()));
 
-        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        if(wait)
+            si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
         si.hStdOutput = h;
         si.hStdError = h;
     }
-    else
+    else if (wait)
     {
         si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
         si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
         si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
     }
 
-	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, true, 0, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
+	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, true, wait ? 0 : CREATE_NO_WINDOW, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
 	{
+        _inf_ << "execute pid=" << pi.dwProcessId;
+
         if (wait)
         {
             WaitForSingleObject(pi.hProcess, INFINITE);
@@ -101,6 +105,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
 #include <spawn.h>
 #include <sys/wait.h>
+#include <boost/program_options.hpp>
 
 extern char **environ;
 
@@ -110,25 +115,44 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 {
     _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
-    std::string cmd = boost::replace_all_copy(prog, " ", "\\ ");
-    cmd += " " + args;
-
-    std::string pwd = boost::replace_all_copy(dir, " ", "\\ ");
-    std::string command = pwd.empty() ? cmd : "cd " + pwd + " && " + cmd;
-    if (!wait)
-        command += " &";
-
-    const char* argv[] = { "sh", "-c", command.c_str(), 0 };
-
     std::vector<char*> envp;
     for (char **env = ::environ; *env; ++env)
         envp.push_back(*env);
     envp.push_back(0);
 
+    std::vector<char*> argv;
+    argv.push_back(const_cast<char*>(prog.data()));
+    auto split = boost::program_options::split_unix(args);
+    for (auto& arg : split)
+        argv.push_back(arg.data());
+    argv.push_back(0);
+
     posix_spawn_file_actions_t action = {};
     int status = posix_spawn_file_actions_init(&action);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn_file_actions_init: error=%d", status));
+
+    if (!dir.empty())
+    {
+        status = posix_spawn_file_actions_addchdir_np(&action, dir.c_str());
+        if (status)
+            throw std::runtime_error(utils::format("posix_spawn_file_actions_addchdir_np: error=%d", status));
+    }
+
+    if (!wait)
+    {
+        status = posix_spawn_file_actions_addclose(&action, 0);
+        if (status)
+            throw std::runtime_error(utils::format("posix_spawn_file_actions_addclose stdin: error=%d", status));
+
+        status = posix_spawn_file_actions_addclose(&action, 1);
+        if (status)
+            throw std::runtime_error(utils::format("posix_spawn_file_actions_addclose stdout: error=%d", status));
+
+        status = posix_spawn_file_actions_addclose(&action, 2);
+        if (status)
+            throw std::runtime_error(utils::format("posix_spawn_file_actions_addclose stderr: error=%d", status));
+    }
 
     if (!log.empty())
     {
@@ -143,23 +167,18 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
     }
 
     pid_t pid;
-    status = posix_spawn(&pid, "/bin/sh", &action, 0, (char*const*)argv, envp.data());
+    status = posix_spawnp(&pid, prog.c_str(), &action, 0, argv.data(), envp.data());
     if (status)
         throw std::runtime_error(utils::format("posix_spawn: error=%d", status));
 
-    int code = 0;
-    if (waitpid(pid, &code, 0) == -1)
-        throw std::runtime_error(utils::format("waitpid: error=%d", errno));
+    _inf_ << "execute pid=" << pid;
+
+    if (wait)
+        waitpid(pid, nullptr, 0);
 
     status = posix_spawn_file_actions_destroy(&action);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn_file_actions_destroy: error=%d", status));
-    if (WIFSIGNALED(code))
-        throw std::runtime_error(utils::format("signal=%d", WTERMSIG(code)));
-    if (WIFSTOPPED(code))
-        throw std::runtime_error(utils::format("signal=%d", WSTOPSIG(code)));
-    if (code)
-        throw std::runtime_error(utils::format("exit: error=%d", code));
 }
 
 }

@@ -463,7 +463,7 @@ public:
         , m_host(host)
         , m_peer(peer)
     {
-        _dbg_ << "imap server: " << m_config.smtp;
+        _dbg_ << "imap server: " << m_config.imap;
 
         make_parsers();
     }

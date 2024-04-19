@@ -24,7 +24,6 @@ class binder_impl : public plexus::stun_binder
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
     uint16_t m_punch;
-    std::shared_ptr<network::udp_socket> m_pin;
 
     class handshake : public tubus::mutable_buffer
     {
@@ -79,7 +78,6 @@ public:
         , m_stun(stun)
         , m_bind(bind)
         , m_punch(punch)
-        , m_pin(plexus::network::create_udp_transport(m_io, m_bind))
     {
         _dbg_ << "stun server: " << stun;
         _dbg_ << "stun client: " << bind;
@@ -96,6 +94,7 @@ public:
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
+        auto pin = plexus::network::create_udp_transport(m_io, m_bind);
         handshake out(0, mask);
         handshake in(mask);
 
@@ -103,7 +102,7 @@ public:
         {
             try
             {
-                m_pin->send_to(out, peer, yield);
+                pin->send_to(out, peer, yield);
 
                 if (out.flag() == 1)
                 {
@@ -111,7 +110,7 @@ public:
                     return;
                 }
 
-                in.truncate(m_pin->receive_from(in, peer, yield));
+                in.truncate(pin->receive_from(in, peer, yield));
 
                 if (in.flag() == 1)
                 {
@@ -132,6 +131,8 @@ public:
 
     void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
+        _dbg_ << "punching upd hole to peer...";
+        
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
@@ -139,13 +140,13 @@ public:
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        _dbg_ << "punching upd hole to peer...";
+        auto pin = plexus::network::create_udp_transport(m_io, m_bind);
 
         boost::asio::ip::unicast::hops old;
-        m_pin->get_option(old);
-        m_pin->set_option(boost::asio::ip::unicast::hops(m_punch));
-        m_pin->send_to(handshake(0, 0), peer, yield, 2000);
-        m_pin->set_option(old);
+        pin->get_option(old);
+        pin->set_option(boost::asio::ip::unicast::hops(m_punch));
+        pin->send_to(handshake(0, 0), peer, yield, 2000);
+        pin->set_option(old);
 
         _dbg_ << "awaiting peer...";
 
@@ -156,11 +157,11 @@ public:
         {
             try
             {
-                in.truncate(m_pin->receive_from(in, peer, yield));
+                in.truncate(pin->receive_from(in, peer, yield));
 
                 if (in.flag() == 0)
                 {
-                    m_pin->send_to(out, peer, yield);
+                    pin->send_to(out, peer, yield);
                 }
                 else
                 {
