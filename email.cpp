@@ -545,6 +545,7 @@ public:
                 {
                     session->snooze(yield, infinite ? max_polling_timeout : min_polling_timeout);
                 }
+                session->request(yield, utils::format("%u NOOP\r\n", ++seq), success_checker);
             }
             else
             {
