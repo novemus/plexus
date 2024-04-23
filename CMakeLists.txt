@@ -104,7 +104,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 if(APPLE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
     cmake_policy(PUSH)
     cmake_policy(SET CMP0074 NEW)
     find_package(ICU REQUIRED COMPONENTS data)
@@ -112,7 +111,7 @@ if(APPLE)
     get_filename_component(ICU_LIBDATA_DIR "${ICU_DATA_LIBRARY}" DIRECTORY)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}")
     set_target_properties(${PLEXUS_SHARED} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}") 
-    target_link_libraries(${PLEXUS_SHARED} Boost::system Boost::regex Boost::coroutine)
+    target_link_libraries(${PLEXUS_SHARED} Boost::program_options)
 endif()
 
 # install executable
@@ -162,7 +161,7 @@ if(BUILD_TESTING)
         target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::regex Boost::coroutine Boost::program_options Boost::unit_test_framework)
     endif()
 
-    if(APPLE AND Boost_USE_STATIC_LIBS)
+    if(APPLE)
         set_target_properties(${PLEXUS_UT} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}")
     endif()
 

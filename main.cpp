@@ -52,6 +52,9 @@ void validate(boost::any& result, const std::vector<std::string>& values, endpoi
 
 int main(int argc, char** argv)
 {
+#ifndef _WIN32
+    signal(SIGCHLD, SIG_IGN);
+#endif
     boost::program_options::options_description desc("plexus options");
     desc.add_options()
         ("help", "produce help message")
@@ -99,10 +102,6 @@ int main(int argc, char** argv)
         std::cout << desc;
         return -1;
     }
-
-#ifndef _WIN32
-    signal(SIGCHLD, SIG_IGN);
-#endif
 
     try
     {

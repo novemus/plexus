@@ -18,12 +18,13 @@
 
 #include <windows.h>
 #include <processthreadsapi.h>
+#include <filesystem>
 
 namespace plexus {
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait) noexcept(false)
 {
-    _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
+    _dbg_ << "execute: cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
 	std::string cmd = "\"" + prog + "\" " + args;
 
@@ -42,7 +43,11 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         sa.lpSecurityDescriptor = NULL;
         sa.bInheritHandle = TRUE;  
 
-        HANDLE h = CreateFile(log.c_str(),
+        auto path = std::filesystem::path(log);
+        if (!dir.empty() && path.is_relative())
+            path = std::filesystem::path(dir) / path;
+
+        HANDLE h = CreateFile(path.string().c_str(),
             FILE_APPEND_DATA,
             FILE_SHARE_WRITE | FILE_SHARE_READ,
             &sa,
@@ -68,7 +73,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
 	if (CreateProcess(prog.c_str(), (char*)cmd.c_str(), 0, 0, true, wait ? 0 : CREATE_NO_WINDOW, 0, dir.empty() ? 0 : dir.c_str(), &si, &pi))
 	{
-        _inf_ << "execute pid=" << pi.dwProcessId;
+        _inf_ << "execute: pid=" << pi.dwProcessId;
 
         if (wait)
         {
@@ -113,28 +118,23 @@ namespace plexus {
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait) noexcept(false)
 {
-    _dbg_ << "execute cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
-
-    std::vector<char*> envp;
-    for (char **env = ::environ; *env; ++env)
-        envp.push_back(*env);
-    envp.push_back(0);
+    _dbg_ << "execute: cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
     std::vector<char*> argv;
-    argv.push_back(const_cast<char*>(prog.data()));
+    argv.push_back((char*)boost::replace_all_copy(prog, " ", "\\ ").data());
     auto split = boost::program_options::split_unix(args);
     for (auto& arg : split)
         argv.push_back(arg.data());
     argv.push_back(0);
 
-    posix_spawn_file_actions_t action = {};
+    posix_spawn_file_actions_t action;
     int status = posix_spawn_file_actions_init(&action);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn_file_actions_init: error=%d", status));
 
     if (!dir.empty())
     {
-        status = posix_spawn_file_actions_addchdir_np(&action, dir.c_str());
+        status = posix_spawn_file_actions_addchdir_np(&action, boost::replace_all_copy(dir, " ", "\\ ").c_str());
         if (status)
             throw std::runtime_error(utils::format("posix_spawn_file_actions_addchdir_np: error=%d", status));
     }
@@ -166,19 +166,39 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
             throw std::runtime_error(utils::format("posix_spawn_file_actions_adddup2: error=%d", status));
     }
 
+    posix_spawnattr_t attr;
+    status = posix_spawnattr_init(&attr);
+    if (status)
+        throw std::runtime_error(utils::format("posix_spawnattr_init: error=%d", status));
+
+    status = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID);
+    if (status)
+        throw std::runtime_error(utils::format("posix_spawnattr_setflags: error=%d", status));
+
     pid_t pid;
-    status = posix_spawnp(&pid, prog.c_str(), &action, 0, argv.data(), envp.data());
+    status = posix_spawnp(&pid, argv.front(), &action, 0, argv.data(), environ);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn: error=%d", status));
 
-    _inf_ << "execute pid=" << pid;
-
-    if (wait)
-        waitpid(pid, nullptr, 0);
+    _inf_ << "execute: pid=" << pid;
 
     status = posix_spawn_file_actions_destroy(&action);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn_file_actions_destroy: error=%d", status));
+
+    status = posix_spawnattr_destroy(&attr);
+    if (status)
+        throw std::runtime_error(utils::format("posix_spawnattr_destroy: error=%d", status));
+
+    if (wait)
+    {
+        int code = 0;
+        if (waitpid(pid, &code, 0) == -1)
+            throw std::runtime_error(utils::format("waitpid: error=%d", errno));
+
+        if (code)
+            throw std::runtime_error(utils::format("execute: error=%d", code));
+    }
 }
 
 }
