@@ -8,11 +8,8 @@
  * 
  */
 
-#include "features.h"
 #include "utils.h"
 #include <logger.h>
-#include <fcntl.h>
-#include <vector>
 
 #ifdef _WIN32
 
@@ -21,6 +18,29 @@
 #include <filesystem>
 
 namespace plexus {
+
+struct waiter
+{
+    HANDLE handle;
+    HANDLE process_handle;
+    DWORD  process_id;
+
+    static void notify(PVOID data, BOOLEAN timeout)
+    {
+        waiter* ptr = static_cast<waiter*>(data);
+
+        DWORD code;
+        if (!GetExitCodeProcess(ptr->process_handle, &code))
+            _wrn_ << "can't get child process " << ptr->process_id << " exit code: error=" << GetLastError();
+        else
+            _inf_ << "got child process " << ptr->process_id << " exit code: " << code;
+
+        CloseHandle(ptr->process_handle);
+        UnregisterWait(ptr->handle);
+
+        delete ptr;
+    }
+};
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait) noexcept(false)
 {
@@ -75,6 +95,11 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 	{
         _inf_ << "execute: pid=" << pi.dwProcessId;
 
+        if (!log.empty())
+            CloseHandle(si.hStdOutput);
+        
+        CloseHandle(pi.hThread);
+
         if (wait)
         {
             WaitForSingleObject(pi.hProcess, INFINITE);
@@ -83,20 +108,19 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
             if (!GetExitCodeProcess(pi.hProcess, &code) || code != 0)
             {
                 CloseHandle(pi.hProcess);
-                CloseHandle(pi.hThread);
-
-                if (!log.empty())
-                    CloseHandle(si.hStdOutput);
-
                 throw std::runtime_error(utils::format("GetExitCodeProcess: error=%d, code=%d", GetLastError(), code));
             }
+            CloseHandle(pi.hProcess);
         }
-
-        if (!log.empty())
-            CloseHandle(si.hStdOutput);
-
-		CloseHandle(pi.hProcess);
-		CloseHandle(pi.hThread);
+        else
+        {
+            waiter* ptr = new waiter { 0, pi.hProcess, pi.dwProcessId };
+            if (!RegisterWaitForSingleObject(&ptr->handle, pi.hProcess, &waiter::notify, ptr, INFINITE, WT_EXECUTEONLYONCE))
+            {
+                CloseHandle(pi.hProcess);
+                throw std::runtime_error(utils::format("RegisterWaitForSingleObject: error=%d", GetLastError()));
+            }
+        }
 	}
 	else
 	{
@@ -108,9 +132,11 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
 #else
 
+#include <fcntl.h>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <boost/program_options.hpp>
+#include <vector>
 
 extern char **environ;
 
@@ -120,10 +146,26 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 {
     _dbg_ << "execute: cmd=\"" << prog << "\" args=\"" << args << "\" pwd=\"" << dir << "\" log=\"" << log << "\"";
 
+    static std::once_flag s_flag;
+    std::call_once(s_flag, []()
+    {
+        signal(SIGCHLD, [](int num)
+        {
+            pid_t pid = waitpid(-1, &num, WNOHANG);
+            while (pid > 0)
+            {
+                _inf_ << "got child process " << pid << " exit code: " << num;
+                pid = waitpid(-1, &num, WNOHANG);
+            }
+        });
+    });
+
+    auto exe = boost::replace_all_copy(prog, " ", "\\ ");
+    auto arguments = boost::program_options::split_unix(args);
+
     std::vector<char*> argv;
-    argv.push_back((char*)boost::replace_all_copy(prog, " ", "\\ ").data());
-    auto split = boost::program_options::split_unix(args);
-    for (auto& arg : split)
+    argv.push_back(exe.data());
+    for (auto& arg : arguments)
         argv.push_back(arg.data());
     argv.push_back(0);
 
@@ -134,7 +176,8 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
     if (!dir.empty())
     {
-        status = posix_spawn_file_actions_addchdir_np(&action, boost::replace_all_copy(dir, " ", "\\ ").c_str());
+        std::string pwd = boost::replace_all_copy(dir, " ", "\\ ");
+        status = posix_spawn_file_actions_addchdir_np(&action, pwd.c_str());
         if (status)
             throw std::runtime_error(utils::format("posix_spawn_file_actions_addchdir_np: error=%d", status));
     }
@@ -156,8 +199,8 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 
     if (!log.empty())
     {
-        std::string outfile = boost::replace_all_copy(log, " ", "\\ ");
-        status = posix_spawn_file_actions_addopen(&action, 1, outfile.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0644);
+        std::string out = boost::replace_all_copy(log, " ", "\\ ");
+        status = posix_spawn_file_actions_addopen(&action, 1, out.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0644);
         if (status)
             throw std::runtime_error(utils::format("posix_spawn_file_actions_addopen: error=%d", status));
 
@@ -176,7 +219,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         throw std::runtime_error(utils::format("posix_spawnattr_setflags: error=%d", status));
 
     pid_t pid;
-    status = posix_spawnp(&pid, argv.front(), &action, 0, argv.data(), environ);
+    status = posix_spawnp(&pid, exe.data(), &action, &attr, argv.data(), environ);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn: error=%d", status));
 
@@ -194,9 +237,11 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
     {
         int code = 0;
         if (waitpid(pid, &code, 0) == -1)
-            throw std::runtime_error(utils::format("waitpid: error=%d", errno));
-
-        if (code)
+        {
+            if (errno != ECHILD)
+                throw std::runtime_error(utils::format("waitpid: error=%d", errno));
+        }
+        else if (code)
             throw std::runtime_error(utils::format("execute: error=%d", code));
     }
 }

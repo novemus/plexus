@@ -21,7 +21,7 @@ To build libraries, specify the *plexus_static* and *plexus_shared* targets.
 
 ## Using
 
-To run the example below you need to install *openvpn*. Launch following commands with your arguments from the project directory on each machines. Script *exec.sh* will try to establish point-to-point *VPN* connection.
+To run the example below you need to install *openvpn*. Launch following commands with your arguments on each machines. Script *exec.sh* will try to establish point-to-point *VPN* connection.
 
 Command for remote machine:
 ```console
