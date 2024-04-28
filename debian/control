@@ -31,10 +31,10 @@ Package: libplexus-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
-Depends: libboost-dev (>= 1.81),
+Depends: libboost1.81-dev (>= 1.81) | libboost-dev (>= 1.81),
          libplexus (= ${binary:Version}),
-         libwormhole-dev (>= 1.2),
          libtubus-dev (>= 1.2),
+         libwormhole-dev (>= 1.2),
          ${misc:Depends},
          ${shlibs:Depends}
 Description: Development files of the 'plexus' library
