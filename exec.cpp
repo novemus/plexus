@@ -135,12 +135,35 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
 #include <fcntl.h>
 #include <spawn.h>
 #include <sys/wait.h>
-#include <boost/program_options.hpp>
+#include <boost/tokenizer.hpp>
+#include <boost/shared_array.hpp>
 #include <vector>
 
 extern char **environ;
 
 namespace plexus {
+
+boost::shared_array<char*> make_arguments(const std::string& exe, const std::string& args)
+{
+    auto holder = std::make_shared<std::vector<std::string>>();
+    holder->push_back(boost::replace_all_copy(exe, " ", "\\ "));
+
+    boost::tokenizer<boost::escaped_list_separator<char>> tokenizer(args.begin(), args.end(), boost::escaped_list_separator<char>("\\", " \t", "'\""));
+    auto iter = tokenizer.begin();
+    while (iter != tokenizer.end())
+    {
+        if (!iter->empty())
+            holder->push_back(iter->c_str());
+        ++iter;
+    }
+
+    boost::shared_array<char*> array(new char*[holder->size() + 1], [holder](char** ptr) { delete[] ptr; });
+    for (size_t i = 0; i < holder->size(); ++i)
+        array[i] = holder->at(i).data();
+    array[holder->size()] = 0;
+
+    return array;
+}
 
 void exec(const std::string& prog, const std::string& args, const std::string& dir, const std::string& log, bool wait) noexcept(false)
 {
@@ -160,14 +183,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         });
     });
 
-    auto exe = boost::replace_all_copy(prog, " ", "\\ ");
-    auto arguments = boost::program_options::split_unix(args);
-
-    std::vector<char*> argv;
-    argv.push_back(exe.data());
-    for (auto& arg : arguments)
-        argv.push_back(arg.data());
-    argv.push_back(0);
+    auto argv = make_arguments(prog, args);
 
     posix_spawn_file_actions_t action;
     int status = posix_spawn_file_actions_init(&action);
@@ -219,7 +235,7 @@ void exec(const std::string& prog, const std::string& args, const std::string& d
         throw std::runtime_error(utils::format("posix_spawnattr_setflags: error=%d", status));
 
     pid_t pid;
-    status = posix_spawnp(&pid, exe.data(), &action, &attr, argv.data(), environ);
+    status = posix_spawnp(&pid, argv[0], &action, &attr, argv.get(), environ);
     if (status)
         throw std::runtime_error(utils::format("posix_spawn: error=%d", status));
 

@@ -111,7 +111,6 @@ if(APPLE)
     get_filename_component(ICU_LIBDATA_DIR "${ICU_DATA_LIBRARY}" DIRECTORY)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}")
     set_target_properties(${PLEXUS_SHARED} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}") 
-    target_link_libraries(${PLEXUS_SHARED} Boost::program_options)
 endif()
 
 # install executable
