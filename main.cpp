@@ -12,8 +12,8 @@
 #include "plexus.h"
 #include "utils.h"
 #include <logger.h>
+#include <regex>
 #include <boost/program_options.hpp>
-#include <boost/regex.hpp>
 
 template<class proto, const char* service>
 struct endpoint : public boost::asio::ip::basic_endpoint<proto>
@@ -110,22 +110,27 @@ int main(int argc, char** argv)
         {
             auto format = [&](const std::string& line)
             {
-                return boost::regex_replace(line,
-                    boost::regex("(%innerip%)|(%innerport%)|(%outerip%)|(%outerport%)|(%peerip%)|(%peerport%)|(%secret%)|(%hostpin%)|(%peerpin%)|(%hostemail%)|(%peeremail%)"),
-                    plexus::utils::format("(?{1}%s)(?{2}%u)(?{3}%s)(?{4}%u)(?{5}%s)(?{6}%u)(?{7}%llu)(?{8}%s)(?{9}%s)(?{10}%s)(?{11}%s)",
-                        bind.address().to_string().c_str(),
-                        bind.port(),
-                        gateway.endpoint.address().to_string().c_str(),
-                        gateway.endpoint.port(),
-                        faraway.endpoint.address().to_string().c_str(),
-                        faraway.endpoint.port(),
-                        gateway.puzzle ^ faraway.puzzle,
-                        host.pin.c_str(),
-                        peer.pin.c_str(),
-                        host.owner.c_str(),
-                        peer.owner.c_str()),
-                    boost::match_posix | boost::format_all
-                    );
+                std::string res = line;
+                std::vector<std::pair<std::regex, std::string>> replaces = { 
+                    { std::regex("%innerip%"), bind.address().to_string() },
+                    { std::regex("%innerport%"), std::to_string(bind.port()) },
+                    { std::regex("%outerip%"), gateway.endpoint.address().to_string()},
+                    { std::regex("%outerport%"), std::to_string(gateway.endpoint.port()) },
+                    { std::regex("%peerip%"), faraway.endpoint.address().to_string() },
+                    { std::regex("%peerport%"), std::to_string(faraway.endpoint.port()) },
+                    { std::regex("%secret%"), std::to_string(gateway.puzzle ^ faraway.puzzle) },
+                    { std::regex("%hostpin%"), host.pin },
+                    { std::regex("%peerpin%"), peer.pin },
+                    { std::regex("%hostemail%"), host.owner },
+                    { std::regex("%peeremail%"), peer.owner }
+                };
+
+                for (const auto& item : replaces)
+                {
+                    res = std::regex_replace(res, item.first, item.second);
+                }
+
+                return res;
             };
 
             plexus::exec(

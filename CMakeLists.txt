@@ -59,9 +59,9 @@ string(REGEX REPLACE "[^/\\]+" ".." PLEXUS_INSTALL_CMAKEDIR_REVERSE ${PLEXUS_INS
 set(Boost_USE_STATIC_LIBS ON)
 
 if(BUILD_TESTING)
-    find_package(Boost 1.81 REQUIRED COMPONENTS system regex program_options coroutine unit_test_framework)
+    find_package(Boost REQUIRED COMPONENTS system program_options coroutine unit_test_framework)
 else()
-    find_package(Boost 1.81 REQUIRED COMPONENTS system regex program_options coroutine)
+    find_package(Boost REQUIRED COMPONENTS system program_options coroutine)
 endif()
 
 message("* Boost Version: ${Boost_VERSION}")
@@ -99,8 +99,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fPIC -fvisibility=hidden")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
-    target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::regex Boost::coroutine Boost::program_options)
-    target_link_libraries(${PLEXUS_SHARED} Boost::system Boost::regex Boost::coroutine)
+    target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::coroutine Boost::program_options)
+    target_link_libraries(${PLEXUS_SHARED} Boost::system Boost::coroutine)
 endif()
 
 if(APPLE)
@@ -157,7 +157,7 @@ if(BUILD_TESTING)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::regex Boost::coroutine Boost::program_options Boost::unit_test_framework)
+        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::coroutine Boost::program_options Boost::unit_test_framework)
     endif()
 
     if(APPLE)

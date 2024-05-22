@@ -12,7 +12,6 @@
 #include "network.h"
 #include "utils.h"
 #include <boost/asio/spawn.hpp>
-#include <boost/regex.hpp>
 #include <filesystem>
 #include <logger.h>
 #include <string>
@@ -395,14 +394,14 @@ class imap
         fetch_parser = [this](const std::string& response) -> bool {
             if (success_checker(response))
             {
-                static const boost::regex pattern("[^\\r\\n]+TEXT[^\\r\\n]+"
+                static const std::regex pattern("[^\\r\\n]+TEXT[^\\r\\n]+"
                                                 "\\r\\n(.+)\\r\\n"
                                                 "[^\\r\\n]+HEADER[^\\r\\n]+"
                                                 "\\r\\nFrom: ([^\\r\\n]+) <([^\\r\\n]+)>"
-                                                "\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>");
+                                                "\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>.*");
 
-                boost::smatch match;
-                if (boost::regex_search(response, match, pattern))
+                std::smatch match;
+                if (std::regex_search(response, match, pattern))
                 {
                     identity peer = { match[3].str(), match[2].str() };
                     identity host = { match[5].str(), match[4].str() };
