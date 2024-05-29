@@ -394,39 +394,38 @@ class imap
         fetch_parser = [this](const std::string& response) -> bool {
             if (success_checker(response))
             {
-                static const std::regex pattern("[^\\r\\n]+TEXT[^\\r\\n]+"
-                                                "\\r\\n(.+)\\r\\n"
-                                                "[^\\r\\n]+HEADER[^\\r\\n]+"
-                                                "\\r\\nFrom: ([^\\r\\n]+) <([^\\r\\n]+)>"
-                                                "\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>.*");
+                static const std::regex pattern("From: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>");
 
                 std::smatch match;
                 if (std::regex_search(response, match, pattern))
                 {
-                    identity peer = { match[3].str(), match[2].str() };
-                    identity host = { match[5].str(), match[4].str() };
+                    identity peer = { match.str(2), match.str(1) };
+                    identity host = { match.str(4), match.str(3) };
 
                     if (m_config.are_defined(m_host, m_peer) || m_config.are_allowed(host, peer))
                     {
-                        std::string message;
+                        static const std::regex pattern("BODY\\[TEXT\\] \\{(\\d+)\\}\\r\\n");
+
+                        auto iter = std::sregex_iterator(response.begin(), response.end(), pattern);
+                        if (iter == std::sregex_iterator())
+                            return true;
+
+                        std::string message = response.substr(iter->position() + iter->length(), boost::lexical_cast<size_t>(iter->str(1)));
+
                         if (m_config.are_encryptable(host, peer))
                         {
                             message = plexus::utils::smime_verify(
-                                plexus::utils::smime_decrypt(match[1].str(), m_config.get_cert(m_host), m_config.get_key(m_host)),
-                                m_config.get_cert(m_peer),
-                                m_config.get_ca(m_peer)
+                                plexus::utils::smime_decrypt(message, m_config.get_cert(host), m_config.get_key(host)),
+                                m_config.get_cert(peer),
+                                m_config.get_ca(peer)
                                 );
-                        }
-                        else
-                        {
-                            message = match[1].str();
                         }
 
                         std::smatch match;
-                        if (std::regex_match(message, match, std::regex("^PLEXUS 3.0 (\\S+) (\\d+) (\\d+)$")))
+                        if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                         {
-                            m_data.endpoint = utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match[1].str(), match[2].str());
-                            m_data.puzzle = boost::lexical_cast<uint64_t>(match[3].str());
+                            m_data.endpoint = utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match.str(1), match.str(2));
+                            m_data.puzzle = boost::lexical_cast<uint64_t>(match.str(3));
                             m_host = host;
                             m_peer = peer;
                         }
