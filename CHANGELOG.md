@@ -1,5 +1,10 @@
 # Change Log
 
+## 3.0.1 (May 31, 2024)
+
+- Build with default boost library.
+- S/MIME mailing fix.
+
 ## 3.0.0 (March 30, 2024)
 
 - Added the ability to accept several peers. Implemented the library build.

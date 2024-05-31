@@ -1,3 +1,10 @@
+plexus (3.0-2+deb12u3) unstable; urgency=low
+
+  * Build with default boost library.
+  * SMIME mailing fix.
+
+ -- Novemus Band <nineletters@mail.ru>  Fri, 31 May 2024 23:59:00 +0300
+
 plexus (3.0-1+deb12u3) unstable; urgency=low
 
   * Initial debian package.

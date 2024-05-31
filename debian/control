@@ -31,7 +31,7 @@ Package: libplexus-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
-Depends: libboost1.81-dev (>= 1.81) | libboost-dev (>= 1.81),
+Depends: libboost-dev (>= 1.74) | libboost1.81-dev,
          libplexus (= ${binary:Version}),
          libtubus-dev (>= 1.2),
          libwormhole-dev (>= 1.2),
