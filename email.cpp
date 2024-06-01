@@ -12,7 +12,6 @@
 #include "network.h"
 #include "utils.h"
 #include <boost/asio/spawn.hpp>
-#include <filesystem>
 #include <logger.h>
 #include <string>
 #include <iostream>
@@ -27,50 +26,6 @@ const int64_t max_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MAX_P
 const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 10000);
 const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
 const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
-
-struct context : public mediator
-{
-    context(const mediator& config) : mediator(config)
-    {
-    }
-
-    bool are_defined(const identity& host, const identity& peer) const
-    {
-        return !host.owner.empty() && !host.pin.empty() && !peer.owner.empty() && !peer.pin.empty();
-    }
-
-    bool are_allowed(const identity& host, const identity& peer) const
-    {
-        return are_defined(host, peer)
-            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.owner / host.pin))
-            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / peer.owner / peer.pin));
-    }
-
-    bool are_encryptable(const identity& host, const identity& peer) const
-    {
-        return std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.owner / host.pin / "cert.crt"))
-            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / host.owner / host.pin / "private.key"))
-            && std::filesystem::exists(std::filesystem::path(std::filesystem::path(repo) / peer.owner / peer.pin / "cert.crt"));
-    }
-
-    std::string get_cert(const identity& info) const 
-    {
-        std::filesystem::path cert(std::filesystem::path(repo) / info.owner / info.pin / "cert.crt");
-        return std::filesystem::exists(cert) ? cert.generic_u8string() : "";
-    }
-
-    std::string get_key(const identity& info) const 
-    {
-        std::filesystem::path key(std::filesystem::path(repo) / info.owner / info.pin / "private.key");
-        return std::filesystem::exists(key) ? key.generic_u8string() : "";
-    }
-
-    std::string get_ca(const identity& info) const 
-    {
-        std::filesystem::path ca(std::filesystem::path(repo) / info.owner / info.pin / "ca.crt");
-        return std::filesystem::exists(ca) ? ca.generic_u8string() : "";
-    }
-};
 
 class channel
 {
@@ -144,6 +99,8 @@ public:
         }
     }
 };
+
+using context = context<plexus::emailer>;
 
 class smtp
 {
@@ -612,14 +569,14 @@ public:
     {
     }
 
-    const reference& pull_request(boost::asio::yield_context yield) noexcept(false) override
+    reference pull_request(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, invite_token);
         _inf_ << "pulled request " << faraway;
         return faraway;
     }
 
-    const reference& pull_response(boost::asio::yield_context yield) noexcept(false) override
+    reference pull_response(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, accept_token);
         _inf_ << "pulled response " << faraway;
@@ -651,23 +608,22 @@ public:
 
 }
 
-using namespace email;
-
-void spawn_accept(boost::asio::io_service& io, const mediator& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+template<>
+void spawn_accept(boost::asio::io_service& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
     {
-        smtp pusher(io, conf, host, peer);
-        imap puller(io, conf, host, peer);
+        email::smtp pusher(io, conf, host, peer);
+        email::imap puller(io, conf, host, peer);
         
         do
         {
-            puller.wait(yield, invite_token);
+            puller.wait(yield, email::invite_token);
 
             pusher.host(puller.host());
             pusher.peer(puller.peer());
 
-            boost::asio::spawn(io, [pipe = std::make_shared<pipe_impl>(pusher, puller), handler](boost::asio::yield_context yield)
+            boost::asio::spawn(io, [pipe = std::make_shared<email::pipe_impl>(pusher, puller), handler](boost::asio::yield_context yield)
             {
                 handler(yield, pipe);
             });
@@ -679,16 +635,17 @@ void spawn_accept(boost::asio::io_service& io, const mediator& conf, const ident
     });
 }
 
-void spawn_invite(boost::asio::io_service& io, const mediator& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+template<>
+void spawn_invite(boost::asio::io_service& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
     {
-        smtp pusher(io, conf, host, peer);
-        imap puller(io, conf, host, peer);
+        email::smtp pusher(io, conf, host, peer);
+        email::imap puller(io, conf, host, peer);
 
         puller.init(yield);
 
-        handler(yield, std::make_shared<pipe_impl>(pusher, puller));
+        handler(yield, std::make_shared<email::pipe_impl>(pusher, puller));
     });
 }
 

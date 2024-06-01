@@ -63,7 +63,7 @@ std::istream& operator>>(std::istream& in, identity& value)
 
 void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify) noexcept(true)
 {
-    spawn_accept(io, config, host, peer, [&io, config, connect, notify](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
+    auto handler = [&io, config, connect, notify](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
     {
         auto peer = pipe->peer();
         auto host = pipe->host();
@@ -93,12 +93,16 @@ void spawn_accept(boost::asio::io_service& io, const options& config, const iden
             if (notify)
                 notify(host, peer, e.what());
         }
-    });
+    };
+
+    config.mediator.index() == 0
+        ? spawn_accept(io, context<emailer>(config.app, config.repo, std::get<emailer>(config.mediator)), host, peer, handler)
+        : spawn_accept(io, context<dhtnode>(config.app, config.repo, std::get<dhtnode>(config.mediator)), host, peer, handler);
 }
 
 void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify) noexcept(true)
 {
-    spawn_invite(io, config, host, peer, [&io, config, connect, notify](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
+    auto handler = [&io, config, connect, notify](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
     {
         auto peer = pipe->peer();
         auto host = pipe->host();
@@ -128,7 +132,11 @@ void spawn_invite(boost::asio::io_service& io, const options& config, const iden
             if (notify)
                 notify(pipe->host(), pipe->peer(), e.what());
         }
-    });
+    };
+
+    config.mediator.index() == 0
+        ? spawn_invite(io, context<emailer>(config.app, config.repo, std::get<emailer>(config.mediator)), host, peer, handler)
+        : spawn_invite(io, context<dhtnode>(config.app, config.repo, std::get<dhtnode>(config.mediator)), host, peer, handler);
 }
 
 void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify) noexcept(true)

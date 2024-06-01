@@ -31,17 +31,22 @@ namespace
             std::smatch match;
             if (std::regex_match(args, match, std::regex("^(.+):(.+),(.+):(.+),(.+),(.+),(.+):(.+),(.+)$")))
             {
+                plexus::emailer mediator {
+                    plexus::utils::parse_endpoint<plexus::tcp::endpoint>(match[1].str(), match[2].str()),
+                    plexus::utils::parse_endpoint<plexus::tcp::endpoint>(match[3].str(), match[4].str()),
+                    match[5].str(),
+                    match[6].str() 
+                };
+
                 g_conf.app = "plexus_test_app";
                 g_conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_test_app";
-                g_conf.smtp = plexus::utils::parse_endpoint<plexus::tcp::endpoint>(match[1].str(), match[2].str());
-                g_conf.imap = plexus::utils::parse_endpoint<plexus::tcp::endpoint>(match[3].str(), match[4].str());
-                g_conf.login = match[5].str();
-                g_conf.password = match[6].str();
                 g_conf.stun = plexus::utils::parse_endpoint<plexus::udp::endpoint>(match[7].str(), match[8].str());
                 g_conf.hops = boost::lexical_cast<uint16_t>(match[9].str());
-                g_host.owner = g_conf.login;
+                g_conf.mediator = mediator;
+                
+                g_host.owner = mediator.login;
                 g_host.pin = "host";
-                g_peer.owner = g_conf.login;
+                g_peer.owner = mediator.login;
                 g_peer.pin = "peer";
 
                 auto host_dir = g_conf.repo + "/" + g_host.owner + "/" + g_host.pin;

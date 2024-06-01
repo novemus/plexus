@@ -26,14 +26,14 @@
 #define PLEXUS_CLASS_DECLSPEC PLEXUS_CLASS_IMPORT_DECLSPEC
 #endif
 
+#include <variant>
 #include <tubus/socket.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ip/udp.hpp>
 
 namespace plexus {
 
-using udp = boost::asio::ip::udp;
-using tcp = boost::asio::ip::tcp;
+using namespace boost::asio::ip;
 
 struct identity
 {
@@ -47,24 +47,34 @@ struct reference
     uint64_t puzzle = 0;
 };
 
-struct mediator
+struct emailer
 {
-    std::string app;
-    std::string repo;
     tcp::endpoint smtp;
     tcp::endpoint imap;
     std::string login;
     std::string password;
-    std::string cert;
+    std::string cert; 
     std::string key;
     std::string ca;
 };
 
-struct options : public mediator
+struct dhtnode
 {
-    udp::endpoint stun;
-    udp::endpoint bind;
-    uint16_t hops;
+    std::string bootstrap; // bootstrap URL
+    uint16_t port = 4222; // node port
+    uint32_t network = 0; // network id
+};
+
+using rendezvous = std::variant<emailer, dhtnode>;
+
+struct options
+{
+    std::string app; // application id
+    std::string repo; // path to application repository
+    udp::endpoint stun; // endpoint of public stun server
+    udp::endpoint bind; // local endpoint to bind the application
+    uint16_t hops; // ttl of the udp-hole punching packet
+    rendezvous mediator; // signaling service to trigger peer connections
 };
 
 using connector = std::function<void(const identity& /* host */,

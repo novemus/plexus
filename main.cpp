@@ -62,10 +62,13 @@ int main(int argc, char** argv)
         ("peer-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email/pin>")
         ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of public stun server")
         ("stun-client", boost::program_options::value<stun_client_endpoint>()->required(), "endpoint of local stun client")
-        ("email-smtps", boost::program_options::value<smtp_server_endpoint>()->required(), "smtps server used to send reference to the peer")
-        ("email-imaps", boost::program_options::value<imap_server_endpoint>()->required(), "imaps server used to receive reference from the peer")
-        ("email-login", boost::program_options::value<std::string>()->required(), "login of email account")
-        ("email-password", boost::program_options::value<std::string>()->required(), "password of email account")
+        ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net:4222"), "url of bootstrap DHT service")
+        ("dht-port", boost::program_options::value<uint16_t>()->default_value(4222), "local port to bind DHT node")
+        ("dht-network", boost::program_options::value<uint32_t>()->default_value(0), "DHT network id")
+        ("email-smtps", boost::program_options::value<smtp_server_endpoint>(), "smtps server used to send reference to the peer")
+        ("email-imaps", boost::program_options::value<imap_server_endpoint>(), "imaps server used to receive reference from the peer")
+        ("email-login", boost::program_options::value<std::string>(), "login of email account")
+        ("email-password", boost::program_options::value<std::string>(), "password of email account")
         ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to X509 certificate of email client")
         ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to Private Key of email client")
         ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to email Certification Authority")
@@ -84,7 +87,14 @@ int main(int argc, char** argv)
         boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
         if(vm.count("help"))
         {
-            std::cout << desc;
+            std::cout << desc << std::endl;
+            return -1;
+        }
+
+        auto count = vm.count("email-smtps") + vm.count("email-imaps") + vm.count("email-login") + vm.count("email-password");
+        if(count > 0 && count != 4)
+        {
+            std::cout << "to use email service for a rendezvous, specify at least 'email-smtps', 'email-imaps', 'email-login' and 'email-password' arguments" << std::endl;
             return -1;
         }
 
@@ -141,21 +151,30 @@ int main(int argc, char** argv)
                 );
         };
 
-        plexus::options config = { plexus::mediator {
-                vm["app-id"].as<std::string>(),
-                vm["app-repo"].as<std::string>(),
-                vm["email-smtps"].as<smtp_server_endpoint>(),
-                vm["email-imaps"].as<imap_server_endpoint>(),
-                vm["email-login"].as<std::string>(),
-                vm["email-password"].as<std::string>(),
-                vm["email-cert"].as<std::string>(),
-                vm["email-key"].as<std::string>(),
-                vm["email-ca"].as<std::string>() 
-            },
+        plexus::options config = {
+            vm["app-id"].as<std::string>(),
+            vm["app-repo"].as<std::string>(),
             vm["stun-server"].as<stun_server_endpoint>(),
             vm["stun-client"].as<stun_client_endpoint>(),
-            vm["punch-hops"].as<uint16_t>()
-            };
+            vm["punch-hops"].as<uint16_t>(),
+            vm.count("email-smtps")
+                ? plexus::rendezvous {
+                    plexus::emailer {
+                        vm["email-smtps"].as<smtp_server_endpoint>(),
+                        vm["email-imaps"].as<imap_server_endpoint>(),
+                        vm["email-login"].as<std::string>(),
+                        vm["email-password"].as<std::string>(),
+                        vm["email-cert"].as<std::string>(),
+                        vm["email-key"].as<std::string>(),
+                        vm["email-ca"].as<std::string>() 
+                    }}
+                : plexus::rendezvous {
+                    plexus::dhtnode {
+                        vm["dht-bootstrap"].as<std::string>(),
+                        vm["dht-port"].as<uint16_t>(),
+                        vm["dht-network"].as<uint32_t>() 
+                    }}
+        };
 
         boost::asio::io_service io;
         vm["accept"].as<bool>()
