@@ -80,12 +80,16 @@ message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
 find_package(PkgConfig REQUIRED)
+pkg_search_module(libargon2 REQUIRED IMPORTED_TARGET argon2)
+pkg_search_module(jsoncpp REQUIRED IMPORTED_TARGET jsoncpp)
+pkg_search_module(nettle REQUIRED IMPORTED_TARGET nettle)
+pkg_search_module(gnutls REQUIRED IMPORTED_TARGET gnutls)
 pkg_search_module(opendht REQUIRED IMPORTED_TARGET opendht)
 
 include_directories(${OPENSSL_INCLUDE_DIR})
 
 add_library(${PLEXUS_SHARED} SHARED utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp dht.cpp stun.cpp binder.cpp plexus.cpp)
-target_link_libraries(${PLEXUS_SHARED} ${WORMHOLE_SHARED} ${TUBUS_SHARED} OpenSSL::Crypto OpenSSL::SSL opendht)
+target_link_libraries(${PLEXUS_SHARED} ${WORMHOLE_SHARED} ${TUBUS_SHARED} OpenSSL::Crypto OpenSSL::SSL opendht gnutls nettle jsoncpp http_parser argon2)
 target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS)
 set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d" IMPORT_PREFIX "lib")
 set_target_properties(${PLEXUS_SHARED} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
@@ -95,7 +99,7 @@ set_target_properties(${PLEXUS_STATIC} PROPERTIES DEBUG_POSTFIX "d")
 set_target_properties(${PLEXUS_STATIC} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 add_executable(${PROJECT_NAME} main.cpp $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
-target_link_libraries(${PROJECT_NAME} ${TUBUS_STATIC} ${WORMHOLE_STATIC} OpenSSL::Crypto OpenSSL::SSL opendht)
+target_link_libraries(${PROJECT_NAME} ${TUBUS_STATIC} ${WORMHOLE_STATIC} OpenSSL::Crypto OpenSSL::SSL opendht gnutls nettle jsoncpp http_parser argon2)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -156,7 +160,7 @@ if(BUILD_TESTING)
                                 tests/smime_tests.cpp
                                 tests/exec_tests.cpp
                                 tests/plexus_tests.cpp)
-    target_link_libraries(${PLEXUS_UT} ${PLEXUS_STATIC} ${WORMHOLE_STATIC} ${TUBUS_STATIC} OpenSSL::Crypto OpenSSL::SSL opendht)
+    target_link_libraries(${PLEXUS_UT} ${PLEXUS_STATIC} ${WORMHOLE_STATIC} ${TUBUS_STATIC} OpenSSL::Crypto OpenSSL::SSL opendht gnutls nettle jsoncpp http_parser argon2)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")

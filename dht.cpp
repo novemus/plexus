@@ -364,7 +364,7 @@ std::shared_ptr<operation<void>> forward(boost::asio::io_service& io, const repo
 
             auto message = plexus::utils::format("PLEXUS 3.0 %s %u %llu", gateway.endpoint.address().to_string().c_str(), gateway.endpoint.port(), gateway.puzzle);
 
-            dht::Value value(dht::ValueType::USER_DATA.id, repo.load_cert(peer)->getPublicKey().encrypt(message), m_id);
+            dht::Value value(dht::ValueType::USER_DATA.id, repo.load_cert(peer)->getPublicKey().encrypt((uint8_t*)message.data(), message.length()), m_id);
             value.sign(*repo.load_key(host));
 
             std::weak_ptr<forward> weak = shared_from_this();
