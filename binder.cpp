@@ -145,7 +145,7 @@ public:
         boost::asio::ip::unicast::hops old;
         pin->get_option(old);
         pin->set_option(boost::asio::ip::unicast::hops(m_punch));
-        pin->send_to(handshake(0, 0), peer, yield, 2000);
+        pin->send_to(handshake(0, mask), peer, yield, 2000);
         pin->set_option(old);
 
         _dbg_ << "awaiting peer...";

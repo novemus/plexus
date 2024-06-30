@@ -80,10 +80,9 @@ message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
 find_package(PkgConfig REQUIRED)
-pkg_search_module(libargon2 REQUIRED IMPORTED_TARGET argon2)
-pkg_search_module(jsoncpp REQUIRED IMPORTED_TARGET jsoncpp)
-pkg_search_module(nettle REQUIRED IMPORTED_TARGET nettle)
-pkg_search_module(gnutls REQUIRED IMPORTED_TARGET gnutls)
+# pkg_search_module(jsoncpp REQUIRED IMPORTED_TARGET jsoncpp)
+# pkg_search_module(nettle REQUIRED IMPORTED_TARGET nettle)
+# pkg_search_module(gnutls REQUIRED IMPORTED_TARGET gnutls)
 pkg_search_module(opendht REQUIRED IMPORTED_TARGET opendht)
 
 include_directories(${OPENSSL_INCLUDE_DIR})

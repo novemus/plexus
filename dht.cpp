@@ -11,7 +11,6 @@
 #include "plexus.h"
 #include "features.h"
 #include "utils.h"
-#include <limits>
 #include <logger.h>
 #include <memory>
 #include <mutex>
@@ -29,7 +28,7 @@
 namespace plexus { namespace opendht {
 
 const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
-const int64_t hangup_timeout = plexus::utils::getenv<int64_t>("PLEXUS_HANGUP_TIMEOUT", 10000);
+const int64_t hangup_timeout = plexus::utils::getenv<int64_t>("PLEXUS_HANGUP_TIMEOUT", 20000);
 const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
 const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
 
@@ -68,7 +67,7 @@ public:
 
             for (auto const& ipin : std::filesystem::directory_iterator(iowner.path()))
             {
-                if (ipin.is_directory())
+                if (!ipin.is_directory())
                     continue;
 
                 identity info { iowner.path().filename().string(), ipin.path().filename().string() };
@@ -77,7 +76,11 @@ public:
 
                 try
                 {
-                    m_index.emplace(load_cert(info)->getId(), info);
+                    auto id = load_cert(info)->getId();
+
+                    _trc_ << "found identity " << info << " with id " << id;
+
+                    m_index.emplace(id, info);
                 } 
                 catch (const std::exception& ex)
                 {
@@ -129,15 +132,13 @@ public:
         return std::make_shared<dht::crypto::Certificate>(load_file(get_ca(info)));
     }
 
-    bool check_peer(const dht::InfoHash& id, identity& peer) const noexcept(true) 
+    identity fetch_identity(const dht::InfoHash& id) const noexcept(true) 
     {
         auto iter = m_index.find(id);
         if (iter != m_index.end() && has_cert(iter->second))
-        {
-            peer = iter->second;
-            return true;
-        }
-        return false;
+            return iter->second;
+
+        return identity();
     }
 
     std::shared_ptr<dht::DhtRunner> node() const noexcept(true)
@@ -152,258 +153,268 @@ template<typename result> struct operation
     virtual result wait(boost::asio::yield_context yield) noexcept(false) = 0;
 };
 
-std::shared_ptr<operation<std::tuple<uint64_t, identity, identity>>> listen(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& mask) noexcept(false)
+using listen_ptr = std::shared_ptr<operation<std::tuple<uint64_t, identity, identity>>>;
+using invite = std::tuple<uint64_t, identity, identity>;
+
+class listen : public operation<invite>
 {
-    using invite = std::tuple<uint64_t, identity, identity>;
+    boost::asio::deadline_timer     timer;
+    std::shared_ptr<dht::DhtRunner> node;
+    dht::InfoHash                   hash;
+    std::future<size_t>             token;
+    std::deque<invite>              queue;
+    std::mutex                      mutex;
 
-    class listen : public operation<invite>, public std::enable_shared_from_this<listen>
+protected:
+
+    listen(boost::asio::io_service& io) noexcept(true)
+        : timer(io)
+    {}
+
+public:
+
+    ~listen() override
     {
-        boost::asio::deadline_timer     m_timer;
-        std::shared_ptr<dht::DhtRunner> m_node;
-        dht::InfoHash                   m_hash;
-        std::future<size_t>             m_token;
-        std::deque<invite>              m_queue;
-        std::mutex                      m_mutex;
+        node->cancelListen(hash, std::move(token));
+    }
 
-    public:
+    invite wait(boost::asio::yield_context yield) noexcept(false) override
+    {
+        boost::system::error_code ec;
+        timer.async_wait(yield[ec]);
 
-        listen(boost::asio::io_service& io) noexcept(true)
-            : m_timer(io)
-        {}
+        std::lock_guard<std::mutex> lock(mutex);
+        timer.expires_from_now(boost::posix_time::time_duration(boost::posix_time::pos_infin));
 
-        ~listen() override
+        if (ec != boost::asio::error::operation_aborted)
+            throw boost::system::system_error(ec);
+
+        if (queue.empty())
+            throw boost::system::system_error(boost::asio::error::broken_pipe);
+
+        auto res = queue.front();
+        queue.pop_front();
+
+        return res;
+    }
+
+    static listen_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer) noexcept(false)
+    {
+        _dbg_ << "listen " << repo.app << "/invite for " << host;
+
+        std::shared_ptr<listen> op(new listen(io));
+        op->node = repo.node();
+        op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + invite_token);
+        
+        auto match = [peer](const identity& info)
         {
-            m_node->cancelListen(m_hash, std::move(m_token));
-        }
+            return !info.owner.empty() && !info.pin.empty() && (peer.owner.empty() || peer.owner == info.owner) && (peer.pin.empty() || peer.pin == info.pin);
+        };
 
-        void start(const repository& repo, const identity& host, const identity& mask) noexcept(false)
+        op->timer.expires_from_now(boost::posix_time::time_duration(boost::posix_time::pos_infin));
+        uint64_t id = std::time(nullptr);
+
+        _trc_ << "listen values with key " << op->hash;
+
+        std::weak_ptr<listen> weak = op;
+        op->token = op->node->listen(op->hash, [weak, repo, id, host, match](const std::vector<std::shared_ptr<dht::Value>>& values)
         {
-            m_node = repo.node();
-            m_hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + invite_token);
-            
-            auto match = [mask](const identity& info)
+            auto ptr = weak.lock();
+            if (not ptr)
+                return false;
+
+            for (auto& value : values)
             {
-                return (mask.owner.empty() || mask.owner == info.owner) && (mask.pin.empty() || mask.pin == info.pin);
-            };
+                if (id > value->id)
+                    continue;
 
-            m_timer.expires_from_now(boost::posix_time::time_duration(boost::posix_time::pos_infin));
-            uint64_t id = std::time(nullptr);
+                _trc_ << "got value " << value->id << " with key " << ptr->hash << " from " << value->getOwner()->getId();
 
-            std::weak_ptr<listen> weak = shared_from_this();
-            m_token = m_node->listen(m_hash, [=](const std::vector<std::shared_ptr<dht::Value>>& values)
+                auto peer = repo.fetch_identity(value->getOwner()->getId());
+                if (not match(peer))
+                    continue;
+
+                std::lock_guard<std::mutex> lock(ptr->mutex);
+                ptr->queue.emplace_back(value->id, host, peer);
+
+                boost::system::error_code ec;
+                ptr->timer.cancel(ec);
+            }
+            return true;
+        });
+
+        return op;
+    }
+};
+
+using acquire_ptr = std::shared_ptr<operation<reference>>;
+
+class acquire : public operation<reference>
+{
+    boost::asio::deadline_timer     timer;
+    std::shared_ptr<dht::DhtRunner> node;
+    dht::InfoHash                   hash;
+    std::future<size_t>             token;
+    reference                       data;
+
+protected:
+
+    acquire(boost::asio::io_service& io) noexcept(true)
+        : timer(io)
+    {
+    }
+
+public:
+
+    ~acquire() override
+    {
+        boost::system::error_code ec;
+        timer.cancel(ec);
+        node->cancelListen(hash, std::move(token));
+    }
+
+    reference wait(boost::asio::yield_context yield) noexcept(false) override
+    {
+        boost::system::error_code ec;
+        timer.async_wait(yield[ec]);
+
+        if (!ec)
+            throw boost::system::system_error(boost::asio::error::timed_out);
+        else if (ec != boost::asio::error::operation_aborted)
+            throw boost::system::system_error(ec);
+
+        return data;
+    }
+
+    static acquire_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject) noexcept(false)
+    {
+        _dbg_ << "acquire " << repo.app << "/" << subject << " for " << host << " from " << peer;
+
+        std::shared_ptr<acquire> op(new acquire(io));
+
+        op->node = repo.node();
+        op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + subject);
+        op->timer.expires_from_now(boost::posix_time::milliseconds(response_timeout));
+
+        auto from = repo.load_cert(peer);
+        auto to = repo.load_key(host);
+
+        _trc_ << "acquire value " << id << " with key " << op->hash;
+
+        std::weak_ptr<acquire> weak = op;
+        op->token = op->node->listen(op->hash, [weak, from, to](const std::vector<std::shared_ptr<dht::Value>>& values)
+        {
+            auto ptr = weak.lock();
+            if (not ptr)
+                return false;
+
+            for (auto& value : values)
             {
-                auto ptr = weak.lock();
-                if (not ptr)
-                    return false;
+                _trc_ << "got value " << value->id << " with key " << ptr->hash << " from " << value->getOwner()->getId();
 
-                for (auto& value : values)
+                if (value->getOwner()->getId() != from->getId())
+                    continue;
+
+                if (!from->getPublicKey().checkSignature(value->getToSign(), value->signature))
+                    continue;
+
+                auto message = dht::unpackMsg<std::string>(to->decrypt(value->data));
+                std::smatch match;
+                if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                 {
-                    _trc_ << "seen value " << value->id  << " on node " << m_node->getNodeId();
-                    if (id > value->id)
-                        continue;
-
-                    identity peer;
-                    if (!repo.check_peer(value->getOwner()->getId(), peer) || !match(peer))
-                        continue;
-
-                    std::lock_guard<std::mutex> lock(m_mutex);
-                    m_queue.emplace_back(value->id, host, peer);
+                    ptr->data = {
+                        utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match.str(1), match.str(2)),
+                        boost::lexical_cast<uint64_t>(match.str(3))
+                    };
 
                     boost::system::error_code ec;
-                    m_timer.cancel(ec);
-                }
-                return true;
-            });
-        }
+                    ptr->timer.cancel(ec);
 
-        invite wait(boost::asio::yield_context yield) noexcept(false) override
-        {
-            boost::system::error_code ec;
-            m_timer.async_wait(yield[ec]);
-
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_timer.expires_from_now(boost::posix_time::milliseconds(std::numeric_limits<int64_t>::max()));
-
-            if (ec != boost::asio::error::operation_aborted)
-                throw boost::system::system_error(ec);
-
-            if (m_queue.empty())
-                throw boost::system::system_error(boost::asio::error::broken_pipe);
-
-            auto res = m_queue.front();
-            m_queue.pop_front();
-
-            return res;
-        }
-    };
-
-    _dbg_ << "listen " << repo.app << "/invite on node " << repo.node()->getNodeId() << " for " << host;
-
-    std::shared_ptr<listen> op = std::make_shared<listen>(io);
-    op->start(repo, host, mask);
-    return op;
-}
-
-std::shared_ptr<operation<reference>> acquire(boost::asio::io_service& io, const repository& repo, uint64_t id, const identity& host, const identity& peer, const std::string& subject) noexcept(false)
-{
-    class acquire : public operation<reference>, public std::enable_shared_from_this<acquire>
-    {
-        boost::asio::deadline_timer     m_timer;
-        std::shared_ptr<dht::DhtRunner> m_node;
-        dht::InfoHash                   m_hash;
-        std::future<size_t>             m_token;
-        reference                       m_data;
-
-    public:
-
-        acquire(boost::asio::io_service& io) noexcept(true)
-            : m_timer(io)
-        {
-        }
-
-        ~acquire() override
-        {
-            boost::system::error_code ec;
-            m_timer.cancel(ec);
-            m_node->cancelListen(m_hash, std::move(m_token));
-        }
-
-        void start(const repository& repo, uint64_t id, const identity& host, const identity& peer, const std::string& subject) noexcept(false)
-        {
-            m_node = repo.node();
-            m_hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + subject);
-            m_timer.expires_from_now(boost::posix_time::milliseconds(response_timeout));
-
-            auto from = repo.load_cert(peer);
-            auto key = repo.load_key(host);
-
-            std::weak_ptr<acquire> weak = shared_from_this();
-            m_token = m_node->listen(m_hash, [=](const std::vector<std::shared_ptr<dht::Value>>& values)
-            {
-                auto ptr = weak.lock();
-                if (not ptr)
                     return false;
-
-                for (auto& value : values)
-                {
-                    _trc_ << "peek value " << value->id  << " on node " << repo.node()->getNodeId();
-                    if (value->getOwner()->getId() != from->getId())
-                        continue;
-
-                    if (!from->getPublicKey().checkSignature(value->getToSign(), value->signature))
-                        continue;
-
-                    auto message = dht::Value::unpack<std::string>(key->decrypt(value->data));
-                    std::smatch match;
-                    if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
-                    {
-                        m_data = {
-                            utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match.str(1), match.str(2)),
-                            boost::lexical_cast<uint64_t>(match.str(3))
-                        };
-
-                        boost::system::error_code ec;
-                        m_timer.cancel(ec);
-
-                        return false;
-                    }
                 }
-                return true;
-            }, dht::Value::IdFilter(id));
-        }
+            }
+            return true;
+        }, dht::Value::IdFilter(id));
 
-        reference wait(boost::asio::yield_context yield) noexcept(false) override
-        {
-            boost::system::error_code ec;
-            m_timer.async_wait(yield[ec]);
+        return op;
+    }
+};
 
-            if (!ec)
-                throw boost::system::system_error(boost::asio::error::timed_out);
-            else if (ec != boost::asio::error::operation_aborted)
-                throw boost::system::system_error(ec);
+using forward_ptr = std::shared_ptr<operation<void>>;
 
-            return m_data;
-        }
-    };
-
-    _dbg_ << "acquire " << repo.app << "/" << subject << " on node " << repo.node()->getNodeId() << " for " << host << " from " << peer << " with id " << id;
-
-    std::shared_ptr<acquire> op = std::make_shared<acquire>(io);
-    op->start(repo, id, host, peer, subject);
-    return op;
-}
-
-std::shared_ptr<operation<void>> forward(boost::asio::io_service& io, const repository& repo, uint64_t id, const identity& host, const identity& peer, const reference& gateway, const std::string& subject) noexcept(false)
+class forward : public operation<void>
 {
-    class forward : public operation<void>, public std::enable_shared_from_this<forward>
+    boost::asio::deadline_timer     timer;
+    std::shared_ptr<dht::DhtRunner> node;
+    dht::InfoHash                   hash;
+    uint64_t                        id;
+
+protected:
+
+    forward(boost::asio::io_service& io) noexcept(true)
+        : timer(io)
     {
-        boost::asio::deadline_timer     m_timer;
-        std::shared_ptr<dht::DhtRunner> m_node;
-        dht::InfoHash                   m_hash;
-        uint64_t                        m_id;
+    }
 
-    public:
+public:
 
-        forward(boost::asio::io_service& io) noexcept(true)
-            : m_timer(io)
+    ~forward() override
+    {
+        boost::system::error_code ec;
+        timer.cancel(ec);
+        node->cancelPut(hash, std::move(id));
+    }
+
+    void wait(boost::asio::yield_context yield) noexcept(false) override
+    {
+        boost::system::error_code ec;
+        timer.async_wait(yield[ec]);
+
+        if (!ec)
+            throw boost::system::system_error(boost::asio::error::timed_out);
+        else if (ec != boost::asio::error::operation_aborted)
+            throw boost::system::system_error(ec);
+
+        if (id == 0)
+            throw boost::system::system_error(boost::asio::error::broken_pipe);
+    }
+
+    static forward_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway) noexcept(false)
+    {
+        _dbg_ << "forward " << repo.app << "/" << subject << " for " << peer << " from " << host;
+
+        std::shared_ptr<forward> op(new forward(io));
+
+        auto to = repo.load_cert(peer);
+        auto from = repo.load_key(host);
+
+        op->node = repo.node();
+        op->hash = dht::InfoHash::get(to->getId().toString() + repo.app + subject);
+        op->timer.expires_from_now(boost::posix_time::milliseconds(hangup_timeout));
+
+        auto message = plexus::utils::format("PLEXUS 3.0 %s %u %llu", gateway.endpoint.address().to_string().c_str(), gateway.endpoint.port(), gateway.puzzle);
+        auto value = std::make_shared<dht::Value>(dht::ValueType::USER_DATA.id, to->getPublicKey().encrypt(dht::packMsg(message)), id);
+        value->sign(*from);
+
+        _trc_ << "forward value " << id << " with key " << op->hash << " from " << value->getOwner()->getId();
+
+        std::weak_ptr<forward> weak = op;
+        op->node->put(op->hash, value, [weak, id, value](bool ok)
         {
-        }
+            auto ptr = weak.lock();
+            if (not ptr)
+                return;
 
-        ~forward() override
-        {
+            _trc_ << (ok ? "sent" : "couldn't send") << " value " << id << " with key " << ptr->hash << " from " << value->getOwner()->getId();
+
+            ptr->id = ok ? id : 0;
             boost::system::error_code ec;
-            m_timer.cancel(ec);
-            m_node->cancelPut(m_hash, std::move(m_id));
-        }
+            ptr->timer.cancel(ec);
+        });
 
-        void start(const repository& repo, uint64_t id, const identity& host, const identity& peer, const reference& gateway, const std::string& subject) noexcept(false)
-        {
-            m_node = repo.node();
-            m_hash = dht::InfoHash::get(repo.load_cert(peer)->getId().toString() + repo.app + subject);
-            m_timer.expires_from_now(boost::posix_time::milliseconds(hangup_timeout));
-
-            auto message = plexus::utils::format("PLEXUS 3.0 %s %u %llu", gateway.endpoint.address().to_string().c_str(), gateway.endpoint.port(), gateway.puzzle);
-
-            dht::Value value(dht::ValueType::USER_DATA.id, repo.load_cert(peer)->getPublicKey().encrypt((uint8_t*)message.data(), message.length()), m_id);
-            value.sign(*repo.load_key(host));
-
-            std::weak_ptr<forward> weak = shared_from_this();
-            m_node->put(m_hash, std::move(value), [=](bool ok)
-            {
-                auto ptr = weak.lock();
-                if (not ptr)
-                    return;
-
-                _trc_ << (ok ? "sent" : "couldn't send") << " value " << m_id  << " by node " << repo.node()->getNodeId();
-
-                m_id = ok ? m_id : 0;
-                boost::system::error_code ec;
-                m_timer.cancel(ec);
-            });
-        }
-
-        void wait(boost::asio::yield_context yield) noexcept(false) override
-        {
-            boost::system::error_code ec;
-            m_timer.async_wait(yield[ec]);
-
-            if (!ec)
-                throw boost::system::system_error(boost::asio::error::timed_out);
-            else if (ec != boost::asio::error::operation_aborted)
-                throw boost::system::system_error(ec);
-
-            if (m_id == 0)
-                throw boost::system::system_error(boost::asio::error::broken_pipe);
-        }
-    };
-
-    _dbg_ << "forward " << repo.app << "/" << subject << " on node " << repo.node()->getNodeId() << " for " << host << " from " << peer << " with id " << id;
-
-    std::shared_ptr<forward> op = std::make_shared<forward>(io);
-    op->start(repo, id, host, peer, gateway, subject);
-
-    return op;
-}
+        return op;
+    }
+};
 
 class pipe_impl : public pipe
 {
@@ -426,7 +437,7 @@ public:
 
     reference pull_request(boost::asio::yield_context yield) noexcept(false) override
     {
-        auto op = opendht::acquire(m_io, m_repo, m_id, m_host, m_peer, invite_token);
+        auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
         auto faraway = op->wait(yield);
 
         _inf_ << "pulled request " << faraway;
@@ -435,7 +446,7 @@ public:
 
     reference pull_response(boost::asio::yield_context yield) noexcept(false) override
     {        
-        auto op = opendht::acquire(m_io, m_repo, m_id, m_host, m_peer, accept_token);
+        auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
         auto faraway = op->wait(yield);
 
         _inf_ << "pulled response " << faraway;
@@ -444,7 +455,7 @@ public:
 
     void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
-        auto op = opendht::forward(m_io, m_repo, m_id, m_host, m_peer, gateway, invite_token);
+        auto op = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, invite_token, gateway);
         op->wait(yield);
 
         _inf_ << "pushed request " << gateway;
@@ -452,7 +463,7 @@ public:
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
-        auto op = opendht::forward(m_io, m_repo, m_id, m_host, m_peer, gateway, accept_token);
+        auto op = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, accept_token, gateway);
         op->wait(yield);
 
         _inf_ << "pushed response " << gateway;
@@ -477,7 +488,7 @@ void spawn_accept(boost::asio::io_service& io, const opendht::context& ctx, cons
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
         opendht::repository repo(ctx);
-        auto op = opendht::listen(io, repo, host, peer);
+        auto op = opendht::listen::start(io, repo, host, peer);
         do
         {
             auto invite = op->wait(yield);
