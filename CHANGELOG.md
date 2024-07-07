@@ -1,5 +1,9 @@
 # Change Log
 
+## 3.1.0 (Aug 1, 2024)
+
+- The ability to use DHT as the rendezvous.
+
 ## 3.0.1 (May 31, 2024)
 
 - Build with default boost library.

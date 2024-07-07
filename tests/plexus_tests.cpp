@@ -29,7 +29,7 @@ namespace
             auto args = plexus::utils::getenv<std::string>("PLEXUS_MODULE_TEST_ARGS", "");
 
             std::smatch match;
-            if (std::regex_match(args, match, std::regex("^(.+):(.+),(.+):(.+),(.+),(.+),(.+):(.+),(.+)$")))
+            if (std::regex_match(args, match, std::regex("^emailer#(.+):(.+),(.+):(.+),(.+),(.+),(.+):(.+),(.+)$")))
             {
                 plexus::emailer mediator {
                     plexus::utils::parse_endpoint<plexus::tcp::endpoint>(match[1].str(), match[2].str()),
@@ -48,7 +48,29 @@ namespace
                 g_host.pin = "host";
                 g_peer.owner = mediator.login;
                 g_peer.pin = "peer";
+            }
+            else if (std::regex_match(args, match, std::regex("^dhtnode#(.+),(.+),(.+),(.+):(.+),(.+)$")))
+            {
+                plexus::dhtnode mediator {
+                    match[1].str(),
+                    boost::lexical_cast<uint16_t>(match[2].str()),
+                    boost::lexical_cast<uint32_t>(match[3].str())
+                };
 
+                g_conf.app = "plexus_test_app";
+                g_conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_test_app";
+                g_conf.stun = plexus::utils::parse_endpoint<plexus::udp::endpoint>(match[4].str(), match[5].str());
+                g_conf.hops = boost::lexical_cast<uint16_t>(match[6].str());
+                g_conf.mediator = mediator;
+
+                g_host.owner = "host@plexus";
+                g_host.pin = "host";
+                g_peer.owner = "peer@plexus";
+                g_peer.pin = "peer";
+            }
+
+            if (!g_conf.app.empty())
+            {
                 auto host_dir = g_conf.repo + "/" + g_host.owner + "/" + g_host.pin;
                 auto peer_dir = g_conf.repo + "/" + g_peer.owner + "/" + g_peer.pin;
 

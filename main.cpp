@@ -23,7 +23,7 @@ struct endpoint : public boost::asio::ip::basic_endpoint<proto>
 };
 
 constexpr char stun_server_default_port[] = "3478";
-constexpr char stun_client_default_port[] = "1974";
+constexpr char stun_client_default_port[] = "0";
 constexpr char smtp_server_default_port[] = "smtps";
 constexpr char imap_client_default_port[] = "imaps";
 
@@ -57,29 +57,29 @@ int main(int argc, char** argv)
         ("help", "produce help message")
         ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate connection")
         ("app-id", boost::program_options::value<std::string>()->required(), "identifier of the application")
-        ("app-repo", boost::program_options::value<std::string>()->default_value(""), "path to application repository")
+        ("app-repo", boost::program_options::value<std::string>()->default_value(""), "path to the application repository")
         ("host-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the host: <email/pin>")
         ("peer-info", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email/pin>")
-        ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of public stun server")
-        ("stun-client", boost::program_options::value<stun_client_endpoint>()->required(), "endpoint of local stun client")
-        ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net:4222"), "url of bootstrap DHT service")
-        ("dht-port", boost::program_options::value<uint16_t>()->default_value(4222), "local port to bind DHT node")
+        ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of the public stun server")
+        ("stun-client", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "endpoint to bind the stun client and the application being launched")
+        ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net:4222"), "url of the bootstrap DHT service")
+        ("dht-port", boost::program_options::value<uint16_t>()->default_value(4222), "local port to bind the DHT node")
         ("dht-network", boost::program_options::value<uint32_t>()->default_value(0), "DHT network id")
-        ("email-smtps", boost::program_options::value<smtp_server_endpoint>(), "smtps server used to send reference to the peer")
-        ("email-imaps", boost::program_options::value<imap_server_endpoint>(), "imaps server used to receive reference from the peer")
-        ("email-login", boost::program_options::value<std::string>(), "login of email account")
-        ("email-password", boost::program_options::value<std::string>(), "password of email account")
-        ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to X509 certificate of email client")
-        ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to Private Key of email client")
-        ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to email Certification Authority")
-        ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for punch packets")
+        ("email-smtps", boost::program_options::value<smtp_server_endpoint>(), "smtps server used for the email rendezvous")
+        ("email-imaps", boost::program_options::value<imap_server_endpoint>(), "imaps server used for the email rendezvous")
+        ("email-login", boost::program_options::value<std::string>(), "login of the email account")
+        ("email-password", boost::program_options::value<std::string>(), "password of the email account")
+        ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to the X509 certificate of the email client")
+        ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to the Private Key of the email client")
+        ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to the email Certification Authority")
+        ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for the punch packet")
         ("exec-command", boost::program_options::value<std::string>()->required(), "command executed after punching the NAT")
         ("exec-args", boost::program_options::value<std::string>()->default_value(""), "arguments for the command executed after punching the NAT, allowed wildcards: %innerip%, %innerport%, %outerip%, %outerport%, %peerip%, %peerport%, %secret%, %hostpin%, %peerpin%, %hostemail%, %peeremail%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for executable, the above wildcards are allowed")
         ("exec-log", boost::program_options::value<std::string>()->default_value(""), "exec log file, the above wildcards are allowed")
         ("log-level", boost::program_options::value<wormhole::log::severity>()->default_value(wormhole::log::info), "log level: <fatal|error|warning|info|debug|trace>")
         ("log-file", boost::program_options::value<std::string>()->default_value(""), "plexus log file, allowed %p (process id) wildcard")
-        ("config", boost::program_options::value<std::string>(), "path to INI-like configuration file");
+        ("config", boost::program_options::value<std::string>(), "path to the INI-like configuration file");
 
     boost::program_options::variables_map vm;
     try
@@ -94,7 +94,7 @@ int main(int argc, char** argv)
         auto count = vm.count("email-smtps") + vm.count("email-imaps") + vm.count("email-login") + vm.count("email-password");
         if(count > 0 && count != 4)
         {
-            std::cout << "to use email service for a rendezvous, specify at least 'email-smtps', 'email-imaps', 'email-login' and 'email-password' arguments" << std::endl;
+            std::cout << "to use email service for a rendezvous, specify at least the 'email-smtps', 'email-imaps', 'email-login' and 'email-password' arguments" << std::endl;
             return -1;
         }
 

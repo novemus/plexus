@@ -72,10 +72,19 @@ endpoint parse_endpoint(const std::string& url, const std::string& service)
     typename endpoint::protocol_type::resolver resolver(io);
 
     std::smatch match;
-    if (std::regex_search(url, match, std::regex("^(\\w+://)?([^/]+):(\\d+)?$")))
+    if (std::regex_search(url, match, std::regex("^(\\w+://)?\\[([a-zA-Z0-9:]+)\\]:(\\d+).*")))
         return *resolver.resolve(match[2].str(), match[3].str());
-    
-    if (std::regex_search(url, match, std::regex("^(\\w+)://([^/]+).*$")))
+
+    if (std::regex_search(url, match, std::regex("^(\\w+)://\\[([a-zA-Z0-9:]+)\\].*")))
+        return *resolver.resolve(match[2].str(), match[1].str());
+
+    if (std::regex_search(url, match, std::regex("^\\[([a-zA-Z0-9:]+)\\].*")))
+        return *resolver.resolve(match[1].str(), service);
+
+    if (std::regex_search(url, match, std::regex("^(\\w+://)?([\\w\\.]+):(\\d+).*")))
+        return *resolver.resolve(match[2].str(), match[3].str());
+
+    if (std::regex_search(url, match, std::regex("^(\\w+)://([\\w\\.]+).*")))
         return *resolver.resolve(match[2].str(), match[1].str());
 
     return *resolver.resolve(url, service);

@@ -1,3 +1,9 @@
+plexus (3.1-1+deb12u3) unstable; urgency=low
+
+  * - The ability to use DHT as the rendezvous.
+
+ -- Novemus Band <nineletters@mail.ru>  Thu, 1 Aug 2024 21:00:00 +0300
+
 plexus (3.0-2+deb12u3) unstable; urgency=low
 
   * Build with default boost library.

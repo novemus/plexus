@@ -1,41 +1,43 @@
 # README
 
-The [plexus](https://github.com/novemus/plexus) tool is designed to make the possibility of establishing a direct network connection between applications running on machines located behind *NAT*s. To do this `plexus` implements the well-known *UDP hole punching* technique using the *STUN*. An email service is used to exchange public addresses between app instances on the local and remote machines. For success, it is necessary that *NAT*s on both sides implement independent mapping policy of internal addresses to public ones. That is, the public address and port assigned by the *NAT* should not be changed when the destination address/port of the outgoing packet is changed, while the local address/port of the outgoing packet remains unchanged. In addition, you will need an accessible *STUN* server and email accounts for each side. It is possible to use one email account for both sides.
+The [plexus](https://github.com/novemus/plexus) tool is designed to make the possibility of establishing a direct network connection between applications running on machines located behind *NAT*s. To do this `plexus` implements the well-known *UDP hole punching* technique using the *STUN*. You can use a `DHT` network or `email` service as a rendezvous to exchange public addresses between local and remote app instances. For success, it is necessary that *NAT*s on both sides implement independent mapping policy of internal addresses to public ones. That is, the public address and port assigned by the *NAT* should not be changed when the destination address/port of the outgoing packet is changed, while the source address/port of the outgoing packet remains unchanged. In addition, you will need an accessible *STUN* server and email accounts for each side if you want to use `email` as the rendezvous. It is possible to use one email account for both sides.
 
 ## Build
 
 You can download [prebuild packages](https://github.com/novemus/plexus/releases) for Debian and Windows platforms.
 
-The project depends on `boost` and `openssl` libraries. Clone repository and run make command.
+The project depends on [boost](https://github.com/boostorg/boost), [openssl](https://github.com/openssl/openssl) and [opendht](https://github.com/savoirfairelinux/opendht) libraries. Clone the repository, then configure and build project.
 
 ```console
 $ cd ~
 $ git clone --recurse-submodules https://github.com/novemus/plexus.git
 $ cd ~/plexus
-$ cmake -B ./build [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
+$ [PKG_CONFIG_PATH=/path/to/opendht/pkgconfig] cmake -B ./build [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
 $ cmake --build ./build --target plexus [plexus_shared] [plexus_static] [plexus_ut]
 $ cmake --build ./build --target install
 ```
 
-To build libraries, specify the *plexus_static* and *plexus_shared* targets.
+To build the libraries, specify the *plexus_static* and *plexus_shared* targets.
 
 ## Using
 
-To run the example below you need to install *openvpn*. Launch following commands with your arguments on each machines. Script *exec.sh* will try to establish point-to-point *VPN* connection.
+Create an application repository and specify the path to the host directory according to the scheme `apprepo/owner@mailer.com/pin`. You must place there the X509 *cert.crt* certificate and the *private.key* key of the host. Likewise, make the directory for the peer and place there its *cert.crt* certificate. Make the same on the peer machine. The intermediate directory `owner@mailer.com` can be named as you want if you use the `DHT` rendezvous, but for the `email` case it must have the name of the appropriate email address. So for compatibility, it is recommended to always use the email address.
 
-Command for remote machine:
+To run the example below you need to install the *openvpn*. The *exec.sh* script will try to establish point-to-point *VPN* connection.
+
+Command for the accepting side:
 ```console
-$ plexus --accept --app-id=appname --email-smtps=smtp.mailer.com[:xxxx] --email-imaps=imap.mailer.com[:xxxx] --email-login=login --email-password=password --host-info=host@mailer.com/hostname --peer-info=peer@mailer.com/peername --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/tests/exec.sh
+$ plexus --app-id=appname --app-repo=/path/to/apprepo --accept --dht-bootstrap=bootstrap.jami.net:4222 --host-info=host@mailer.com/hostid --peer-info=peer@mailer.com/peerid --stun-server=stun.someserver.com[:xxxx] --exec-command=~/plexus/tests/exec.sh
 ```
 
-`--accept` key tells the app to cyclically accept initiations from other side. It must only be set for one side. If you want to accept several peers, create application repository and specify the path for each peer as `apprepo/peer@mailer.com/peername`. To use email encryption, you must place the X509 *cert.crt* peer certificates and, optionally, their CA *ca.crt* certificates in the appropriate folders. You must also make the same for the local host and additionally place its *private.key* key. The same must be done on every peer machine. Specify application repository with `--app-repo` argument.
-
-Some *NAT*s may drop mappings when receiving an incoming packet that does not meet the filtering policy. This package may be a punching package sent by `plexus` towards the peer. In this case, it is impossible to punch the *passage* between the machines. To avoid such situations, `plexus` sets a small *ttl* to the punching packet, by default 7. In general, this is enough for the packet to go beyond the host *NAT* to punch it, but not reach the peer *NAT* to not drop peer mapping. If necessary, you can set a more appropriate *ttl* using the `--punch-hops` argument, defining a suitable value by some routing utility. This only makes sense for the *accepting* side.
-
-Command for local machine:
+Command for the inviting side:
 ```console
-$ plexus --app-id=appname --email-smtps=smtp.mailer.com[:xxxx] --email-imaps=imap.mailer.com[:xxxx] --email-login=login --email-password=password --host-info=host@mailer.com/hostname --peer-info=peer@mailer.com/peername --stun-server=stun.someserver.com[:xxxx] --stun-client=xxx.xxx.xxx.xxx[:xxxx] --exec-command=~/plexus/tests/exec.sh
+$ plexus --app-id=appname --app-repo=/path/to/apprepo --dht-bootstrap=bootstrap.jami.net:4222 --host-info=host@mailer.com/hostid --peer-info=peer@mailer.com/peerid --stun-server=stun.someserver.com[:xxxx] --exec-command=~/plexus/tests/exec.sh
 ```
+
+The `--app-id` key determines the target application. The `--host-info` argument points to the local application identity and the `--peer-info` points to the remote one. The `--app-repo` key is used to specify the application repository. The `--accept` key tells the app to cyclically accept invitations from the remotes. It must only be set for one side. If you want to accept many peers you should just omit the `--peer-info` argument. In this case, every peer is contained in the repository will be accepted.
+
+Some *NAT*s may drop mapping when receiving an incoming packet that does not meet the filtering policy. This package may be a punching package sent by `plexus` towards the peer. In this case, it is impossible to punch the *passage* between the machines. To avoid such situations, `plexus` sets a small *ttl* to the punching packet, by default 7. In general, this is enough for the packet to go beyond the host *NAT* to punch it, but not to reach the peer *NAT* and not to drop its peer mapping. If necessary, you can set a more appropriate *ttl* using the `--punch-hops` argument, determining the suitable value by some routing utility. This only makes sense for the *accepting* side.
 
 As soon as both `plexus` instanses make the *passage* to each other the command specified by `--exec-command` will be started. You can pass your arguments to the executable by `--exec-args` argument with the following wildcards:
 
@@ -47,21 +49,21 @@ As soon as both `plexus` instanses make the *passage* to each other the command 
 
 `%outerport%` - port issued by the NAT
 
-`%peerip%` - public address of the peer received by email
+`%peerip%` - public address of the peer received by the rendezvous
 
-`%peerport%` - port of the peer received by email
+`%peerport%` - port of the peer received by the rendezvous
 
-`%hostpin%` - name of the host
+`%hostmail%` - owner of the host, first part of the `--host-info` argument
 
-`%peerpin%` - name of the peer
+`%peermail%` - owner of the peer, first part of the `--peer-info` argument
 
-`%hostmail%` - email of the host
+`%hostpin%` - id of the host, second part of the `--host-info` argument
 
-`%peermail%` - email of the peer
+`%peerpin%` - id of the peer, second part of the `--peer-info` argument
 
 `%secret%` - shared 64-bit key used for the handshake procedure
 
-To learn about additional parameters run tool with `--help` argument.
+To learn about additional parameters run the tool with the `--help` key.
 
 ## Extensions and Library
 
@@ -77,12 +79,12 @@ Local machine:
 --exec-command=wormhole --exec-args="--purpose=import --service=127.0.0.1:2222 --gateway=%innerip%:%innerport% --faraway=%peerip%:%peerport%" --exec-log=import.ssh.log
 ```
 
-Then connect to the remote *ssh* via the local port:
+Then connect to the remote *ssh* via the local mapping:
 ```console
 $ ssh -p 2222 127.0.0.1
 ```
 
-The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/plexus.h) header and provides the same functionality with additional UDP streaming capability, so you will need the [tubus](https://github.com/novemus/tubus) UDP library.
+The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/plexus.h) header and provides the same functionality with the additional UDP streaming capability, so you will need the [tubus](https://github.com/novemus/tubus) UDP library.
 
 ## Bugs and improvements
 

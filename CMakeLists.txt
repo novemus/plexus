@@ -1,9 +1,9 @@
 message("***** plexus *****")
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 
 project(plexus)
-project(${PROJECT_NAME} VERSION 3.0)
+project(${PROJECT_NAME} VERSION 3.1)
 
 add_subdirectory(wormhole)
 
@@ -23,6 +23,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     set(CMAKE_STATIC_LIBRARY_PREFIX "lib")
     set(CMAKE_SHARED_LIBRARY_PREFIX "lib")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
+    set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO RELEASE)
     add_definitions(
         -D_CRT_NO_VA_START_VALIDATION
         -D_CRT_SECURE_NO_WARNINGS
@@ -56,6 +57,8 @@ endif()
 
 string(REGEX REPLACE "[^/\\]+" ".." PLEXUS_INSTALL_CMAKEDIR_REVERSE ${PLEXUS_INSTALL_CMAKEDIR})
 
+include_directories(wormhole)
+
 set(Boost_USE_STATIC_LIBS ON)
 
 if(BUILD_TESTING)
@@ -70,7 +73,6 @@ message("* Boost Librariy Dirs: ${Boost_LIBRARY_DIRS}")
 message("* Boost Libraries: ${Boost_LIBRARIES}")
 
 include_directories(${Boost_INCLUDE_DIRS})
-include_directories(wormhole)
 link_directories(${Boost_LIBRARY_DIRS})
 
 find_package(OpenSSL REQUIRED)
@@ -79,17 +81,49 @@ message("* OpenSSL Version: ${OPENSSL_VERSION}")
 message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
-find_package(PkgConfig REQUIRED)
-# pkg_search_module(jsoncpp REQUIRED IMPORTED_TARGET jsoncpp)
-# pkg_search_module(nettle REQUIRED IMPORTED_TARGET nettle)
-# pkg_search_module(gnutls REQUIRED IMPORTED_TARGET gnutls)
-pkg_search_module(opendht REQUIRED IMPORTED_TARGET opendht)
-
 include_directories(${OPENSSL_INCLUDE_DIR})
 
+find_package(PkgConfig REQUIRED)
+
+pkg_search_module(opendht REQUIRED IMPORTED_TARGET opendht)
+message("* opendht Include Dir: ${opendht_INCLUDEDIR}")
+message("* opendht Lib Dir: ${opendht_LIBDIR}")
+include_directories(${opendht_INCLUDE_DIR})
+link_directories(${opendht_LIBDIR})
+
+pkg_search_module(JsonCpp REQUIRED IMPORTED_TARGET jsoncpp)
+message("* JsonCpp Include Dir: ${JsonCpp_INCLUDEDIR}")
+message("* JsonCpp Lib Dir: ${JsonCpp_LIBDIR}")
+include_directories(${JsonCpp_INCLUDE_DIR})
+link_directories(${JsonCpp_LIBDIR})
+
+pkg_search_module(libargon2 REQUIRED IMPORTED_TARGET libargon2)
+message("* libargon2 Include Dir: ${libargon2_INCLUDEDIR}")
+message("* libargon2 Lib Dir: ${libargon2_LIBDIR}")
+include_directories(${libargon2_INCLUDE_DIR})
+link_directories(${libargon2_LIBDIR})
+
+pkg_search_module(fmt REQUIRED IMPORTED_TARGET fmt)
+message("* fmt Include Dir: ${fmt_INCLUDEDIR}")
+message("* fmt Lib Dir: ${fmt_LIBDIR}")
+include_directories(${fmt_INCLUDE_DIR})
+link_directories(${fmt_LIBDIR})
+
+pkg_search_module(GnuTLS REQUIRED IMPORTED_TARGET gnutls)
+message("* GnuTLS Include Dir: ${GnuTLS_INCLUDEDIR}")
+message("* GnuTLS Lib Dir: ${GnuTLS_LIBDIR}")
+include_directories(${GnuTLS_INCLUDE_DIR})
+link_directories(${GnuTLS_LIBDIR})
+
+pkg_search_module(nettle REQUIRED IMPORTED_TARGET nettle)
+message("* nettle Include Dir: ${nettle_INCLUDEDIR}")
+message("* nettle Lib Dir: ${nettle_LIBDIR}")
+include_directories(${nettle_INCLUDE_DIR})
+link_directories(${nettle_LIBDIR})
+
 add_library(${PLEXUS_SHARED} SHARED utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp dht.cpp stun.cpp binder.cpp plexus.cpp)
-target_link_libraries(${PLEXUS_SHARED} ${WORMHOLE_SHARED} ${TUBUS_SHARED} OpenSSL::Crypto OpenSSL::SSL opendht gnutls nettle jsoncpp http_parser argon2)
-target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS)
+target_link_libraries(${PLEXUS_SHARED} PRIVATE ${TUBUS_SHARED} ${WORMHOLE_SHARED} Boost::coroutine OpenSSL::SSL OpenSSL::Crypto PkgConfig::opendht PkgConfig::fmt PkgConfig::libargon2 PkgConfig::GnuTLS PkgConfig::nettle PkgConfig::JsonCpp)
+target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS OPENDHT_STATIC)
 set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d" IMPORT_PREFIX "lib")
 set_target_properties(${PLEXUS_SHARED} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
@@ -98,15 +132,16 @@ set_target_properties(${PLEXUS_STATIC} PROPERTIES DEBUG_POSTFIX "d")
 set_target_properties(${PLEXUS_STATIC} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 add_executable(${PROJECT_NAME} main.cpp $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
-target_link_libraries(${PROJECT_NAME} ${TUBUS_STATIC} ${WORMHOLE_STATIC} OpenSSL::Crypto OpenSSL::SSL opendht gnutls nettle jsoncpp http_parser argon2)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${TUBUS_STATIC} ${WORMHOLE_STATIC} Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto PkgConfig::opendht PkgConfig::fmt PkgConfig::libargon2 PkgConfig::GnuTLS PkgConfig::nettle PkgConfig::JsonCpp)
+target_compile_definitions(${PROJECT_NAME} PRIVATE OPENDHT_STATIC)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fPIC -fvisibility=hidden")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
-    target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system Boost::coroutine Boost::program_options)
-    target_link_libraries(${PLEXUS_SHARED} Boost::system Boost::coroutine)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads Boost::system)
+    target_link_libraries(${PLEXUS_SHARED} PRIVATE Boost::system)
 endif()
 
 if(APPLE)
@@ -116,7 +151,7 @@ if(APPLE)
     cmake_policy(POP)
     get_filename_component(ICU_LIBDATA_DIR "${ICU_DATA_LIBRARY}" DIRECTORY)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}")
-    set_target_properties(${PLEXUS_SHARED} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}") 
+    set_target_properties(${PLEXUS_SHARED} PROPERTIES LINK_FLAGS "-L${ICU_LIBDATA_DIR}")
 endif()
 
 # install executable
@@ -159,11 +194,12 @@ if(BUILD_TESTING)
                                 tests/smime_tests.cpp
                                 tests/exec_tests.cpp
                                 tests/plexus_tests.cpp)
-    target_link_libraries(${PLEXUS_UT} ${PLEXUS_STATIC} ${WORMHOLE_STATIC} ${TUBUS_STATIC} OpenSSL::Crypto OpenSSL::SSL opendht gnutls nettle jsoncpp http_parser argon2)
+    target_link_libraries(${PLEXUS_UT} PRIVATE ${PLEXUS_STATIC} ${WORMHOLE_STATIC} ${TUBUS_STATIC} Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto PkgConfig::opendht PkgConfig::fmt PkgConfig::libargon2 PkgConfig::GnuTLS PkgConfig::nettle PkgConfig::JsonCpp)
+    target_compile_definitions(${PLEXUS_UT} PRIVATE OPENDHT_STATIC)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_link_libraries(${PLEXUS_UT} Threads::Threads Boost::system Boost::coroutine Boost::program_options Boost::unit_test_framework)
+        target_link_libraries(${PLEXUS_UT} PRIVATE Threads::Threads Boost::system)
     endif()
 
     if(APPLE)
