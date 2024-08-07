@@ -1,3 +1,9 @@
+plexus (3.1-2+deb12u3) unstable; urgency=low
+
+  * - Set default value to --exec-args argument.
+
+ -- Novemus Band <nineletters@mail.ru>  Thu, 8 Aug 2024 00:07:00 +0300
+
 plexus (3.1-1+deb12u3) unstable; urgency=low
 
   * - The ability to use DHT as the rendezvous.
