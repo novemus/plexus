@@ -85,7 +85,7 @@ include_directories(${OPENSSL_INCLUDE_DIR})
 
 find_package(PkgConfig REQUIRED)
 
-pkg_search_module(opendht REQUIRED IMPORTED_TARGET opendht)
+pkg_search_module(opendht REQUIRED IMPORTED_TARGET opendht>=3.2)
 message("* opendht Include Dir: ${opendht_INCLUDEDIR}")
 message("* opendht Lib Dir: ${opendht_LIBDIR}")
 include_directories(${opendht_INCLUDE_DIR})
@@ -123,7 +123,7 @@ link_directories(${nettle_LIBDIR})
 
 add_library(${PLEXUS_SHARED} SHARED utils.cpp exec.cpp smime.cpp udp.cpp tcp.cpp email.cpp dht.cpp stun.cpp binder.cpp plexus.cpp)
 target_link_libraries(${PLEXUS_SHARED} PRIVATE ${TUBUS_SHARED} ${WORMHOLE_SHARED} Boost::coroutine OpenSSL::SSL OpenSSL::Crypto PkgConfig::opendht PkgConfig::fmt PkgConfig::libargon2 PkgConfig::GnuTLS PkgConfig::nettle PkgConfig::JsonCpp)
-target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS OPENDHT_STATIC)
+target_compile_definitions(${PLEXUS_SHARED} PRIVATE PLEXUS_EXPORTS)
 set_target_properties(${PLEXUS_SHARED} PROPERTIES DEBUG_POSTFIX "d" IMPORT_PREFIX "lib")
 set_target_properties(${PLEXUS_SHARED} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
@@ -133,7 +133,6 @@ set_target_properties(${PLEXUS_STATIC} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 add_executable(${PROJECT_NAME} main.cpp $<TARGET_OBJECTS:${PLEXUS_SHARED}>)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${TUBUS_STATIC} ${WORMHOLE_STATIC} Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto PkgConfig::opendht PkgConfig::fmt PkgConfig::libargon2 PkgConfig::GnuTLS PkgConfig::nettle PkgConfig::JsonCpp)
-target_compile_definitions(${PROJECT_NAME} PRIVATE OPENDHT_STATIC)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -195,7 +194,6 @@ if(BUILD_TESTING)
                                 tests/exec_tests.cpp
                                 tests/plexus_tests.cpp)
     target_link_libraries(${PLEXUS_UT} PRIVATE ${PLEXUS_STATIC} ${WORMHOLE_STATIC} ${TUBUS_STATIC} Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto PkgConfig::opendht PkgConfig::fmt PkgConfig::libargon2 PkgConfig::GnuTLS PkgConfig::nettle PkgConfig::JsonCpp)
-    target_compile_definitions(${PLEXUS_UT} PRIVATE OPENDHT_STATIC)
     set_target_properties(${PLEXUS_UT} PROPERTIES DEBUG_POSTFIX "d")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
