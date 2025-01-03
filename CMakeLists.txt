@@ -171,7 +171,7 @@ include(CMakePackageConfigHelpers)
 
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/plexus-config-version.cmake"
-    VERSION "${CMAKE_PROJECT_VERSION}"
+    VERSION "${${PROJECT_NAME}_VERSION}"
     COMPATIBILITY AnyNewerVersion)
 
 install(FILES ${HEADERS} DESTINATION ${PLEXUS_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
