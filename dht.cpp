@@ -89,28 +89,54 @@ public:
             }
         }
 
-        static std::map<std::string, std::weak_ptr<dht::DhtRunner>> s_nodes;
+        static std::map<uint64_t, std::shared_ptr<dht::DhtRunner>> s_nodes;
         static std::mutex s_mutex;
 
         std::lock_guard<std::mutex> lock(s_mutex);
 
-        auto key = bootstrap + std::to_string(port) + std::to_string(network);
+        auto key = uint64_t(port) << 32 | network;
 
         auto iter = s_nodes.find(key);
         if (iter != s_nodes.end())
-        {
-            m_node = iter->second.lock();
-        }
+            m_node = iter->second;
 
         if (!m_node)
         {
             m_node = std::make_shared<dht::DhtRunner>();
             m_node->run(port, {}, true, network);
-            m_node->bootstrap(bootstrap);
-            
-            _dbg_ << "run dht: node=" << m_node->getNodeId() << " port=" << port << " bootstrap=" << bootstrap << " network=" << network;
 
+            _dbg_ << "startup dht: node=" << m_node->getNodeId() << " port=" << port << " bootstrap=" << bootstrap << " network=" << network;
+
+            m_node->bootstrap(bootstrap);
             s_nodes.emplace(key, m_node);
+        }
+        else
+        {
+            m_node->bootstrap(bootstrap);
+            _dbg_ << "refresh dht: node=" << m_node->getNodeId() << " bootstrap=" << bootstrap;
+        }
+
+        try
+        {
+            iter = s_nodes.begin();
+            while (iter != s_nodes.end())
+            {
+                if (iter->second.use_count() == 1)
+                {
+                    _dbg_ << "shutdown dht: node=" << m_node->getNodeId();
+
+                    iter->second->shutdown({}, true);
+                    iter->second->join();
+
+                    iter = s_nodes.erase(iter);
+                }
+                else
+                    ++iter;
+            }
+        }
+        catch (const std::exception& ex)
+        {
+            _err_ << ex.what();
         }
     }
 
