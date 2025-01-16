@@ -68,7 +68,7 @@ void spawn_accept(boost::asio::io_service& io, const options& config, const iden
         auto peer = pipe->peer();
         auto host = pipe->host();
 
-        _inf_ << "accepting " << peer << " for " << host;
+        _inf_ << "accepting " << peer << " by " << host << " for " << config.app;
 
         try
         {
@@ -88,7 +88,7 @@ void spawn_accept(boost::asio::io_service& io, const options& config, const iden
         }
         catch (const std::exception& e)
         {
-            _err_ << "accepting " << peer << " for " << host << " failed: " << e.what();
+            _err_ << "accepting " << peer << " by " << host << " for " << config.app << " failed: " << e.what();
 
             if (notify)
                 notify(host, peer, e.what());
@@ -107,7 +107,7 @@ void spawn_invite(boost::asio::io_service& io, const options& config, const iden
         auto peer = pipe->peer();
         auto host = pipe->host();
 
-        _inf_ << "inviting " << peer << " for " << host;
+        _inf_ << "inviting " << peer << " by " << host << " for " << config.app;
 
         try
         {
@@ -127,7 +127,7 @@ void spawn_invite(boost::asio::io_service& io, const options& config, const iden
         }
         catch (const std::exception& e)
         {
-            _err_ << "inviting " << peer << " for " << host << " failed: " << e.what();
+            _err_ << "inviting " << peer << " by " << host << " for " << config.app << " failed: " << e.what();
 
             if (notify)
                 notify(pipe->host(), pipe->peer(), e.what());
@@ -151,7 +151,7 @@ void spawn_accept(boost::asio::io_service& io, const options& config, const iden
 
         if (ec)
         {
-            _err_ << "open socket " << bind << " failed: " << ec.message();
+            _err_ << "can't open " << bind << " socket: " << ec.message();
 
             if (notify)
                 notify(host, peer, ec.message());
@@ -186,7 +186,7 @@ void spawn_invite(boost::asio::io_service& io, const options& config, const iden
 
         if (ec)
         {
-            _err_ << "open socket " << bind << " failed: " << ec.message();
+            _err_ << "can't open " << bind << " socket: " << ec.message();
 
             if (notify)
                 notify(host, peer, ec.message());

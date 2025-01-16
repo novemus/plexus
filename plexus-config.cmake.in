@@ -8,6 +8,7 @@ unset(CMAKE_THREAD_PREFER_PTHREAD)
 
 get_filename_component(plexus_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/@PLEXUS_INSTALL_CMAKEDIR_REVERSE@/@PLEXUS_INSTALL_INCLUDEDIR@" ABSOLUTE)
 get_filename_component(plexus_LIBRARY_DIR "${CMAKE_CURRENT_LIST_DIR}/@PLEXUS_INSTALL_CMAKEDIR_REVERSE@/@PLEXUS_INSTALL_LIBDIR@" ABSOLUTE)
+get_filename_component(plexus_BINARY_DIR "${CMAKE_CURRENT_LIST_DIR}/@PLEXUS_INSTALL_CMAKEDIR_REVERSE@/@PLEXUS_INSTALL_BINDIR@" ABSOLUTE)
 
 if (plexus_USE_SHARED_LIB)
     add_library(plexus SHARED IMPORTED)
@@ -19,6 +20,12 @@ if(CMAKE_BUILD_TYPE MATCHES "Debug")
     set(_bt_postfix "d")
 else()
     set(_bt_postfix "")
+endif()
+
+if(WIN32)
+    find_file(plexus_BIN plexus${_bt_postfix}.exe PATHS "${plexus_BINARY_DIR}" NO_DEFAULT_PATH)
+else()
+    find_file(plexus_BIN plexus${_bt_postfix} PATHS "${plexus_BINARY_DIR}" NO_DEFAULT_PATH)
 endif()
 
 if(WIN32 AND plexus_USE_SHARED_LIB)
