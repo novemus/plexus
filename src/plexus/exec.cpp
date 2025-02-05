@@ -8,8 +8,8 @@
  * 
  */
 
-#include "utils.h"
-#include <logger.h>
+#include <plexus/utils.h>
+#include <wormhole/logger.h>
 
 #ifdef _WIN32
 

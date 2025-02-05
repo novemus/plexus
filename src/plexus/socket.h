@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <logger.h>
+#include <wormhole/logger.h>
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
 #include <boost/asio/error.hpp>

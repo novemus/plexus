@@ -16,7 +16,7 @@
 #include <boost/asio/spawn.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/test/unit_test.hpp>
-#include "../network.h"
+#include <plexus/network.h>
 
 namespace {
 

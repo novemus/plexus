@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "plexus.h"
-#include "network.h"
+#include <plexus/plexus.h>
+#include <plexus/network.h>
 #include <string>
 #include <filesystem>
 #include <boost/asio.hpp>

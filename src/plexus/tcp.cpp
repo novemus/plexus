@@ -8,7 +8,7 @@
  * 
  */
 
-#include "network.h"
+#include <plexus/network.h>
 #include <boost/asio/ssl.hpp>
 
 namespace plexus { namespace network {

@@ -6,18 +6,16 @@ The [plexus](https://github.com/novemus/plexus) tool is designed to make the pos
 
 You can download [prebuild packages](https://github.com/novemus/plexus/releases) for Debian and Windows platforms.
 
-The project depends on [boost](https://github.com/boostorg/boost), [openssl](https://github.com/openssl/openssl) and [opendht](https://github.com/savoirfairelinux/opendht) libraries. Clone the repository, then configure and build project.
+The project depends on [boost](https://github.com/boostorg/boost), [openssl](https://github.com/openssl/openssl), [opendht](https://github.com/savoirfairelinux/opendht), [wormhole](https://github.com/novemus/wormhole) and [tubus](https://github.com/novemus/tubus) libraries. Clone the repository, then configure and build project.
 
 ```console
 $ cd ~
 $ git clone --recurse-submodules https://github.com/novemus/plexus.git
 $ cd ~/plexus
-$ [PKG_CONFIG_PATH=/path/to/opendht/pkgconfig] cmake -B ./build [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
-$ cmake --build ./build --target plexus [plexus_shared] [plexus_static] [plexus_ut]
+$ [PKG_CONFIG_PATH=/path/to/opendht/pkgconfig] [CMAKE_PREFIX_PATH=/path/to/wormhole/cmake/config:/path/to/tubus/cmake/config] cmake -B ./build -DCMAKE_BUILD_TYPE=Release [-DBUILD_SHARED_LIBS=ON] [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
+$ cmake --build ./build --target all
 $ cmake --build ./build --target install
 ```
-
-To build the libraries, specify the *plexus_static* and *plexus_shared* targets.
 
 ## Using
 

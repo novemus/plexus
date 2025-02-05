@@ -1,3 +1,0 @@
-opt/plexus/*/include
-opt/plexus/*/lib/*/*.a
-opt/plexus/*/lib/*/cmake/*.cmake

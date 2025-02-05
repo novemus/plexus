@@ -8,10 +8,10 @@
  * 
  */
 
-#include "plexus.h"
-#include "features.h"
-#include "utils.h"
-#include <logger.h>
+#include <plexus/plexus.h>
+#include <plexus/features.h>
+#include <plexus/utils.h>
+#include <wormhole/logger.h>
 
 namespace plexus {
 

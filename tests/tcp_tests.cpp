@@ -14,7 +14,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/system/system_error.hpp>
 #include <boost/test/unit_test.hpp>
-#include "../network.h"
+#include <plexus/network.h>
 
 class tcp_echo_session : public std::enable_shared_from_this<tcp_echo_session>
 {

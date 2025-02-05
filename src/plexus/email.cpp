@@ -8,11 +8,11 @@
  * 
  */
 
-#include "features.h"
-#include "network.h"
-#include "utils.h"
+#include <plexus/features.h>
+#include <plexus/network.h>
+#include <plexus/utils.h>
+#include <wormhole/logger.h>
 #include <boost/asio/spawn.hpp>
-#include <logger.h>
 #include <string>
 #include <iostream>
 #include <memory>

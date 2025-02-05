@@ -11,7 +11,7 @@
 #define BOOST_TEST_MODULE plexus_tests
 
 #include <boost/test/unit_test.hpp>
-#include "../utils.h"
+#include <plexus/utils.h>
 
 BOOST_AUTO_TEST_CASE(hexadecimal)
 {

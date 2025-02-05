@@ -12,7 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include "../features.h"
+#include <plexus/features.h>
 
 BOOST_AUTO_TEST_CASE(exec)
 {

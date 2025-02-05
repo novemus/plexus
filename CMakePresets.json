@@ -1,0 +1,501 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "config-base",
+            "hidden": true,
+            "displayName": "Basic Config",
+            "description": "Basic Configure Preset",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "PLEXUS_SKIP_TEST_RULES": "OFF",
+                "PLEXUS_SKIP_INSTALL_RULES": "OFF",
+                "PLEXUS_SKIP_PACKAGE_RULES": "OFF",
+                "Boost_USE_STATIC_LIBS": "ON",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install"
+            }
+        },
+        {
+            "name": "windows-shared",
+            "displayName": "Shared Config",
+            "description": "Configure shared build context",
+            "binaryDir": "${sourceDir}/build/shared",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-static",
+            "displayName": "Static Config",
+            "description": "Configure static build context",
+            "binaryDir": "${sourceDir}/build/static",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "linux-shared-debug",
+            "displayName": "Shared Debug Config",
+            "description": "Configure shared Debug build context",
+            "binaryDir": "${sourceDir}/build/shared-debug",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_SHARED_LIBS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-shared-release",
+            "displayName": "Shared Release Config",
+            "description": "Configure shared Release build context",
+            "binaryDir": "${sourceDir}/build/shared-release",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BUILD_SHARED_LIBS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-static-debug",
+            "displayName": "Static Debug Config",
+            "description": "Configure static Debug build context",
+            "binaryDir": "${sourceDir}/build/static-debug",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_SHARED_LIBS": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-static-release",
+            "displayName": "Static Release Config",
+            "description": "Configure static Release build context",
+            "binaryDir": "${sourceDir}/build/static-release",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BUILD_SHARED_LIBS": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "windows-shared-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "windows-shared"
+        },
+        {
+            "name": "windows-shared-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "windows-shared"
+        },
+        {
+            "name": "windows-static-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "windows-static"
+        },
+        {
+            "name": "windows-static-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "windows-static"
+        },
+        {
+            "name": "linux-shared-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "linux-shared-debug"
+        },
+        {
+            "name": "linux-static-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "linux-static-debug"
+        },
+        {
+            "name": "linux-shared-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "linux-shared-release"
+        },
+        {
+            "name": "linux-static-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "linux-static-release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "linux-static-release",
+            "configurePreset": "linux-static-release",
+            "displayName": "All",
+            "description": "All project tests",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "linux-static-debug",
+            "configurePreset": "linux-static-debug",
+            "displayName": "All",
+            "description": "All project tests",
+            "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "linux-shared-release",
+            "configurePreset": "linux-shared-release",
+            "displayName": "All",
+            "description": "All project tests",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "linux-shared-debug",
+            "configurePreset": "linux-shared-debug",
+            "displayName": "All",
+            "description": "All project tests",
+            "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "windows-static-release",
+            "configurePreset": "windows-static",
+            "displayName": "All",
+            "description": "All project tests",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "windows-static-debug",
+            "configurePreset": "windows-static",
+            "displayName": "All",
+            "description": "All project tests",
+            "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "windows-shared-release",
+            "configurePreset": "windows-shared",
+            "displayName": "All",
+            "description": "All project tests",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "windows-shared-debug",
+            "configurePreset": "windows-shared",
+            "displayName": "All",
+            "description": "All project tests",
+            "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        }
+    ],
+    "packagePresets": [
+        {
+            "name": "debian-package-bin",
+            "displayName": "plexus (DEB)",
+            "description": "Debian binary package",
+            "configurePreset": "linux-static-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "generators": [
+                "DEB"
+            ],
+            "configurations": [
+                "Release",
+                "Debug"
+            ],
+            "variables": {
+                "CPACK_PACKAGING_INSTALL_PREFIX": "/opt",
+                "CPACK_DEBIAN_PACKAGE_RELEASE": "1",
+                "CPACK_DEBIAN_PACKAGE_MAINTAINER": "Community",
+                "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "The tool for connecting network applications via NAT",
+                "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' utility provides the ability to connect network\napplications based on UDP protocol via NAT.",
+                "CPACK_COMPONENTS_ALL": "binary_files;bin_doc_files",
+                "CPACK_DEBIAN_FILE_NAME": "DEB-DEFAULT",
+                "CPACK_DEBIAN_PACKAGE_SHLIBDEPS": "ON",
+                "CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS": "ON",
+                "CPACK_DEBIAN_DEBUGINFO_PACKAGE": "ON",
+                "CPACK_DEB_COMPONENT_INSTALL": "ON",
+                "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON"
+            },
+            "packageName": "plexus",
+            "packageDirectory": ".."
+        },
+        {
+            "name": "debian-package-lib",
+            "displayName": "libplexus (DEB)",
+            "description": "Debian library package",
+            "configurePreset": "linux-shared-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "generators": [
+                "DEB"
+            ],
+            "configurations": [
+                "Release",
+                "Debug"
+            ],
+            "variables": {
+                "CPACK_PACKAGING_INSTALL_PREFIX": "/opt",
+                "CPACK_DEBIAN_PACKAGE_RELEASE": "1",
+                "CPACK_DEBIAN_PACKAGE_MAINTAINER": "Community",
+                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libtubus (>= 1.2), libwormhole (>= 1.2)",
+                "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "The 'plexus' library runtime",
+                "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol via NAT.",
+                "CPACK_COMPONENTS_ALL": "library_files;lib_doc_files",
+                "CPACK_DEBIAN_FILE_NAME": "DEB-DEFAULT",
+                "CPACK_DEBIAN_PACKAGE_SHLIBDEPS": "ON",
+                "CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS": "ON",
+                "CPACK_DEBIAN_DEBUGINFO_PACKAGE": "ON",
+                "CPACK_DEB_COMPONENT_INSTALL": "ON",
+                "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON"
+            },
+            "packageName": "libplexus",
+            "packageDirectory": ".."
+        },
+        {
+            "name": "debian-package-dev",
+            "displayName": "libplexus-dev (DEB)",
+            "description": "Debian development package",
+            "configurePreset": "linux-static-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "generators": [
+                "DEB"
+            ],
+            "configurations": [
+                "Release",
+                "Debug"
+            ],
+            "variables": {
+                "CPACK_PACKAGING_INSTALL_PREFIX": "/opt",
+                "CPACK_DEBIAN_PACKAGE_RELEASE": "1",
+                "CPACK_DEBIAN_PACKAGE_MAINTAINER": "Community",
+                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.2), libwormhole-dev (>= 1.2), libplexus (= 3.1.2-1)",
+                "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "Development files of the 'plexus' library",
+                "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol via NAT.",
+                "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_doc_files",
+                "CPACK_DEBIAN_FILE_NAME": "DEB-DEFAULT",
+                "CPACK_DEBIAN_PACKAGE_SHLIBDEPS": "ON",
+                "CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS": "ON",
+                "CPACK_DEBIAN_DEBUGINFO_PACKAGE": "ON",
+                "CPACK_DEB_COMPONENT_INSTALL": "ON",
+                "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON"
+            },
+            "packageName": "libplexus-dev",
+            "packageDirectory": ".."
+        },
+        {
+            "name": "windows-archive",
+            "displayName": "plexus (ZIP)",
+            "description": "Portable ZIP archive",
+            "configurePreset": "windows-static",
+            "generators": [
+                "ZIP"
+            ],
+            "configurations": [
+                "Release",
+                "Debug"
+            ],
+            "variables": {
+                "CPACK_COMPONENTS_ALL": "runtime_files;library_files;archive_files;header_files;cmake_files;lib_doc_files;pdb_files",
+                "CPACK_ARCHIVE_COMPONENT_INSTALL": "ON",
+                "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON"
+            },
+            "packageName": "plexus",
+            "packageDirectory": ".."
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "windows-archive",
+            "displayName": "Archive (ZIP)",
+            "description": "Portable ZIP archive",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "windows-static"
+                },
+                {
+                    "type": "build",
+                    "name": "windows-static-release"
+                },
+                {
+                    "type": "build",
+                    "name": "windows-static-debug"
+                },
+                {
+                    "type": "test",
+                    "name": "windows-static-release"
+                },
+                {
+                    "type": "package",
+                    "name": "windows-archive"
+                }
+            ]
+        },
+        {
+            "name": "debian-package-bin",
+            "displayName": "Package (Bin)",
+            "description": "Debian util package",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "linux-static-release"
+                },
+                {
+                    "type": "build",
+                    "name": "linux-static-release"
+                },
+                {
+                    "type": "test",
+                    "name": "linux-static-release"
+                },
+                {
+                    "type": "package",
+                    "name": "debian-package-bin"
+                }
+            ]
+        },
+        {
+            "name": "debian-package-lib",
+            "displayName": "Package (Lib)",
+            "description": "Debian library package",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "linux-shared-release"
+                },
+                {
+                    "type": "build",
+                    "name": "linux-shared-release"
+                },
+                {
+                    "type": "test",
+                    "name": "linux-shared-release"
+                },
+                {
+                    "type": "package",
+                    "name": "debian-package-lib"
+                }
+            ]
+        },
+        {
+            "name": "debian-package-dev",
+            "displayName": "Package (Dev)",
+            "description": "Debian development package",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "linux-static-release"
+                },
+                {
+                    "type": "build",
+                    "name": "linux-static-release"
+                },
+                {
+                    "type": "test",
+                    "name": "linux-static-release"
+                },
+                {
+                    "type": "package",
+                    "name": "debian-package-dev"
+                }
+            ]
+        }
+    ]
+}

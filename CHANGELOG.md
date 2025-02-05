@@ -1,5 +1,9 @@
 # Change Log
 
+## 3.1.2 (Feb 5, 2025)
+
+- CMake project structure reform.
+
 ## 3.1.1 (Nov 17, 2024)
 
 - Link with opendht version 3.2 to stabilize the DHT rendezvous

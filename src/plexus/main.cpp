@@ -8,10 +8,10 @@
  * 
  */
 
-#include "features.h"
-#include "plexus.h"
-#include "utils.h"
-#include <logger.h>
+#include <plexus/features.h>
+#include <plexus/plexus.h>
+#include <plexus/utils.h>
+#include <wormhole/logger.h>
 #include <regex>
 #include <boost/program_options.hpp>
 

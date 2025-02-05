@@ -8,7 +8,7 @@
  * 
  */
 
-#include "network.h"
+#include <plexus/network.h>
 
 namespace plexus { namespace network {
 

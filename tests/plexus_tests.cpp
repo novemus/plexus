@@ -8,11 +8,11 @@
  * 
  */
 
-#include "../utils.h"
-#include "../plexus.h"
 #include <filesystem>
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
+#include <plexus/utils.h>
+#include <plexus/plexus.h>
 
 namespace
 {

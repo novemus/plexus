@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <logger.h>
+#include <wormhole/logger.h>
 #include <cstdlib>
 #include <string>
 #include <iostream>

@@ -8,11 +8,11 @@
  * 
  */
 
-#include "../network.h"
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
 #include <boost/system/system_error.hpp>
 #include <boost/test/unit_test.hpp>
+#include <plexus/network.h>
 
 BOOST_AUTO_TEST_CASE(sync_udp_exchange)
 {

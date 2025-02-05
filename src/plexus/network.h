@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "socket.h"
+#include <plexus/socket.h>
 #include <string>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
