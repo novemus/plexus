@@ -44,15 +44,15 @@ class repository : public context
         std::vector<uint8_t> buffer;
         std::ifstream file(path, std::ios::binary);
         if (!file)
-            throw std::runtime_error("can't open file: " + path);
+            throw std::runtime_error("can't open file (" + path + ")");
         file.seekg(0, std::ios::end);
         auto size = file.tellg();
         if (size == 0)
-            throw std::runtime_error("file is empty: " + path);
+            throw std::runtime_error("file is empty (" + path + ")");
         buffer.resize(size);
         file.seekg(0, std::ios::beg);
         if (!file.read((char*)buffer.data(), size))
-            throw std::runtime_error("can't read file: " + path);
+            throw std::runtime_error("can't read file (" + path + ")");
         return buffer;
     }
 
@@ -100,20 +100,27 @@ public:
         if (iter != s_nodes.end())
             m_node = iter->second;
 
-        if (!m_node)
+        try
         {
-            m_node = std::make_shared<dht::DhtRunner>();
-            m_node->run(port, {}, true, network);
+            if (!m_node)
+            {
+                m_node = std::make_shared<dht::DhtRunner>();
+                m_node->run(port, {}, true, network);
 
-            _dbg_ << "startup dht: node=" << m_node->getNodeId() << " port=" << port << " bootstrap=" << bootstrap << " network=" << network;
+                _dbg_ << "startup dht: node=" << m_node->getNodeId() << " port=" << port << " bootstrap=" << bootstrap << " network=" << network;
 
-            m_node->bootstrap(bootstrap);
-            s_nodes.emplace(key, m_node);
+                m_node->bootstrap(bootstrap);
+                s_nodes.emplace(key, m_node);
+            }
+            else
+            {
+                m_node->bootstrap(bootstrap);
+                _dbg_ << "refresh dht: node=" << m_node->getNodeId() << " bootstrap=" << bootstrap;
+            }
         }
-        else
+        catch (const std::exception& ex)
         {
-            m_node->bootstrap(bootstrap);
-            _dbg_ << "refresh dht: node=" << m_node->getNodeId() << " bootstrap=" << bootstrap;
+            throw plexus::context_error("dht", ex.what());
         }
 
         try
@@ -145,17 +152,38 @@ public:
 
     std::shared_ptr<dht::crypto::PrivateKey> load_key(const identity& info) const noexcept(false)
     {
-        return std::make_shared<dht::crypto::PrivateKey>(dht::crypto::PrivateKey(load_file(get_key(info))));
+        try
+        {
+            return std::make_shared<dht::crypto::PrivateKey>(dht::crypto::PrivateKey(load_file(get_key(info))));
+        }
+        catch (const std::exception& ex)
+        {
+            throw plexus::context_error("dht", ex.what());
+        }
     }
 
     std::shared_ptr<dht::crypto::Certificate> load_cert(const identity& info) const noexcept(false) 
     {
-        return std::make_shared<dht::crypto::Certificate>(load_file(get_cert(info)));
+        try
+        {
+            return std::make_shared<dht::crypto::Certificate>(load_file(get_cert(info)));
+        }
+        catch (const std::exception& ex)
+        {
+            throw plexus::context_error("dht", ex.what());
+        }
     }
 
     std::shared_ptr<dht::crypto::Certificate> load_ca(const identity& info) const noexcept(false) 
     {
-        return std::make_shared<dht::crypto::Certificate>(load_file(get_ca(info)));
+        try
+        {
+            return std::make_shared<dht::crypto::Certificate>(load_file(get_ca(info)));
+        }
+        catch (const std::exception& ex)
+        {
+            throw plexus::context_error("dht", ex.what());
+        }
     }
 
     identity fetch_identity(const dht::InfoHash& id) const noexcept(true) 
@@ -213,10 +241,10 @@ public:
         timer.expires_from_now(boost::posix_time::time_duration(boost::posix_time::pos_infin));
 
         if (ec != boost::asio::error::operation_aborted)
-            throw boost::system::system_error(ec);
+            throw plexus::context_error("dht", ec.message());
 
         if (queue.empty())
-            throw boost::system::system_error(boost::asio::error::broken_pipe);
+            throw plexus::context_error("dht", "operation aborted");
 
         auto res = queue.front();
         queue.pop_front();
@@ -231,7 +259,7 @@ public:
         std::shared_ptr<listen> op(new listen(io));
         op->node = repo.node();
         op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + invite_token);
-        
+
         auto match = [peer](const identity& info)
         {
             return !info.owner.empty() && !info.pin.empty() && (peer.owner.empty() || peer.owner == info.owner) && (peer.pin.empty() || peer.pin == info.pin);
@@ -305,9 +333,9 @@ public:
         timer.async_wait(yield[ec]);
 
         if (!ec)
-            throw boost::system::system_error(boost::asio::error::timed_out);
+            throw plexus::timeout_error("dht");
         else if (ec != boost::asio::error::operation_aborted)
-            throw boost::system::system_error(ec);
+            throw plexus::context_error("dht", ec);
 
         return data;
     }
@@ -397,12 +425,12 @@ public:
         timer.async_wait(yield[ec]);
 
         if (!ec)
-            throw boost::system::system_error(boost::asio::error::timed_out);
+            throw plexus::timeout_error("dht");
         else if (ec != boost::asio::error::operation_aborted)
-            throw boost::system::system_error(ec);
+            throw plexus::context_error("dht", ec);
 
         if (id == 0)
-            throw boost::system::system_error(boost::asio::error::broken_pipe);
+            throw plexus::context_error("dht", "operation aborted");
     }
 
     static forward_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway) noexcept(false)

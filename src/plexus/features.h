@@ -12,6 +12,7 @@
 
 #include <plexus/plexus.h>
 #include <plexus/network.h>
+#include <plexus/utils.h>
 #include <string>
 #include <filesystem>
 #include <boost/asio.hpp>
@@ -21,11 +22,23 @@
 
 namespace plexus {
 
-struct timeout_error : public std::runtime_error { timeout_error() : std::runtime_error("timeout error") {} };
-struct handshake_error : public std::runtime_error { handshake_error() : std::runtime_error("handshake error") {} };
-struct bad_message : public std::runtime_error { bad_message() : std::runtime_error("bad message") {} };
-struct bad_network : public std::runtime_error { bad_network() : std::runtime_error("bad network") {} };
-struct bad_identity : public std::runtime_error { bad_identity() : std::runtime_error("bad identity") {} };
+struct context_error : public std::runtime_error
+{ 
+    context_error(const std::string& loc, const std::string& msg) 
+        : std::runtime_error(utils::format("%s: %s", loc.c_str(), msg.c_str())) 
+    {} 
+    
+    context_error(const std::string& loc, const boost::system::error_code& code) 
+        : std::runtime_error(utils::format("%s: %s", loc.c_str(), code.message().c_str())) 
+    {} 
+};
+
+struct timeout_error : public context_error
+{ 
+    timeout_error(const std::string& loc) 
+        : context_error(loc, "timeout error") 
+    {} 
+};
 
 static constexpr const char* cert_file_name = "cert.crt";
 static constexpr const char* key_file_name = "private.key";

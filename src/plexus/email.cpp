@@ -36,34 +36,55 @@ class channel
 public:
 
     channel(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
-        : m_ssl(network::create_ssl_client(io, remote, cert, key, ca))
     {
+        try
+        {
+            m_ssl = network::create_ssl_client(io, remote, cert, key, ca);
+        }
+        catch (const boost::system::system_error& ex)
+        {
+            throw plexus::context_error("ssl", ex.code());
+        }
     }
 
     typedef std::function<bool(const std::string&)> response_parser_t;
 
     void connect(boost::asio::yield_context yield, const response_parser_t& parse)
     {
-        m_ssl->connect(yield);
-        m_ssl->handshake(boost::asio::ssl::stream_base::client, yield);
-
-        std::string response;
-        do
+        try
         {
-            auto end = response.size();
-            response.resize(end + BUFFER_SIZE);
-            response.resize(end + m_ssl->read_some(boost::asio::buffer(response.data() + end, BUFFER_SIZE), yield));
-        } 
-        while (!parse(response));
+            m_ssl->connect(yield);
+            m_ssl->handshake(boost::asio::ssl::stream_base::client, yield);
 
-        _trc_ << ">>>>>\n" << response << "\n*****";
+            std::string response;
+            do
+            {
+                auto end = response.size();
+                response.resize(end + BUFFER_SIZE);
+                response.resize(end + m_ssl->read_some(boost::asio::buffer(response.data() + end, BUFFER_SIZE), yield));
+            } 
+            while (!parse(response));
+
+            _trc_ << ">>>>>\n" << response << "\n*****";
+        }
+        catch (const boost::system::system_error& ex)
+        {
+            throw plexus::context_error("ssl", ex.code());
+        }
     }
 
     void request(boost::asio::yield_context yield, const std::string& request, const response_parser_t& parse, int64_t timeout = 0)
     {
         _trc_ << "<<<<<\n" << request << "\n*****";
 
-        m_ssl->write(boost::asio::buffer(request), yield);
+        try
+        {
+            m_ssl->write(boost::asio::buffer(request), yield);
+        }
+        catch (const boost::system::system_error& ex)
+        {
+            throw plexus::context_error("ssl", ex.code());
+        }
 
         std::string response;
         try
@@ -81,8 +102,7 @@ public:
         catch (const boost::system::system_error& ex)
         {
             if (timeout == 0 || ex.code() != boost::asio::error::operation_aborted)
-                throw;
-            
+                throw plexus::context_error("ssl", ex.code());
         }
     }
 
@@ -95,7 +115,7 @@ public:
         catch (const boost::system::system_error& ex)
         {
             if (ex.code() != boost::asio::error::operation_aborted)
-                throw;
+                throw plexus::context_error("ssl", ex.code());
         }
     }
 };
@@ -112,7 +132,7 @@ class smtp
             std::smatch match;
             bool done = std::regex_search(response, match, std::regex("^(\\d+)\\s+.*\\r\\n$"));
             if (done && match[1] != std::to_string(code))
-                throw std::runtime_error(response);
+                throw plexus::context_error("smtp", response);
             return done;
         };
     }
@@ -188,7 +208,7 @@ public:
     void push(boost::asio::yield_context yield, const std::string& subject, const reference& data) noexcept(false)
     {
         if (!m_config.are_defined(m_host, m_peer))
-            throw bad_identity();
+            throw plexus::context_error("smtp", "bad identity");
 
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_io,
@@ -257,7 +277,7 @@ class imap
                 std::smatch match;
                 bool done = std::regex_search(response, match, std::regex("^\\* (OK|NO) .*\\r\\n$"));
                 if (done && match[1] != "OK")
-                    throw std::runtime_error(response);
+                    throw plexus::context_error("imap", response);
                 return done;
             };
 
@@ -265,14 +285,14 @@ class imap
             std::smatch match;
             bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (OK|NO) .*\\r\\n$"));
             if (done && match[2] != "OK")
-                throw std::runtime_error(response);
+                throw plexus::context_error("imap", response);
             return done;
         };
 
         idle_parser = [](const std::string& response) -> bool {
             std::smatch match;
             if (std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (NO|BAD) .*\\r\\n")))
-                throw std::runtime_error(response);
+                throw plexus::context_error("imap", response);
             return std::regex_search(response, match, std::regex("\\+ idling\\r\\n.+\\r\\n"));
         };
 
@@ -489,7 +509,7 @@ public:
             if (m_position == end)
             {
                 if (elapsed())
-                    throw timeout_error();
+                    throw plexus::timeout_error("imap");
 
                 if (m_idle)
                 {

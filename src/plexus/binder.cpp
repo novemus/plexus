@@ -65,7 +65,7 @@ class binder_impl : public plexus::stun_binder
                 sum ^= get<uint8_t>(i) ^ get_mask_byte(i);
 
             if (sum != 0)
-                throw plexus::handshake_error();
+                throw plexus::context_error("handshake", "bad message checksum");
 
             return (get<uint8_t>(0) ^ get_mask_byte(0)) & 0x01;
         }
@@ -120,13 +120,13 @@ public:
             catch(const boost::system::system_error& ex)
             {
                 if (ex.code() != boost::asio::error::operation_aborted)
-                    throw;
+                    throw plexus::context_error("handshake", ex.code());
 
                 _trc_ << ex.what();
             }
         }
 
-        throw plexus::timeout_error();
+        throw plexus::timeout_error("handshake");
     }
 
     void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
@@ -172,13 +172,13 @@ public:
             catch(const boost::system::system_error& ex)
             {
                 if (ex.code() != boost::asio::error::operation_aborted)
-                    throw;
+                    throw plexus::context_error("handshake", ex.code());
 
                 _trc_ << ex.what();
             }
         }
 
-        throw plexus::timeout_error();
+        throw plexus::timeout_error("handshake");
     }
 
     network::traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override

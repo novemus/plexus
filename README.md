@@ -12,7 +12,7 @@ The project depends on [boost](https://github.com/boostorg/boost), [openssl](htt
 $ cd ~
 $ git clone --recurse-submodules https://github.com/novemus/plexus.git
 $ cd ~/plexus
-$ [PKG_CONFIG_PATH=/path/to/opendht/pkgconfig] [CMAKE_PREFIX_PATH=/path/to/wormhole/cmake/config:/path/to/tubus/cmake/config] cmake -B ./build -DCMAKE_BUILD_TYPE=Release [-DBUILD_SHARED_LIBS=ON] [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
+$ [PKG_CONFIG_PATH=...] [CMAKE_PREFIX_PATH=...] cmake -B ./build -DCMAKE_BUILD_TYPE=Release [-DBUILD_SHARED_LIBS=ON] [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
 $ cmake --build ./build --target all
 $ cmake --build ./build --target install
 ```

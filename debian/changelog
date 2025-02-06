@@ -1,8 +1,8 @@
 wormhole (3.1.2-1) unstable; urgency=low
 
-- CMake project structure reform.
+  * CMake project structure reform.
 
- -- Novemus Band <nineletters@mail.ru>  Wed, 5 Feb 2024 21:00:00 +0300
+ -- Novemus Band <nineletters@mail.ru>  Wed, 5 Feb 2025 21:00:00 +0300
 
 plexus (3.1-3+deb12u3) unstable; urgency=low
 
@@ -12,13 +12,13 @@ plexus (3.1-3+deb12u3) unstable; urgency=low
 
 plexus (3.1-2+deb12u3) unstable; urgency=low
 
-  * - Set default value to --exec-args argument.
+  * Set default value to --exec-args argument.
 
  -- Novemus Band <nineletters@mail.ru>  Thu, 8 Aug 2024 00:07:00 +0300
 
 plexus (3.1-1+deb12u3) unstable; urgency=low
 
-  * - The ability to use DHT as the rendezvous.
+  * The ability to use DHT as the rendezvous.
 
  -- Novemus Band <nineletters@mail.ru>  Thu, 1 Aug 2024 21:00:00 +0300
 

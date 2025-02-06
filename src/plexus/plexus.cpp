@@ -76,7 +76,7 @@ void spawn_accept(boost::asio::io_service& io, const options& config, const iden
 
             auto hole = binder->punch_hole(yield);
             if (hole.traits.mapping != network::traverse::independent)
-                throw plexus::bad_network();
+                throw plexus::context_error("plexus", "bad network");
 
             reference faraway = pipe->pull_request(yield);
             reference gateway = {hole.outer_endpoint, plexus::utils::random<uint64_t>()};
@@ -115,7 +115,7 @@ void spawn_invite(boost::asio::io_service& io, const options& config, const iden
 
             auto hole = binder->punch_hole(yield);
             if (hole.traits.mapping != network::traverse::independent)
-                throw plexus::bad_network();
+                throw plexus::context_error("plexus", "bad network");
 
             plexus::reference gateway = { hole.outer_endpoint, plexus::utils::random<uint64_t>() };
             pipe->push_request(yield, gateway);

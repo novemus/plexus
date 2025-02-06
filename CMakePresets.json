@@ -4,20 +4,19 @@
         {
             "name": "config-base",
             "hidden": true,
-            "displayName": "Basic Config",
+            "displayName": "Basic",
             "description": "Basic Configure Preset",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "PLEXUS_SKIP_TEST_RULES": "OFF",
                 "PLEXUS_SKIP_INSTALL_RULES": "OFF",
                 "PLEXUS_SKIP_PACKAGE_RULES": "OFF",
-                "Boost_USE_STATIC_LIBS": "ON",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install"
             }
         },
         {
             "name": "windows-shared",
-            "displayName": "Shared Config",
+            "displayName": "Shared",
             "description": "Configure shared build context",
             "binaryDir": "${sourceDir}/build/shared",
             "inherits": "config-base",
@@ -32,12 +31,13 @@
         },
         {
             "name": "windows-static",
-            "displayName": "Static Config",
+            "displayName": "Static",
             "description": "Configure static build context",
             "binaryDir": "${sourceDir}/build/static",
             "inherits": "config-base",
             "cacheVariables": {
-                "BUILD_SHARED_LIBS": "OFF"
+                "BUILD_SHARED_LIBS": "OFF",
+                "CMAKE_STATIC_LIBRARY_SUFFIX_CXX": "-static.lib"
             },
             "condition": {
                 "type": "equals",
@@ -47,7 +47,7 @@
         },
         {
             "name": "linux-shared-debug",
-            "displayName": "Shared Debug Config",
+            "displayName": "Shared Debug",
             "description": "Configure shared Debug build context",
             "binaryDir": "${sourceDir}/build/shared-debug",
             "inherits": "config-base",
@@ -63,7 +63,7 @@
         },
         {
             "name": "linux-shared-release",
-            "displayName": "Shared Release Config",
+            "displayName": "Shared Release",
             "description": "Configure shared Release build context",
             "binaryDir": "${sourceDir}/build/shared-release",
             "inherits": "config-base",
@@ -79,7 +79,7 @@
         },
         {
             "name": "linux-static-debug",
-            "displayName": "Static Debug Config",
+            "displayName": "Static Debug",
             "description": "Configure static Debug build context",
             "binaryDir": "${sourceDir}/build/static-debug",
             "inherits": "config-base",
@@ -95,7 +95,7 @@
         },
         {
             "name": "linux-static-release",
-            "displayName": "Static Release Config",
+            "displayName": "Static Release",
             "description": "Configure static Release build context",
             "binaryDir": "${sourceDir}/build/static-release",
             "inherits": "config-base",
@@ -164,7 +164,7 @@
         {
             "name": "linux-static-release",
             "configurePreset": "linux-static-release",
-            "displayName": "All",
+            "displayName": "Test",
             "description": "All project tests",
             "configuration": "Release",
             "output": {
@@ -178,7 +178,7 @@
         {
             "name": "linux-static-debug",
             "configurePreset": "linux-static-debug",
-            "displayName": "All",
+            "displayName": "Test",
             "description": "All project tests",
             "configuration": "Debug",
             "output": {
@@ -192,7 +192,7 @@
         {
             "name": "linux-shared-release",
             "configurePreset": "linux-shared-release",
-            "displayName": "All",
+            "displayName": "Test",
             "description": "All project tests",
             "configuration": "Release",
             "output": {
@@ -206,7 +206,7 @@
         {
             "name": "linux-shared-debug",
             "configurePreset": "linux-shared-debug",
-            "displayName": "All",
+            "displayName": "Test",
             "description": "All project tests",
             "configuration": "Debug",
             "output": {
@@ -220,7 +220,7 @@
         {
             "name": "windows-static-release",
             "configurePreset": "windows-static",
-            "displayName": "All",
+            "displayName": "Release Test",
             "description": "All project tests",
             "configuration": "Release",
             "output": {
@@ -234,7 +234,7 @@
         {
             "name": "windows-static-debug",
             "configurePreset": "windows-static",
-            "displayName": "All",
+            "displayName": "Debug Test",
             "description": "All project tests",
             "configuration": "Debug",
             "output": {
@@ -248,7 +248,7 @@
         {
             "name": "windows-shared-release",
             "configurePreset": "windows-shared",
-            "displayName": "All",
+            "displayName": "Release Test",
             "description": "All project tests",
             "configuration": "Release",
             "output": {
@@ -262,7 +262,7 @@
         {
             "name": "windows-shared-debug",
             "configurePreset": "windows-shared",
-            "displayName": "All",
+            "displayName": "Debug Test",
             "description": "All project tests",
             "configuration": "Debug",
             "output": {
@@ -302,6 +302,7 @@
                 "CPACK_DEBIAN_FILE_NAME": "DEB-DEFAULT",
                 "CPACK_DEBIAN_PACKAGE_SHLIBDEPS": "ON",
                 "CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS": "ON",
+                "CPACK_DEBIAN_PACKAGE_SECTION": "utils",
                 "CPACK_DEBIAN_DEBUGINFO_PACKAGE": "ON",
                 "CPACK_DEB_COMPONENT_INSTALL": "ON",
                 "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON"

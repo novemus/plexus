@@ -4,7 +4,7 @@ message("***** plexus ***** ")
 
 cmake_minimum_required(VERSION 3.21)
 
-project(plexus VERSION 3.1.2 DESCRIPTION "Tool for connecting applications via NAT" LANGUAGES CXX)
+project(plexus VERSION 3.1.2 DESCRIPTION "The tool for connecting UDP applications via NAT" LANGUAGES CXX)
 
 option(PLEXUS_USE_SHARED_LIB "Build shared library" ${BUILD_SHARED_LIBS})
 option(PLEXUS_SKIP_TEST_RULES "Don't generate test rules" ON)
@@ -110,8 +110,8 @@ set(SOURCES ${CMAKE_CURRENT_BINARY_DIR}/export_header/plexus/${EXPORT_FILE}
 
 set(HEADERS ${CMAKE_CURRENT_BINARY_DIR}/export_header/plexus/${EXPORT_FILE} src/plexus/export.h src/plexus/plexus.h)
 
-if(NOT MSVC)
-    add_definitions(-D_WIN32_WINNT=0x0601 -DINCL_EXTRA_HTON_FUNCTIONS)
+if(MSVC)
+    add_definitions(-D_WIN32_WINNT=0x0601)
 endif()
 
 if(NOT DEFINED CMAKE_BUILD_TYPE AND NOT DEFINED CMAKE_CONFIGURATION_TYPES)
@@ -244,7 +244,7 @@ if(NOT PLEXUS_SKIP_TEST_RULES)
                                   tests/smime_tests.cpp
                                   tests/exec_tests.cpp
                                   tests/plexus_tests.cpp)
-    target_link_libraries(${PLEXUS_TEST} PRIVATE tubus::libtubus wormhole::libwormhole plexus::libplexus Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto PkgConfig::opendht PkgConfig::nettle PkgConfig::fmt PkgConfig::libargon2)
+    target_link_libraries(${PLEXUS_TEST} PRIVATE ${LIBPLEXUS} tubus::libtubus wormhole::libwormhole Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto PkgConfig::opendht PkgConfig::nettle PkgConfig::fmt PkgConfig::libargon2)
 
     set_target_properties(${PLEXUS_TEST} PROPERTIES DEBUG_POSTFIX "d")
 
@@ -255,46 +255,45 @@ endif()
 ########## package ##########
 
 if(NOT PLEXUS_SKIP_PACKAGE_RULES AND NOT PLEXUS_SKIP_INSTALL_RULES AND NOT CMAKE_SKIP_INSTALL_RULES)
-    set(_DOC_FILES_COMPONENT lib_doc_files)
+    set(DOC_FILES_COMPONENT lib_doc_files)
 
     if(CMAKE_INSTALL_PREFIX MATCHES "^(/usr)|(/usr/local)$")
-        set(_DOCDIR_PREFIX ${CMAKE_INSTALL_DOCDIR})
+        set(BINPLEXUS_INSTALL_DOCDIR ${CMAKE_INSTALL_DOCDIR}/${BINPLEXUS}-${${PROJECT_NAME}_VERSION})
+        set(LIBPLEXUS_INSTALL_DOCDIR ${CMAKE_INSTALL_DOCDIR}/${LIBPLEXUS}-${${PROJECT_NAME}_VERSION})
     else()
-        set(_DOCDIR_PREFIX ${PROJECT_NAME}-${${PROJECT_NAME}_VERSION}/${CMAKE_INSTALL_DOCDIR})
+        set(BINPLEXUS_INSTALL_DOCDIR ${PROJECT_NAME}-${${PROJECT_NAME}_VERSION}/${CMAKE_INSTALL_DATADIR}/doc/${BINPLEXUS})
+        set(LIBPLEXUS_INSTALL_DOCDIR ${PROJECT_NAME}-${${PROJECT_NAME}_VERSION}/${CMAKE_INSTALL_DATADIR}/doc/${LIBPLEXUS})
     endif()
 
-    set(BINPLEXUS_INSTALL_DOCDIR ${_DOCDIR_PREFIX}/${BINPLEXUS}-${${PROJECT_NAME}_VERSION})
-    set(LIBPLEXUS_INSTALL_DOCDIR ${_DOCDIR_PREFIX}/${LIBPLEXUS}-${${PROJECT_NAME}_VERSION})
-
     if(CMAKE_HOST_SYSTEM_NAME MATCHES "Linux")
-        cmake_host_system_information(RESULT _DISTRIB QUERY DISTRIB_ID)
-        if(_DISTRIB MATCHES "(debian)|(ubuntu)|(kali)|(astra)")
+        cmake_host_system_information(RESULT DISTR QUERY DISTRIB_ID)
+        if(DISTR MATCHES "(debian)|(ubuntu)|(kali)|(astra)")
             if(NOT BUILD_SHARED_LIBS)
-                set(_DOC_FILES_COMPONENT dev_doc_files)
+                set(DOC_FILES_COMPONENT dev_doc_files)
                 set(LIBPLEXUS_INSTALL_DOCDIR "${LIBPLEXUS_INSTALL_DOCDIR}-dev")
             endif()
             add_custom_command(DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/debian/changelog"
                 COMMAND gzip -cn9 "${CMAKE_CURRENT_SOURCE_DIR}/debian/changelog" > "${CMAKE_CURRENT_BINARY_DIR}/changelog.gz"
                 OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/changelog.gz")
-            add_custom_target(tubus_changelog ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/changelog.gz")
+            add_custom_target(changelog ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/changelog.gz")
             
-            set(_DEBIAN_DOC_FILES
+            set(DEBIAN_DOC_FILES
                 ${CMAKE_CURRENT_BINARY_DIR}/changelog.gz
                 ${CMAKE_CURRENT_SOURCE_DIR}/debian/copyright
                 ${CMAKE_CURRENT_SOURCE_DIR}/debian/README.Debian
                 )
-            install(FILES ${_DEBIAN_DOC_FILES} DESTINATION ${LIBPLEXUS_INSTALL_DOCDIR} COMPONENT ${_DOC_FILES_COMPONENT})
-            install(FILES ${_DEBIAN_DOC_FILES} DESTINATION ${BINPLEXUS_INSTALL_DOCDIR} COMPONENT bin_doc_files)
+            install(FILES ${DEBIAN_DOC_FILES} DESTINATION ${LIBPLEXUS_INSTALL_DOCDIR} COMPONENT ${DOC_FILES_COMPONENT})
+            install(FILES ${DEBIAN_DOC_FILES} DESTINATION ${BINPLEXUS_INSTALL_DOCDIR} COMPONENT bin_doc_files)
         endif()
     endif()
 
     if(NOT BUILD_SHARED_LIBS)
-        set(_SOURCE_DOC_FILES
+        set(SOURCE_DOC_FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt
             ${CMAKE_CURRENT_SOURCE_DIR}/README.md
             ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md
             )
-        install(FILES ${_SOURCE_DOC_FILES} DESTINATION ${LIBPLEXUS_INSTALL_DOCDIR} COMPONENT ${_DOC_FILES_COMPONENT})
+        install(FILES ${SOURCE_DOC_FILES} DESTINATION ${LIBPLEXUS_INSTALL_DOCDIR} COMPONENT ${DOC_FILES_COMPONENT})
     endif()
 
     include(CPack)

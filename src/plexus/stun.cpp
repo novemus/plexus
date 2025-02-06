@@ -156,7 +156,7 @@ class message : public tubus::mutable_buffer
             if (attribute == type)
             {
                 if (ptr + length + TYPE_LENGTH_PART_SIZE > end)
-                    throw std::runtime_error("wrong attribute data");
+                    throw plexus::context_error("stun", "wrong attribute data");
 
                 return ptr;
             }
@@ -177,7 +177,7 @@ class message : public tubus::mutable_buffer
             if (ptr[5] == flag::ip_v4)
             {
                 if (length != 8u)
-                    throw std::runtime_error("wrong endpoint data");
+                    throw plexus::context_error("stun", "wrong endpoint data");
 
                 return boost::asio::ip::udp::endpoint(
                     boost::asio::ip::address::from_string(utils::format("%d.%d.%d.%d", ptr[8], ptr[9], ptr[10], ptr[11])),
@@ -187,7 +187,7 @@ class message : public tubus::mutable_buffer
             else if (ptr[5] == flag::ip_v6)
             {
                 if (length != 20u)
-                    throw std::runtime_error("wrong endpoint data");
+                    throw plexus::context_error("stun", "wrong endpoint data");
 
                 return boost::asio::ip::udp::endpoint(
                     boost::asio::ip::address::from_string(utils::format("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
@@ -197,7 +197,7 @@ class message : public tubus::mutable_buffer
         }
 
         if (type() == msg::binding_response)
-            throw std::runtime_error(utils::format("attribute %d not found", kind));
+            throw plexus::context_error("stun", utils::format("attribute %d not found", kind));
 
         return boost::asio::ip::udp::endpoint();
     }
@@ -249,7 +249,7 @@ public:
                 uint16_t length = read_short(ptr, 2);
                 return std::string((const char*)ptr + 8, length - 8);
             }
-            throw std::runtime_error("error code attribute not found");
+            throw plexus::context_error("stun", "error code attribute not found");
         }
         return std::string();
     }
@@ -303,7 +303,7 @@ public:
                 resp.truncate(udp->receive_from(resp, from, yield, timeout));
 
                 if (timer().total_milliseconds() >= deadline)
-                    throw plexus::timeout_error();
+                    throw plexus::timeout_error("stun");
                 else if (recv.transaction() != resp.transaction())
                     continue;
 
@@ -323,9 +323,9 @@ public:
                     case msg::binding_request:
                         break;
                     case msg::binding_error_response:
-                        throw std::runtime_error("server responded with an error: " + resp.error());
+                        throw plexus::context_error("stun", resp.error());
                     default:
-                        throw std::runtime_error("server responded with unexpected message type");
+                        throw plexus::context_error("stun", "server responded with unexpected message type");
                 }
 
                 return resp;
@@ -333,7 +333,7 @@ public:
             catch(const boost::system::system_error& ex)
             {
                 if (ex.code() != boost::asio::error::operation_aborted)
-                    throw;
+                    throw plexus::context_error("stun", ex.code());
 
                 _trc_ << ex.what();
 
@@ -341,7 +341,7 @@ public:
             }
         } 
 
-        throw plexus::timeout_error();
+        throw plexus::timeout_error("stun");
     }
 
 public:
