@@ -10,130 +10,102 @@
             "cacheVariables": {
                 "PLEXUS_SKIP_TEST_RULES": "OFF",
                 "PLEXUS_SKIP_INSTALL_RULES": "OFF",
-                "PLEXUS_SKIP_PACKAGE_RULES": "OFF",
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install"
+                "PLEXUS_SKIP_PACKAGE_RULES": "OFF"
             }
         },
         {
-            "name": "windows-shared",
-            "displayName": "Shared",
-            "description": "Configure shared build context",
-            "binaryDir": "${sourceDir}/build/shared",
-            "inherits": "config-base",
-            "cacheVariables": {
-                "BUILD_SHARED_LIBS": "ON"
-            },
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Windows"
-            }
-        },
-        {
-            "name": "windows-static",
-            "displayName": "Static",
-            "description": "Configure static build context",
-            "binaryDir": "${sourceDir}/build/static",
+            "name": "windows-static-debug",
+            "displayName": "Static (Debug)",
+            "description": "Configure Debug static build",
             "inherits": "config-base",
             "cacheVariables": {
                 "BUILD_SHARED_LIBS": "OFF",
-                "CMAKE_STATIC_LIBRARY_SUFFIX_CXX": "-static.lib"
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+                "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
+                "CMAKE_CONFIGURATION_TYPES": "Debug",
+                "CMAKE_BUILD_TYPE": "Debug"
             },
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Windows"
-            }
-        },
-        {
-            "name": "linux-shared-debug",
-            "displayName": "Shared Debug",
-            "description": "Configure shared Debug build context",
-            "binaryDir": "${sourceDir}/build/shared-debug",
-            "inherits": "config-base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "BUILD_SHARED_LIBS": "ON"
             },
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Linux"
-            }
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "installDir": "${sourceParentDir}/install/x64-static"
         },
         {
-            "name": "linux-shared-release",
-            "displayName": "Shared Release",
-            "description": "Configure shared Release build context",
-            "binaryDir": "${sourceDir}/build/shared-release",
-            "inherits": "config-base",
+            "name": "windows-static-release",
+            "displayName": "Static (Release)",
+            "description": "Configure Release static build",
+            "inherits": "windows-static-debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BUILD_SHARED_LIBS": "ON"
-            },
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Linux"
-            }
-        },
-        {
-            "name": "linux-static-debug",
-            "displayName": "Static Debug",
-            "description": "Configure static Debug build context",
-            "binaryDir": "${sourceDir}/build/static-debug",
-            "inherits": "config-base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "BUILD_SHARED_LIBS": "OFF"
-            },
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Linux"
+                "CMAKE_CONFIGURATION_TYPES": "Release"
             }
         },
         {
             "name": "linux-static-release",
-            "displayName": "Static Release",
-            "description": "Configure static Release build context",
-            "binaryDir": "${sourceDir}/build/static-release",
+            "displayName": "Static (Release)",
+            "description": "Configure static Release build",
             "inherits": "config-base",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BUILD_SHARED_LIBS": "OFF"
+                "BUILD_SHARED_LIBS": "OFF",
+                "CMAKE_BUILD_TYPE": "Release"
             },
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Linux"
+            },
+            "installDir": "${sourceParentDir}/install/x64-static"
+        },
+        {
+            "name": "linux-static-debug",
+            "displayName": "Static (Debug)",
+            "description": "Configure static Debug build",
+            "inherits": "linux-static-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "linux-shared-release",
+            "displayName": "Shared (Release)",
+            "description": "Configure static Release build",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "ON",
+                "CMAKE_BUILD_TYPE": "Release"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "installDir": "${sourceParentDir}/install/x64"
+        },
+        {
+            "name": "linux-shared-debug",
+            "displayName": "Shared (Debug)",
+            "description": "Configure static Debug build",
+            "inherits": "linux-shared-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
             }
         }
     ],
     "buildPresets": [
         {
-            "name": "windows-shared-debug",
-            "displayName": "Debug",
-            "configuration": "Debug",
-            "configurePreset": "windows-shared"
-        },
-        {
-            "name": "windows-shared-release",
-            "displayName": "Release",
-            "configuration": "Release",
-            "configurePreset": "windows-shared"
-        },
-        {
             "name": "windows-static-debug",
             "displayName": "Debug",
             "configuration": "Debug",
-            "configurePreset": "windows-static"
+            "configurePreset": "windows-static-debug"
         },
         {
             "name": "windows-static-release",
             "displayName": "Release",
             "configuration": "Release",
-            "configurePreset": "windows-static"
+            "configurePreset": "windows-static-release"
         },
         {
             "name": "linux-shared-debug",
@@ -162,116 +134,59 @@
     ],
     "testPresets": [
         {
-            "name": "linux-static-release",
-            "configurePreset": "linux-static-release",
-            "displayName": "Test",
-            "description": "All project tests",
-            "configuration": "Release",
+            "name": "test-base",
             "output": {
                 "outputOnFailure": true
             },
             "execution": {
                 "noTestsAction": "error",
                 "stopOnFailure": true
-            }
+            },
+            "hidden": true
+        },
+        {
+            "name": "linux-static-release",
+            "description": "All project tests",
+            "displayName": "Test",
+            "configurePreset": "linux-static-release",
+            "inherits": "test-base"
         },
         {
             "name": "linux-static-debug",
-            "configurePreset": "linux-static-debug",
-            "displayName": "Test",
             "description": "All project tests",
-            "configuration": "Debug",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error",
-                "stopOnFailure": true
-            }
+            "displayName": "Test",
+            "configurePreset": "linux-static-debug",
+            "inherits": "test-base"
         },
         {
             "name": "linux-shared-release",
-            "configurePreset": "linux-shared-release",
-            "displayName": "Test",
             "description": "All project tests",
-            "configuration": "Release",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error",
-                "stopOnFailure": true
-            }
+            "displayName": "Test",
+            "configurePreset": "linux-shared-release",
+            "inherits": "test-base"
         },
         {
             "name": "linux-shared-debug",
-            "configurePreset": "linux-shared-debug",
-            "displayName": "Test",
             "description": "All project tests",
-            "configuration": "Debug",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error",
-                "stopOnFailure": true
-            }
+            "displayName": "Test",
+            "configurePreset": "linux-shared-debug",
+            "inherits": "test-base"
         },
         {
             "name": "windows-static-release",
-            "configurePreset": "windows-static",
-            "displayName": "Release Test",
+            "configurePreset": "windows-static-release",
+            "displayName": "Test (Release)",
             "description": "All project tests",
             "configuration": "Release",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error",
-                "stopOnFailure": true
-            }
+            "inherits": "test-base"
         },
         {
             "name": "windows-static-debug",
-            "configurePreset": "windows-static",
-            "displayName": "Debug Test",
+            "configurePreset": "windows-static-debug",
+            "displayName": "Test (Debug)",
             "description": "All project tests",
             "configuration": "Debug",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error",
-                "stopOnFailure": true
-            }
-        },
-        {
-            "name": "windows-shared-release",
-            "configurePreset": "windows-shared",
-            "displayName": "Release Test",
-            "description": "All project tests",
-            "configuration": "Release",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error",
-                "stopOnFailure": true
-            }
-        },
-        {
-            "name": "windows-shared-debug",
-            "configurePreset": "windows-shared",
-            "displayName": "Debug Test",
-            "description": "All project tests",
-            "configuration": "Debug",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error",
-                "stopOnFailure": true
-            }
+            "inherits": "test-base"
         }
     ],
     "packagePresets": [
@@ -298,7 +213,7 @@
                 "CPACK_DEBIAN_PACKAGE_MAINTAINER": "Community",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "The tool for connecting network applications via NAT",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' utility provides the ability to connect network\napplications based on UDP protocol via NAT.",
-                "CPACK_COMPONENTS_ALL": "binary_files;bin_doc_files",
+                "CPACK_COMPONENTS_ALL": "binary_files;bin_deb_files",
                 "CPACK_DEBIAN_FILE_NAME": "DEB-DEFAULT",
                 "CPACK_DEBIAN_PACKAGE_SHLIBDEPS": "ON",
                 "CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS": "ON",
@@ -334,7 +249,7 @@
                 "CPACK_DEBIAN_PACKAGE_DEPENDS": "libtubus (>= 1.2), libwormhole (>= 1.2)",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "The 'plexus' library runtime",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol via NAT.",
-                "CPACK_COMPONENTS_ALL": "library_files;lib_doc_files",
+                "CPACK_COMPONENTS_ALL": "library_files;lib_deb_files",
                 "CPACK_DEBIAN_FILE_NAME": "DEB-DEFAULT",
                 "CPACK_DEBIAN_PACKAGE_SHLIBDEPS": "ON",
                 "CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS": "ON",
@@ -369,7 +284,7 @@
                 "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.2), libwormhole-dev (>= 1.2), libplexus (= 3.1.2-1)",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "Development files of the 'plexus' library",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol via NAT.",
-                "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_doc_files",
+                "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_deb_files;dev_doc_files",
                 "CPACK_DEBIAN_FILE_NAME": "DEB-DEFAULT",
                 "CPACK_DEBIAN_PACKAGE_SHLIBDEPS": "ON",
                 "CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS": "ON",
@@ -384,7 +299,7 @@
             "name": "windows-archive",
             "displayName": "plexus (ZIP)",
             "description": "Portable ZIP archive",
-            "configurePreset": "windows-static",
+            "configurePreset": "windows-static-release",
             "generators": [
                 "ZIP"
             ],
@@ -409,7 +324,7 @@
             "steps": [
                 {
                     "type": "configure",
-                    "name": "windows-static"
+                    "name": "windows-static-release"
                 },
                 {
                     "type": "build",
