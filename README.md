@@ -10,7 +10,7 @@ The project depends on [boost](https://github.com/boostorg/boost), [openssl](htt
 
 ```console
 $ cd ~
-$ git clone --recurse-submodules https://github.com/novemus/plexus.git
+$ git clone https://github.com/novemus/plexus.git
 $ cd ~/plexus
 $ [PKG_CONFIG_PATH=...] [CMAKE_PREFIX_PATH=...] cmake -B ./build -DCMAKE_BUILD_TYPE=Release [-DBUILD_SHARED_LIBS=ON] [-DBOOST_ROOT=...] [-DOPENSSL_ROOT_DIR=...]
 $ cmake --build ./build --target all

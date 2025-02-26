@@ -1,8 +1,8 @@
 wormhole (3.1.2-1) unstable; urgency=low
 
-  * CMake project structure reform.
+  * The CMake project has been reorganized.
 
- -- Novemus Band <nineletters@mail.ru>  Wed, 5 Feb 2025 21:00:00 +0300
+ -- Novemus Band <nineletters@mail.ru>  Wed, 26 Feb 2025 08:00:00 +0300
 
 plexus (3.1-3+deb12u3) unstable; urgency=low
 

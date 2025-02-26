@@ -1,8 +1,8 @@
 # Change Log
 
-## 3.1.2 (Feb 5, 2025)
+## 3.1.2 (Feb 26, 2025)
 
-- CMake project structure reform.
+- The CMake project has been reorganized.
 
 ## 3.1.1 (Nov 17, 2024)
 
