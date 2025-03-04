@@ -10,7 +10,7 @@ macro(import_targets type)
     include("${CMAKE_CURRENT_LIST_DIR}/plexus-${type}-targets.cmake")
 endmacro()
 
-if(NOT TARGET plexus::plexus AND NOT TARGET plexus::libplexus)
+if(NOT TARGET plexus::libplexus)
     set(_type "")
 
     if(DEFINED PLEXUS_USE_SHARED_LIB)
@@ -37,7 +37,6 @@ if(NOT TARGET plexus::plexus AND NOT TARGET plexus::libplexus)
 
     get_target_property(plexus_INCLUDE_DIRS plexus::libplexus INTERFACE_INCLUDE_DIRECTORIES)
     set(plexus_LIBRARY plexus::libplexus)
-    set(plexus_BINRARY plexus::plexus)
 
     set(plexus_FOUND ON)
     unset(_type)

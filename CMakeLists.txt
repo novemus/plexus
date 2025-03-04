@@ -165,7 +165,7 @@ if(NOT PLEXUS_SKIP_INSTALL_RULES AND NOT CMAKE_SKIP_INSTALL_RULES)
 
     write_basic_package_version_file(plexus-config-version.cmake COMPATIBILITY SameMajorVersion)
 
-    install(TARGETS ${BINPLEXUS} EXPORT plexus_export RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT binary_files)
+    install(TARGETS ${BINPLEXUS} RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT binary_files)
 
     install(TARGETS ${LIBPLEXUS} EXPORT plexus_export
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT runtime_files
