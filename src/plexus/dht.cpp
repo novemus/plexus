@@ -510,7 +510,17 @@ public:
     void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         auto op = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, invite_token, gateway);
-        op->wait(yield);
+        boost::asio::spawn(m_io, [op](boost::asio::yield_context yield)
+        {
+            try
+            {
+                op->wait(yield);
+            } 
+            catch (const std::exception& ex) 
+            {
+                _err_ << ex.what();
+            }
+        });
 
         _inf_ << "pushed request " << gateway;
     }
@@ -518,7 +528,17 @@ public:
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         auto op = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, accept_token, gateway);
-        op->wait(yield);
+        boost::asio::spawn(m_io, [op](boost::asio::yield_context yield)
+        {
+            try
+            {
+                op->wait(yield);
+            } 
+            catch (const std::exception& ex) 
+            {
+                _err_ << ex.what();
+            }
+        });
 
         _inf_ << "pushed response " << gateway;
     }
