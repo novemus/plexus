@@ -229,7 +229,8 @@ public:
 
     ~listen() override
     {
-        node->cancelListen(hash, std::move(token));
+        if (token.valid())
+            node->cancelListen(hash, std::move(token));
     }
 
     invite wait(boost::asio::yield_context yield) noexcept(false) override
@@ -324,7 +325,8 @@ public:
     {
         boost::system::error_code ec;
         timer.cancel(ec);
-        node->cancelListen(hash, std::move(token));
+        if (token.valid())
+            node->cancelListen(hash, std::move(token));
     }
 
     reference wait(boost::asio::yield_context yield) noexcept(false) override
@@ -401,7 +403,7 @@ class forward : public operation<void>
     boost::asio::deadline_timer     timer;
     std::shared_ptr<dht::DhtRunner> node;
     dht::InfoHash                   hash;
-    uint64_t                        id;
+    uint64_t                        id = 0;
 
 protected:
 
@@ -416,7 +418,8 @@ public:
     {
         boost::system::error_code ec;
         timer.cancel(ec);
-        node->cancelPut(hash, std::move(id));
+        if (id)
+            node->cancelPut(hash, id);
     }
 
     void wait(boost::asio::yield_context yield) noexcept(false) override
