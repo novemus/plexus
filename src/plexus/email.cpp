@@ -43,7 +43,7 @@ public:
         }
         catch (const boost::system::system_error& ex)
         {
-            throw plexus::context_error("ssl", ex.code());
+            throw plexus::context_error(__FUNCTION__, ex.code());
         }
     }
 
@@ -69,7 +69,7 @@ public:
         }
         catch (const boost::system::system_error& ex)
         {
-            throw plexus::context_error("ssl", ex.code());
+            throw plexus::context_error(__FUNCTION__, ex.code());
         }
     }
 
@@ -83,7 +83,7 @@ public:
         }
         catch (const boost::system::system_error& ex)
         {
-            throw plexus::context_error("ssl", ex.code());
+            throw plexus::context_error(__FUNCTION__, ex.code());
         }
 
         std::string response;
@@ -102,7 +102,7 @@ public:
         catch (const boost::system::system_error& ex)
         {
             if (timeout == 0 || ex.code() != boost::asio::error::operation_aborted)
-                throw plexus::context_error("ssl", ex.code());
+                throw plexus::context_error(__FUNCTION__, ex.code());
         }
     }
 
@@ -115,7 +115,7 @@ public:
         catch (const boost::system::system_error& ex)
         {
             if (ex.code() != boost::asio::error::operation_aborted)
-                throw plexus::context_error("ssl", ex.code());
+                throw plexus::context_error(__FUNCTION__, ex.code());
         }
     }
 };
@@ -132,7 +132,7 @@ class smtp
             std::smatch match;
             bool done = std::regex_search(response, match, std::regex("^(\\d+)\\s+.*\\r\\n$"));
             if (done && match[1] != std::to_string(code))
-                throw plexus::context_error("smtp", response);
+                throw plexus::context_error(__FUNCTION__, response);
             return done;
         };
     }
@@ -208,7 +208,7 @@ public:
     void push(boost::asio::yield_context yield, const std::string& subject, const reference& data) noexcept(false)
     {
         if (!m_config.are_defined(m_host, m_peer))
-            throw plexus::context_error("smtp", "bad identity");
+            throw plexus::context_error(__FUNCTION__, "bad identity");
 
         std::unique_ptr<channel> session = std::make_unique<channel>(
             m_io,
@@ -277,7 +277,7 @@ class imap
                 std::smatch match;
                 bool done = std::regex_search(response, match, std::regex("^\\* (OK|NO) .*\\r\\n$"));
                 if (done && match[1] != "OK")
-                    throw plexus::context_error("imap", response);
+                    throw plexus::context_error(__FUNCTION__, response);
                 return done;
             };
 
@@ -285,14 +285,14 @@ class imap
             std::smatch match;
             bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (OK|NO) .*\\r\\n$"));
             if (done && match[2] != "OK")
-                throw plexus::context_error("imap", response);
+                throw plexus::context_error(__FUNCTION__, response);
             return done;
         };
 
         idle_parser = [](const std::string& response) -> bool {
             std::smatch match;
             if (std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (NO|BAD) .*\\r\\n")))
-                throw plexus::context_error("imap", response);
+                throw plexus::context_error(__FUNCTION__, response);
             return std::regex_search(response, match, std::regex("\\+ idling\\r\\n.+\\r\\n"));
         };
 
@@ -509,7 +509,7 @@ public:
             if (m_position == end)
             {
                 if (elapsed())
-                    throw plexus::timeout_error("imap");
+                    throw plexus::timeout_error(__FUNCTION__);
 
                 if (m_idle)
                 {

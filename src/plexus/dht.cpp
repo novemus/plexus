@@ -120,7 +120,7 @@ public:
         }
         catch (const std::exception& ex)
         {
-            throw plexus::context_error("dht", ex.what());
+            throw plexus::context_error(__FUNCTION__, ex.what());
         }
 
         try
@@ -158,7 +158,7 @@ public:
         }
         catch (const std::exception& ex)
         {
-            throw plexus::context_error("dht", ex.what());
+            throw plexus::context_error(__FUNCTION__, ex.what());
         }
     }
 
@@ -170,7 +170,7 @@ public:
         }
         catch (const std::exception& ex)
         {
-            throw plexus::context_error("dht", ex.what());
+            throw plexus::context_error(__FUNCTION__, ex.what());
         }
     }
 
@@ -182,7 +182,7 @@ public:
         }
         catch (const std::exception& ex)
         {
-            throw plexus::context_error("dht", ex.what());
+            throw plexus::context_error(__FUNCTION__, ex.what());
         }
     }
 
@@ -241,10 +241,10 @@ public:
         timer.expires_from_now(boost::posix_time::time_duration(boost::posix_time::pos_infin));
 
         if (ec != boost::asio::error::operation_aborted)
-            throw plexus::context_error("dht", ec.message());
+            throw plexus::context_error(__FUNCTION__, ec.message());
 
         if (queue.empty())
-            throw plexus::context_error("dht", "operation aborted");
+            throw plexus::context_error(__FUNCTION__, "operation aborted");
 
         auto res = queue.front();
         queue.pop_front();
@@ -333,9 +333,9 @@ public:
         timer.async_wait(yield[ec]);
 
         if (!ec)
-            throw plexus::timeout_error("dht");
+            throw plexus::timeout_error(__FUNCTION__);
         else if (ec != boost::asio::error::operation_aborted)
-            throw plexus::context_error("dht", ec);
+            throw plexus::context_error(__FUNCTION__, ec);
 
         return data;
     }
@@ -425,12 +425,12 @@ public:
         timer.async_wait(yield[ec]);
 
         if (!ec)
-            throw plexus::timeout_error("dht");
+            throw plexus::timeout_error(__FUNCTION__);
         else if (ec != boost::asio::error::operation_aborted)
-            throw plexus::context_error("dht", ec);
+            throw plexus::context_error(__FUNCTION__, ec);
 
         if (id == 0)
-            throw plexus::context_error("dht", "operation aborted");
+            throw plexus::context_error(__FUNCTION__, "operation aborted");
     }
 
     static forward_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway) noexcept(false)
