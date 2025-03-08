@@ -104,11 +104,6 @@ template<class mediator> struct context : public mediator
         return !host.owner.empty() && !host.pin.empty() && !peer.owner.empty() && !peer.pin.empty();
     }
 
-    bool matched(const identity& host, const identity& peer) const noexcept(true)
-    {
-        return !host.owner.empty() && !host.pin.empty() && !peer.owner.empty() && !peer.pin.empty();
-    }
-
     bool are_allowed(const identity& host, const identity& peer) const noexcept(false)
     {
         return are_defined(host, peer)
