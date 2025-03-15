@@ -1,0 +1,22 @@
+{
+    "dependencies": [
+        "boost-system",
+        "boost-asio",
+        "boost-test",
+        "boost-lexical-cast",
+        "boost-program-options",
+        "boost-tokenizer",
+        "boost-bind",
+        "boost-date-time",
+        "boost-coroutine",
+        "fmt",
+        "pkgconf",
+        "shiftmedia-libgnutls",
+        "openssl",
+        "msgpack",
+        "nettle",
+        "argon2",
+        "jsoncpp"
+    ],
+    "builtin-baseline": "1de2026f28ead93ff1773e6e680387643e914ea1"
+}
