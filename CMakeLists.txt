@@ -22,9 +22,9 @@ if (NOT MSVC AND NOT BUILD_SHARED_LIBS)
 endif()
 
 if(NOT PLEXUS_SKIP_TEST_RULES)
-    find_package(Boost REQUIRED COMPONENTS system program_options coroutine unit_test_framework)
+    find_package(Boost 1.74...1.85 REQUIRED COMPONENTS system program_options coroutine unit_test_framework)
 else()
-    find_package(Boost REQUIRED COMPONENTS system program_options coroutine)
+    find_package(Boost 1.74...1.85 REQUIRED COMPONENTS system program_options coroutine)
 endif()
 
 message("* Boost Version: ${Boost_VERSION}")
