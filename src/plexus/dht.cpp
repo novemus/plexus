@@ -403,12 +403,13 @@ class forward : public operation<void>
     boost::asio::deadline_timer     timer;
     std::shared_ptr<dht::DhtRunner> node;
     dht::InfoHash                   hash;
-    uint64_t                        id = 0;
+    uint64_t                        val;
 
 protected:
 
-    forward(boost::asio::io_service& io) noexcept(true)
+    forward(boost::asio::io_service& io, uint64_t id) noexcept(true)
         : timer(io)
+        , val(id)
     {
     }
 
@@ -418,8 +419,7 @@ public:
     {
         boost::system::error_code ec;
         timer.cancel(ec);
-        if (id)
-            node->cancelPut(hash, id);
+        node->cancelPut(hash, val);
     }
 
     void wait(boost::asio::yield_context yield) noexcept(false) override
@@ -431,16 +431,13 @@ public:
             throw plexus::timeout_error(__FUNCTION__);
         else if (ec != boost::asio::error::operation_aborted)
             throw plexus::context_error(__FUNCTION__, ec);
-
-        if (id == 0)
-            throw plexus::context_error(__FUNCTION__, "operation aborted");
     }
 
     static forward_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway) noexcept(false)
     {
         _dbg_ << "forward " << repo.app << "/" << subject << " for " << peer << " from " << host;
 
-        std::shared_ptr<forward> op(new forward(io));
+        std::shared_ptr<forward> op(new forward(io, id));
 
         auto to = repo.load_cert(peer);
         auto from = repo.load_key(host);
@@ -450,21 +447,20 @@ public:
         op->timer.expires_from_now(boost::posix_time::milliseconds(hangup_timeout));
 
         auto message = plexus::utils::format("PLEXUS 3.0 %s %u %llu", gateway.endpoint.address().to_string().c_str(), gateway.endpoint.port(), gateway.puzzle);
-        auto value = std::make_shared<dht::Value>(dht::ValueType::USER_DATA.id, to->getPublicKey().encrypt(dht::packMsg(message)), id);
+        auto value = std::make_shared<dht::Value>(dht::ValueType::USER_DATA.id, to->getPublicKey().encrypt(dht::packMsg(message)), op->val);
         value->sign(*from);
 
-        _trc_ << "forward value " << id << " with key " << op->hash << " from " << value->getOwner()->getId();
+        _trc_ << "forward value " << op->val << " with key " << op->hash << " from " << value->getOwner()->getId();
 
         std::weak_ptr<forward> weak = op;
-        op->node->put(op->hash, value, [weak, id, value](bool ok)
+        op->node->put(op->hash, value, [weak, value](bool ok)
         {
             auto ptr = weak.lock();
             if (not ptr)
                 return;
 
-            _trc_ << (ok ? "sent" : "couldn't send") << " value " << id << " with key " << ptr->hash << " from " << value->getOwner()->getId();
+            _trc_ << (ok ? "sent" : "couldn't send") << " value " << ptr->val << " with key " << ptr->hash << " from " << value->getOwner()->getId();
 
-            ptr->id = ok ? id : 0;
             boost::system::error_code ec;
             ptr->timer.cancel(ec);
         });
@@ -480,6 +476,8 @@ class pipe_impl : public pipe
     uint64_t                 m_id;
     identity                 m_host;
     identity                 m_peer;
+    forward_ptr              m_fwd;
+    acquire_ptr              m_acq;
 
 public:
 
@@ -494,8 +492,8 @@ public:
 
     reference pull_request(boost::asio::yield_context yield) noexcept(false) override
     {
-        auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
-        auto faraway = op->wait(yield);
+        m_acq = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
+        auto faraway = m_acq->wait(yield);
 
         _inf_ << "pulled request " << faraway;
         return faraway;
@@ -503,8 +501,8 @@ public:
 
     reference pull_response(boost::asio::yield_context yield) noexcept(false) override
     {        
-        auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
-        auto faraway = op->wait(yield);
+        m_acq = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
+        auto faraway = m_acq->wait(yield);
 
         _inf_ << "pulled response " << faraway;
         return faraway;
@@ -512,8 +510,8 @@ public:
 
     void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
-        auto op = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, invite_token, gateway);
-        boost::asio::spawn(m_io, [op](boost::asio::yield_context yield)
+        m_fwd = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, invite_token, gateway);
+        boost::asio::spawn(m_io, [op = m_fwd](boost::asio::yield_context yield)
         {
             try
             {
@@ -530,8 +528,8 @@ public:
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
-        auto op = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, accept_token, gateway);
-        boost::asio::spawn(m_io, [op](boost::asio::yield_context yield)
+        m_fwd = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, accept_token, gateway);
+        boost::asio::spawn(m_io, [op = m_fwd](boost::asio::yield_context yield)
         {
             try
             {
