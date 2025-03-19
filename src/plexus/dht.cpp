@@ -255,7 +255,7 @@ public:
 
     static listen_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer) noexcept(false)
     {
-        _dbg_ << "listen " << repo.app << "/invite for " << host;
+        _dbg_ << "listen " << repo.app << "#invite for " << host;
 
         std::shared_ptr<listen> op(new listen(io));
         op->node = repo.node();
@@ -269,8 +269,6 @@ public:
         op->timer.expires_from_now(boost::posix_time::time_duration(boost::posix_time::pos_infin));
         uint64_t id = std::time(nullptr);
 
-        _trc_ << "listen values with key " << op->hash;
-
         std::weak_ptr<listen> weak = op;
         op->token = op->node->listen(op->hash, [weak, repo, id, host, match](const std::vector<std::shared_ptr<dht::Value>>& values)
         {
@@ -283,7 +281,7 @@ public:
                 if (id > value->id)
                     continue;
 
-                _trc_ << "got value " << value->id << " with key " << ptr->hash << " from " << value->getOwner()->getId();
+                _trc_ << "listen value=" << value->id << " key=" << ptr->hash << " owner=" << value->getOwner()->getId();
 
                 auto peer = repo.fetch_identity(value->getOwner()->getId());
                 if (not match(peer))
@@ -344,7 +342,7 @@ public:
 
     static acquire_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject) noexcept(false)
     {
-        _dbg_ << "acquire " << repo.app << "/" << subject << " for " << host << " from " << peer;
+        _dbg_ << "acquire " << repo.app << "#" << subject << " for " << host << " from " << peer;
 
         std::shared_ptr<acquire> op(new acquire(io));
 
@@ -355,8 +353,6 @@ public:
         auto from = repo.load_cert(peer);
         auto to = repo.load_key(host);
 
-        _trc_ << "acquire value " << id << " with key " << op->hash;
-
         std::weak_ptr<acquire> weak = op;
         op->token = op->node->listen(op->hash, [weak, from, to](const std::vector<std::shared_ptr<dht::Value>>& values)
         {
@@ -366,7 +362,7 @@ public:
 
             for (auto& value : values)
             {
-                _trc_ << "got value " << value->id << " with key " << ptr->hash << " from " << value->getOwner()->getId();
+                _trc_ << "acquire value=" << value->id << " key=" << ptr->hash << " owner=" << value->getOwner()->getId();
 
                 if (value->getOwner()->getId() != from->getId())
                     continue;
@@ -435,7 +431,7 @@ public:
 
     static forward_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway) noexcept(false)
     {
-        _dbg_ << "forward " << repo.app << "/" << subject << " for " << peer << " from " << host;
+        _dbg_ << "forward " << repo.app << "#" << subject << " for " << peer << " from " << host;
 
         std::shared_ptr<forward> op(new forward(io, id));
 
@@ -450,8 +446,6 @@ public:
         auto value = std::make_shared<dht::Value>(dht::ValueType::USER_DATA.id, to->getPublicKey().encrypt(dht::packMsg(message)), op->val);
         value->sign(*from);
 
-        _trc_ << "forward value " << op->val << " with key " << op->hash << " from " << value->getOwner()->getId();
-
         std::weak_ptr<forward> weak = op;
         op->node->put(op->hash, value, [weak, value](bool ok)
         {
@@ -459,7 +453,7 @@ public:
             if (not ptr)
                 return;
 
-            _trc_ << (ok ? "sent" : "couldn't send") << " value " << ptr->val << " with key " << ptr->hash << " from " << value->getOwner()->getId();
+            _trc_ << "forward value=" << ptr->val << " key=" << ptr->hash << " owner=" << value->getOwner()->getId() << " ok=" << ok;
 
             boost::system::error_code ec;
             ptr->timer.cancel(ec);
