@@ -1,5 +1,9 @@
 # Change Log
 
+## 3.1.4 (Mar 23, 2025)
+
+- Increased reliability of DHT rendezvous.
+
 ## 3.1.3 (Mar 8, 2025)
 
 - Fixed handshake race when using DHT rendezvous.

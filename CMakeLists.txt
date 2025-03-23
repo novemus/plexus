@@ -4,7 +4,7 @@ message("***** plexus ***** ")
 
 cmake_minimum_required(VERSION 3.21)
 
-project(plexus VERSION 3.1.3 DESCRIPTION "The tool for connecting UDP applications via NAT" LANGUAGES CXX)
+project(plexus VERSION 3.1.4 DESCRIPTION "The tool for connecting UDP applications via NAT" LANGUAGES CXX)
 
 option(PLEXUS_USE_SHARED_LIB "Build shared library" ${BUILD_SHARED_LIBS})
 option(PLEXUS_SKIP_TEST_RULES "Don't generate test rules" ON)
