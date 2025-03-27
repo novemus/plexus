@@ -31,7 +31,7 @@ if(NOT TARGET plexus::libplexus)
     check_required_components(plexus)
 
     include(CMakeFindDependencyMacro)
-    find_dependency(Boost COMPONENTS system coroutine)
+    find_dependency(Boost CONFIG COMPONENTS system coroutine)
     find_dependency(wormhole COMPONENTS libwormhole)
     find_dependency(tubus COMPONENTS libtubus)
 

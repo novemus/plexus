@@ -11,7 +11,14 @@
         "boost-coroutine",
         "fmt",
         "pkgconf",
-        "shiftmedia-libgnutls",
+        {
+            "name": "shiftmedia-libgnutls",
+            "platform": "windows"
+        },
+        {
+            "name": "libgnutls",
+            "platform": "osx"
+        },
         "openssl",
         "msgpack",
         "nettle",

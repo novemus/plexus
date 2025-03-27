@@ -22,9 +22,9 @@ if (NOT MSVC AND NOT BUILD_SHARED_LIBS)
 endif()
 
 if(NOT PLEXUS_SKIP_TEST_RULES)
-    find_package(Boost 1.74...1.85 REQUIRED COMPONENTS system program_options coroutine unit_test_framework)
+    find_package(Boost 1.74...1.85 CONFIG REQUIRED COMPONENTS system program_options coroutine unit_test_framework)
 else()
-    find_package(Boost 1.74...1.85 REQUIRED COMPONENTS system program_options coroutine)
+    find_package(Boost 1.74...1.85 CONFIG REQUIRED COMPONENTS system program_options coroutine)
 endif()
 
 message("* Boost Version: ${Boost_VERSION}")
@@ -149,8 +149,10 @@ target_include_directories(${LIBPLEXUS} PUBLIC
         PRIVATE "${opendht_INCLUDEDIR}")
 
 set_target_properties(${BINPLEXUS} PROPERTIES DEBUG_POSTFIX "d" COMPILE_FLAGS -DLIBPLEXUS_STATIC_DEFINE)
+set_target_properties(${BINPLEXUS} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 set_target_properties(${LIBPLEXUS} PROPERTIES DEBUG_POSTFIX "d" OUTPUT_NAME ${PROJECT_NAME} IMPORT_PREFIX "lib")
 set_target_properties(${LIBPLEXUS} PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR} VERSION ${PROJECT_VERSION})
+set_target_properties(${LIBPLEXUS} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 
 ########## install ##########
 
