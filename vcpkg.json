@@ -17,7 +17,8 @@
         },
         {
             "name": "libgnutls",
-            "platform": "osx"
+            "platform": "osx",
+            "version>=": "3.8.7.1"
         },
         "openssl",
         "msgpack",
