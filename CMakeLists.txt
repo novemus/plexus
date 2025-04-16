@@ -52,7 +52,14 @@ message("* wormhole Library: ${wormhole_LIBRARY}")
 
 find_package(opendht 3.2 REQUIRED)
 find_package(fmt REQUIRED)
-find_package(msgpack-cxx REQUIRED)
+
+find_package(msgpackc-cxx QUIET CONFIG NAMES msgpackc-cxx msgpack)
+if(msgpackc-cxx_FOUND)
+  add_library(msgpack-cxx ALIAS msgpackc-cxx)
+else()
+  find_package(msgpack-cxx CONFIG REQUIRED)
+endif()
+
 find_package(PkgConfig REQUIRED)
 
 pkg_search_module(GnuTLS REQUIRED IMPORTED_TARGET gnutls)
