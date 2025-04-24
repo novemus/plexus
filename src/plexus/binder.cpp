@@ -190,7 +190,7 @@ public:
 
 }
 
-std::shared_ptr<plexus::stun_binder> create_stun_binder(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(true)
+std::shared_ptr<plexus::stun_binder> create_stun_binder(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(false)
 {
     boost::asio::ip::udp::socket socket(io, stun.protocol());
     socket.set_option(boost::asio::socket_base::reuse_address(true));
