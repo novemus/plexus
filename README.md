@@ -2,6 +2,8 @@
 
 The [plexus](https://github.com/novemus/plexus) tool is designed to make the possibility of establishing a direct network connection between applications running on machines located behind *NAT*s. To do this `plexus` implements the well-known *UDP hole punching* technique using the *STUN*. You can use a `DHT` network or `email` service as a rendezvous to exchange public addresses between local and remote app instances. For success, it is necessary that *NAT*s on both sides implement independent mapping policy of internal addresses to public ones. That is, the public address and port assigned by the *NAT* should not be changed when the destination address/port of the outgoing packet is changed, while the source address/port of the outgoing packet remains unchanged. In addition, you will need an accessible *STUN* server and email accounts for each side if you want to use `email` as the rendezvous. It is possible to use one email account for both sides.
 
+For those who prefer GUI, there is a [webpier](https://github.com/novemus/webpier) application based on the `plexus` library.
+
 ## Build
 
 You can download [prebuild packages](https://github.com/novemus/plexus/releases) for Debian and Windows platforms.
