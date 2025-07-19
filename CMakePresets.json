@@ -175,72 +175,122 @@
             "description": "All project tests",
             "displayName": "Test",
             "configurePreset": "linux-static-release",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
         },
         {
             "name": "linux-static-debug",
             "description": "All project tests",
             "displayName": "Test",
             "configurePreset": "linux-static-debug",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
         },
         {
             "name": "linux-shared-release",
             "description": "All project tests",
             "displayName": "Test",
             "configurePreset": "linux-shared-release",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
         },
         {
             "name": "linux-shared-debug",
             "description": "All project tests",
             "displayName": "Test",
             "configurePreset": "linux-shared-debug",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
         },
         {
             "name": "windows-static-release",
             "configurePreset": "windows-static-release",
-            "displayName": "Test (Release)",
+            "displayName": "Test",
             "description": "All project tests",
             "configuration": "Release",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
         },
         {
             "name": "windows-static-debug",
             "configurePreset": "windows-static-debug",
-            "displayName": "Test (Debug)",
+            "displayName": "Test",
             "description": "All project tests",
             "configuration": "Debug",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
         },
         {
             "name": "darwin-static-release",
             "configurePreset": "darwin-static-release",
-            "displayName": "Test (Release)",
+            "displayName": "Test",
             "description": "All project tests",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
         },
         {
             "name": "darwin-static-debug",
             "configurePreset": "darwin-static-debug",
-            "displayName": "Test (Debug)",
+            "displayName": "Test",
             "description": "All project tests",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
         },
         {
             "name": "darwin-shared-release",
             "configurePreset": "darwin-shared-release",
-            "displayName": "Test (Release)",
+            "displayName": "Test",
             "description": "All project tests",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
         },
         {
             "name": "darwin-shared-debug",
             "configurePreset": "darwin-shared-debug",
-            "displayName": "Test (Debug)",
+            "displayName": "Test",
             "description": "All project tests",
-            "inherits": "test-base"
+            "inherits": "test-base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
         }
     ],
     "buildPresets": [
@@ -248,13 +298,111 @@
             "name": "windows-static-debug",
             "displayName": "Debug",
             "configuration": "Debug",
-            "configurePreset": "windows-static-debug"
+            "configurePreset": "windows-static-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
         },
         {
             "name": "windows-static-release",
             "displayName": "Release",
             "configuration": "Release",
-            "configurePreset": "windows-static-release"
+            "configurePreset": "windows-static-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "linux-shared-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "linux-shared-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-shared-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "linux-shared-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-static-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "linux-static-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-static-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "linux-static-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "darwin-shared-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "darwin-shared-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "darwin-shared-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "darwin-shared-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "darwin-static-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "darwin-static-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "darwin-static-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "darwin-static-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
         }
     ],
     "packagePresets": [
@@ -366,6 +514,11 @@
             "displayName": "plexus (ZIP)",
             "description": "Portable ZIP archive",
             "configurePreset": "windows-static-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
             "generators": [
                 "ZIP"
             ],
@@ -395,10 +548,6 @@
                 {
                     "type": "build",
                     "name": "windows-static-release"
-                },
-                {
-                    "type": "build",
-                    "name": "windows-static-debug"
                 },
                 {
                     "type": "test",
