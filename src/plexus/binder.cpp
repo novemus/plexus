@@ -181,7 +181,7 @@ public:
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    network::traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
+    traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
         return stun->punch_hole(yield);

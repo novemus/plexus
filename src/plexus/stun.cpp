@@ -78,15 +78,15 @@
 
 namespace plexus { namespace stun {
 
-std::string to_string(const network::traverse::binding& value)
+std::string to_string(const traverse::binding& value)
 {
     switch (value)
     {
-        case network::traverse::port_dependent:
+        case traverse::port_dependent:
             return "port dependent";
-        case network::traverse::address_dependent:
+        case traverse::address_dependent:
             return "address dependent";
-        case network::traverse::address_and_port_dependent:
+        case traverse::address_and_port_dependent:
             return "address and port dependent";
         default:
             return "independent";
@@ -346,11 +346,11 @@ public:
 
 public:
 
-    network::traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
+    traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
     {
         _dbg_ << "punching udp hole to stun...";
         
-        network::traverse hole = { { 0 } };
+        traverse hole = { { 0 } };
 
         auto mapper = plexus::network::create_udp_transport(m_io, m_bind);
         auto response = exec_binding(mapper, yield, m_stun, m_stun);
@@ -364,7 +364,7 @@ public:
         {
             hole.traits.nat = true;
 
-            if (m_bind.port() != hole.outer_endpoint.port())
+            if (hole.inner_endpoint.port() != hole.outer_endpoint.port())
             {
                 hole.traits.random_port = true;
             }
@@ -374,7 +374,7 @@ public:
             auto first_endpoint = exec_binding(mapper, yield, changed_stun, changed_stun).mapped_endpoint();
             if (first_endpoint == hole.outer_endpoint)
             {
-                hole.traits.mapping = network::traverse::independent;
+                hole.traits.mapping = traverse::independent;
             }
             else
             {
@@ -385,15 +385,15 @@ public:
                 
                 if (second_endpoint == hole.outer_endpoint)
                 {
-                    hole.traits.mapping = network::traverse::port_dependent;
+                    hole.traits.mapping = traverse::port_dependent;
                 }
                 else if (second_endpoint == first_endpoint)
                 {
-                    hole.traits.mapping = network::traverse::address_dependent;
+                    hole.traits.mapping = traverse::address_dependent;
                 }
                 else
                 {
-                    hole.traits.mapping = network::traverse::address_and_port_dependent;
+                    hole.traits.mapping = traverse::address_and_port_dependent;
                 }
 
                 if (second_endpoint.address() != hole.outer_endpoint.address() || second_endpoint.address() != first_endpoint.address())
@@ -404,7 +404,7 @@ public:
         }
         else
         {
-            hole.traits.mapping = network::traverse::independent;
+            hole.traits.mapping = traverse::independent;
         }
 
         auto filter = plexus::network::create_udp_transport(m_io);
@@ -413,7 +413,7 @@ public:
             _dbg_ << "first filtering test...";
 
             exec_binding(filter, yield, m_stun, changed_stun, message(flag::change_address | flag::change_port), 1400);
-            hole.traits.filtering = network::traverse::independent;
+            hole.traits.filtering = traverse::independent;
         }
         catch(const plexus::timeout_error&)
         {
@@ -422,7 +422,7 @@ public:
                 _dbg_ << "second filtering test...";
 
                 exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(changed_stun.address(), m_stun.port()), message(flag::change_address), 1400);
-                hole.traits.filtering = network::traverse::port_dependent;
+                hole.traits.filtering = traverse::port_dependent;
             }
             catch(const plexus::timeout_error&)
             {
@@ -431,15 +431,15 @@ public:
                     _dbg_ << "third filtering test...";
 
                     exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(m_stun.address(), changed_stun.port()), message(flag::change_port), 1400);
-                    hole.traits.filtering = network::traverse::address_dependent;
+                    hole.traits.filtering = traverse::address_dependent;
                 }
                 catch(const plexus::timeout_error&)
                 {
-                    hole.traits.filtering = network::traverse::address_and_port_dependent;
+                    hole.traits.filtering = traverse::address_and_port_dependent;
                 }
             }
         }
-        
+
         try
         {
             _dbg_ << "hairpin test...";

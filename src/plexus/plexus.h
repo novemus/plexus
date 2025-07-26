@@ -20,10 +20,41 @@ namespace plexus {
 
 using namespace boost::asio::ip;
 
+struct traverse
+{
+    enum binding
+    {
+        independent = 0,
+        port_dependent = 1,
+        address_dependent = 2,
+        address_and_port_dependent = 3
+    };
+
+    struct
+    {
+        bool nat : 1;
+        bool hairpin : 1;
+        bool random_port : 1;
+        bool variable_address : 1;
+        binding mapping : 2;
+        binding filtering : 2;
+    }
+    traits;
+
+    udp::endpoint inner_endpoint;
+    udp::endpoint outer_endpoint;
+};
+
 struct identity
 {
     std::string owner;
     std::string pin;
+};
+
+struct cryptoid
+{
+    std::string certfile;
+    std::string keyfile;
 };
 
 struct reference
@@ -72,17 +103,26 @@ using collector = std::function<void(const identity& /* host */,
                                      const identity& /* peer */,
                                      tubus::socket&& /* socket */)>;
 
+using observer = std::function<void(const identity& /* host */,
+                                    const identity& /* peer */)>;
+
 using fallback = std::function<void(const identity& /* host */,
                                     const identity& /* peer */,
                                     const std::string& /* error */)>;
 
 LIBPLEXUS_EXPORT
-void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify = nullptr) noexcept(true);
+void explore_network(boost::asio::io_service& io, const udp::endpoint& bind, const udp::endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
 LIBPLEXUS_EXPORT
-void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& notify = nullptr) noexcept(true);
+void forward_advent(boost::asio::io_service& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT
-void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify = nullptr) noexcept(true);
+void receive_advent(boost::asio::io_service& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT
-void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& notify = nullptr) noexcept(true);
+void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
+LIBPLEXUS_EXPORT
+void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
+LIBPLEXUS_EXPORT
+void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure = nullptr) noexcept(true);
+LIBPLEXUS_EXPORT
+void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure = nullptr) noexcept(true);
 
 }

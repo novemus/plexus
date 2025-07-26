@@ -31,6 +31,7 @@ const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE
 const int64_t hangup_timeout = plexus::utils::getenv<int64_t>("PLEXUS_HANGUP_TIMEOUT", 20000);
 const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
 const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
+const std::string advent_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "advent");
 
 using context = context<plexus::dhtnode>;
 
@@ -208,15 +209,15 @@ template<typename result> struct operation
 };
 
 using listen_ptr = std::shared_ptr<operation<std::tuple<uint64_t, identity, identity>>>;
-using invite = std::tuple<uint64_t, identity, identity>;
+using notice = std::tuple<uint64_t, identity, identity>;
 
-class listen : public operation<invite>
+class listen : public operation<notice>
 {
     boost::asio::deadline_timer     timer;
     std::shared_ptr<dht::DhtRunner> node;
     dht::InfoHash                   hash;
     std::future<size_t>             token;
-    std::deque<invite>              queue;
+    std::deque<notice>              queue;
     std::mutex                      mutex;
 
 protected:
@@ -233,7 +234,7 @@ public:
             node->cancelListen(hash, std::move(token));
     }
 
-    invite wait(boost::asio::yield_context yield) noexcept(false) override
+    notice wait(boost::asio::yield_context yield) noexcept(false) override
     {
         boost::system::error_code ec;
         timer.async_wait(yield[ec]);
@@ -253,13 +254,13 @@ public:
         return res;
     }
 
-    static listen_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer) noexcept(false)
+    static listen_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, const std::string& subject) noexcept(false)
     {
         _dbg_ << "listen " << repo.app << "#invite for " << host;
 
         std::shared_ptr<listen> op(new listen(io));
         op->node = repo.node();
-        op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + invite_token);
+        op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + subject);
 
         auto match = [peer](const identity& info)
         {
@@ -429,7 +430,7 @@ public:
             throw plexus::context_error(__FUNCTION__, ec);
     }
 
-    static forward_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway) noexcept(false)
+    static forward_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway = {}) noexcept(false)
     {
         _dbg_ << "forward " << repo.app << "#" << subject << " for " << peer << " from " << host;
 
@@ -557,7 +558,7 @@ void spawn_accept(boost::asio::io_service& io, const opendht::context& ctx, cons
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
         opendht::repository repo(ctx);
-        auto op = opendht::listen::start(io, repo, host, peer);
+        auto op = opendht::listen::start(io, repo, host, peer, opendht::accept_token);
         do
         {
             auto invite = op->wait(yield);
@@ -577,6 +578,55 @@ void spawn_invite(boost::asio::io_service& io, const opendht::context& ctx, cons
     {
         opendht::repository repo(ctx);
         handler(yield, std::make_shared<opendht::pipe_impl>(io, repo, std::time(nullptr), host, peer));
+    });
+}
+
+template<>
+void forward_advent(boost::asio::io_service& io, const opendht::context& ctx, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+{
+    boost::asio::spawn(io, [&io, ctx, host, peer, handler, failure](boost::asio::yield_context yield)
+    {
+        try
+        {
+            opendht::repository repo(ctx);
+            auto op = opendht::forward::start(io, repo, host, peer, std::time(nullptr), opendht::advent_token);
+            op->wait(yield);
+
+            _inf_ << "advent " << host << " -> " << peer;
+
+            handler(host, peer);
+        }
+        catch(const std::exception& ex)
+        {
+            _err_ << "advent " << host << " -> " << peer << " failed: " << ex.what();
+            failure(host, peer, ex.what());
+        }
+    });
+}
+
+template<>
+void receive_advent(boost::asio::io_service& io, const opendht::context& ctx, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+{
+    boost::asio::spawn(io, [&io, ctx, host, peer, handler, failure](boost::asio::yield_context yield)
+    {
+        try
+        {
+            opendht::repository repo(ctx);
+            auto op = opendht::listen::start(io, repo, host, peer, opendht::advent_token);
+            do
+            {
+                auto advent = op->wait(yield);
+                io.post(std::bind(handler, std::get<1>(advent), std::get<2>(advent)));
+
+                _inf_ << "advent " << std::get<1>(advent) << " <- " << std::get<2>(advent);
+            }
+            while (true);
+        }
+        catch(const std::exception& ex)
+        {
+            _err_ << "advent " << host << " <- " << peer << " failed: " << ex.what();
+            failure(host, peer, ex.what());
+        }
     });
 }
 

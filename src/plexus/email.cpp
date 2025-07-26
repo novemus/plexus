@@ -26,6 +26,7 @@ const int64_t max_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MAX_P
 const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 10000);
 const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
 const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
+const std::string advent_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "advent");
 
 class channel
 {
@@ -635,7 +636,7 @@ void spawn_accept(boost::asio::io_service& io, const email::context& conf, const
     {
         email::smtp pusher(io, conf, host, peer);
         email::imap puller(io, conf, host, peer);
-        
+
         do
         {
             puller.wait(yield, email::invite_token);
@@ -666,6 +667,57 @@ void spawn_invite(boost::asio::io_service& io, const email::context& conf, const
         puller.init(yield);
 
         handler(yield, std::make_shared<email::pipe_impl>(pusher, puller));
+    });
+}
+
+template<>
+void forward_advent(boost::asio::io_service& io, const email::context& conf, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+{
+    boost::asio::spawn(io, [&io, conf, host, peer, handler, failure](boost::asio::yield_context yield)
+    {
+        try
+        {
+            email::smtp pusher(io, conf, host, peer);
+            pusher.push(yield, email::advent_token, reference { boost::asio::ip::udp::endpoint { boost::asio::ip::address { boost::asio::ip::address_v4 {} }, 1 }});
+
+            handler(host, peer);
+
+            _inf_ << "advent " << host << " -> " << peer;
+        }
+        catch(const std::exception& ex)
+        {
+            _err_ << "advent " << host << " -> " << peer << " failed: " << ex.what();
+            failure(host, peer, ex.what());
+        }
+    });
+}
+
+template<>
+void receive_advent(boost::asio::io_service& io, const email::context& conf, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+{
+    boost::asio::spawn(io, [&io, conf, host, peer, handler, failure](boost::asio::yield_context yield)
+    {
+        try
+        {
+            email::imap puller(io, conf, host, peer);
+            do
+            {
+                puller.wait(yield, email::advent_token);
+
+                io.post(std::bind(handler, puller.host(), puller.peer()));
+
+                _inf_ << "advent " << puller.host() << " <- " << puller.peer();
+
+                puller.host(host);
+                puller.peer(peer);
+            }
+            while (true);
+        }
+        catch(const std::exception& ex)
+        {
+            _err_ << "advent " << host << " <- " << peer << " failed: " << ex.what();
+            failure(host, peer, ex.what());
+        }
     });
 }
 

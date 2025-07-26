@@ -54,7 +54,7 @@ std::istream& operator>>(std::istream& in, identity& level);
 struct stun_client
 {
     virtual ~stun_client() {}
-    virtual network::traverse punch_hole(boost::asio::yield_context yield) noexcept(false) = 0;
+    virtual traverse punch_hole(boost::asio::yield_context yield) noexcept(false) = 0;
 };
 
 std::shared_ptr<stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) noexcept(true);
@@ -156,5 +156,10 @@ template<class mediator>
 void spawn_accept(boost::asio::io_service& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
 template<class mediator>
 void spawn_invite(boost::asio::io_service& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
+
+template<class mediator>
+void forward_advent(boost::asio::io_service& io, const context<mediator>& conf, const identity& host, const identity& peer, const observer& reveal, const fallback& failure = nullptr) noexcept(true);
+template<class mediator>
+void receive_advent(boost::asio::io_service& io, const context<mediator>& conf, const identity& host, const identity& peer, const observer& reveal, const fallback& failure = nullptr) noexcept(true);
 
 }
