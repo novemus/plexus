@@ -29,7 +29,7 @@ class ssl_echo_session : public std::enable_shared_from_this<ssl_echo_session>
 
 public:
 
-    ssl_echo_session(boost::asio::io_service& io, boost::asio::ssl::context &ssl)
+    ssl_echo_session(boost::asio::io_context& io, boost::asio::ssl::context &ssl)
         : m_socket(io, ssl)
     {
     }
@@ -85,13 +85,13 @@ protected:
 
 class ssl_echo_server
 {
-    boost::asio::io_service& m_io;
+    boost::asio::io_context& m_io;
     boost::asio::ip::tcp::acceptor m_acceptor;
     boost::asio::ssl::context m_ssl;
 
 public:
 
-    ssl_echo_server(boost::asio::io_service& io, unsigned short port, const std::string& cert, const std::string& key, const std::string& ca = "")
+    ssl_echo_server(boost::asio::io_context& io, unsigned short port, const std::string& cert, const std::string& key, const std::string& ca = "")
         : m_io(io)
         , m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
         , m_ssl(boost::asio::ssl::context::sslv23)
@@ -105,7 +105,7 @@ public:
             m_ssl.load_verify_file(ca);
         }
 
-        m_io.post(boost::bind(&ssl_echo_server::start_accept, this));
+        boost::asio::post(m_io, boost::bind(&ssl_echo_server::start_accept, this));
     }
 
 protected:
@@ -128,20 +128,20 @@ protected:
     }
 };
 
-std::shared_ptr<ssl_echo_server> create_ssl_server(boost::asio::io_service& io, unsigned short port, const std::string& cert = "", const std::string& key = "", const std::string& ca = "")
+std::shared_ptr<ssl_echo_server> create_ssl_server(boost::asio::io_context& io, unsigned short port, const std::string& cert = "", const std::string& key = "", const std::string& ca = "")
 {
     return std::make_shared<ssl_echo_server>(io, port, cert, key, ca);
 }
 
 const uint16_t SSL_PORT = 4433;
-const boost::asio::ip::tcp::endpoint SSL_SERVER(boost::asio::ip::address::from_string("127.0.0.1"), SSL_PORT);
-const boost::asio::ip::tcp::endpoint WRONG_SSL_SERVER(boost::asio::ip::address::from_string("1.2.3.4"), SSL_PORT);
+const boost::asio::ip::tcp::endpoint SSL_SERVER(boost::asio::ip::make_address("127.0.0.1"), SSL_PORT);
+const boost::asio::ip::tcp::endpoint WRONG_SSL_SERVER(boost::asio::ip::make_address("1.2.3.4"), SSL_PORT);
 
 }
 
 BOOST_AUTO_TEST_CASE(no_check_certs)
 {
-    boost::asio::io_service io;
+    boost::asio::io_context io;
     auto server = create_ssl_server(io, SSL_PORT, "./certs/server.crt", "./certs/server.key");
 
     boost::asio::spawn(io, [&](boost::asio::yield_context yield)
@@ -169,14 +169,14 @@ BOOST_AUTO_TEST_CASE(no_check_certs)
         BOOST_REQUIRE_NO_THROW(client->shutdown());
 
         io.stop();
-    });
+    }, boost::asio::detached);
 
     io.run();
 }
 
 BOOST_AUTO_TEST_CASE(check_certs)
 {
-    boost::asio::io_service io;
+    boost::asio::io_context io;
     auto server = create_ssl_server(io, SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
     
     boost::asio::spawn(io, [&](boost::asio::yield_context yield)
@@ -204,14 +204,14 @@ BOOST_AUTO_TEST_CASE(check_certs)
         BOOST_REQUIRE_NO_THROW(client->shutdown());
 
         io.stop();
-    });
+    }, boost::asio::detached);
 
     io.run();
 }
 
 BOOST_AUTO_TEST_CASE(wrong_certs)
 {
-    boost::asio::io_service io;
+    boost::asio::io_context io;
     auto server = create_ssl_server(io, SSL_PORT, "./certs/server.crt", "./certs/server.key", "./certs/ca.crt");
     
     boost::asio::spawn(io, [&](boost::asio::yield_context yield)
@@ -235,7 +235,7 @@ BOOST_AUTO_TEST_CASE(wrong_certs)
         BOOST_REQUIRE_NO_THROW(client->shutdown());
 
         io.stop();
-    });
+    }, boost::asio::detached);
 
     io.run();
 }

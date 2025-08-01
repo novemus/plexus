@@ -25,7 +25,7 @@ class tcp_echo_session : public std::enable_shared_from_this<tcp_echo_session>
 
 public:
 
-    tcp_echo_session(boost::asio::io_service &io)
+    tcp_echo_session(boost::asio::io_context &io)
         : m_socket(io)
     {
     }
@@ -72,16 +72,16 @@ namespace {
 
 class tcp_echo_server
 {
-    boost::asio::io_service& m_io;
+    boost::asio::io_context& m_io;
     boost::asio::ip::tcp::acceptor m_acceptor;
 
 public:
 
-    tcp_echo_server(boost::asio::io_service& io, unsigned short port)
+    tcp_echo_server(boost::asio::io_context& io, unsigned short port)
         : m_io(io)
         , m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
     {
-        m_io.post(boost::bind(&tcp_echo_server::start_accept, this));
+        boost::asio::post(m_io, boost::bind(&tcp_echo_server::start_accept, this));
     }
 
 protected:
@@ -104,27 +104,27 @@ protected:
     }
 };
 
-std::shared_ptr<tcp_echo_server> create_tcp_server(boost::asio::io_service& io, unsigned short port)
+std::shared_ptr<tcp_echo_server> create_tcp_server(boost::asio::io_context& io, unsigned short port)
 {
     return std::make_shared<tcp_echo_server>(io, port);
 }
 
 const uint16_t TCP_SERVER_PORT = 8765;
 
-const boost::asio::ip::tcp::endpoint TCP_SERVER(boost::asio::ip::address::from_string("127.0.0.1"), TCP_SERVER_PORT);
+const boost::asio::ip::tcp::endpoint TCP_SERVER(boost::asio::ip::make_address("127.0.0.1"), TCP_SERVER_PORT);
 const boost::asio::ip::tcp::endpoint TCP_CLIENT(boost::asio::ip::tcp::v4(), 0);
-const boost::asio::ip::tcp::endpoint TCP_REMOTE_SERVER(boost::asio::ip::address::from_string("8.8.8.8"), 80);
+const boost::asio::ip::tcp::endpoint TCP_FAKE_SERVER(boost::asio::ip::make_address("1.1.1.1"), 1);
 
 }
 
 BOOST_AUTO_TEST_CASE(tcp_echo_exchange)
 {
-    boost::asio::io_service io;
+    boost::asio::io_context io;
     auto server = create_tcp_server(io, TCP_SERVER_PORT);
     
     boost::asio::spawn(io, [&](boost::asio::yield_context yield)
     {
-        auto shorty = plexus::network::create_tcp_client(io, TCP_REMOTE_SERVER, TCP_CLIENT, 3);
+        auto shorty = plexus::network::create_tcp_client(io, TCP_FAKE_SERVER, TCP_CLIENT);
         BOOST_REQUIRE_THROW(shorty->connect(yield, 2000), boost::system::system_error);
         BOOST_REQUIRE_NO_THROW(shorty->shutdown());
 
@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(tcp_echo_exchange)
         BOOST_REQUIRE_NO_THROW(client->shutdown());
 
         io.stop();
-    });
+    }, boost::asio::detached);
 
     io.run();
 }

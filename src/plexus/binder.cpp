@@ -20,7 +20,7 @@ namespace plexus { namespace stun {
 
 class binder_impl : public plexus::stun_binder
 {
-    boost::asio::io_service& m_io;
+    boost::asio::io_context& m_io;
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
     uint16_t m_punch;
@@ -73,7 +73,7 @@ class binder_impl : public plexus::stun_binder
 
 public:
 
-    binder_impl(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch)
+    binder_impl(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch)
         : m_io(io)
         , m_stun(stun)
         , m_bind(bind)
@@ -190,7 +190,7 @@ public:
 
 }
 
-std::shared_ptr<plexus::stun_binder> create_stun_binder(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(false)
+std::shared_ptr<plexus::stun_binder> create_stun_binder(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(false)
 {
     boost::asio::ip::udp::socket socket(io, stun.protocol());
     socket.set_option(boost::asio::socket_base::reuse_address(true));

@@ -61,7 +61,7 @@ std::istream& operator>>(std::istream& in, identity& value)
     throw boost::bad_lexical_cast();
 }
 
-void explore_network(boost::asio::io_service& io, const udp::endpoint& bind, const udp::endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true)
+void explore_network(boost::asio::io_context& io, const udp::endpoint& bind, const udp::endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true)
 {
     boost::asio::spawn(io, [&io, bind, stun, handler, failure](boost::asio::yield_context yield)
     {
@@ -81,10 +81,10 @@ void explore_network(boost::asio::io_service& io, const udp::endpoint& bind, con
             if (failure)
                 failure(e.what());
         }
-    });
+    }, boost::asio::detached);
 }
 
-void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure) noexcept(true)
+void spawn_accept(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure) noexcept(true)
 {
     auto handler = [&io, config, connect, failure](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
     {
@@ -123,7 +123,7 @@ void spawn_accept(boost::asio::io_service& io, const options& config, const iden
         : spawn_accept(io, context<dhtnode>(config.app, config.repo, std::get<dhtnode>(config.mediator)), host, peer, handler);
 }
 
-void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure) noexcept(true)
+void spawn_invite(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure) noexcept(true)
 {
     auto handler = [&io, config, connect, failure](boost::asio::yield_context yield, std::shared_ptr<plexus::pipe> pipe)
     {
@@ -162,7 +162,7 @@ void spawn_invite(boost::asio::io_service& io, const options& config, const iden
         : spawn_invite(io, context<dhtnode>(config.app, config.repo, std::get<dhtnode>(config.mediator)), host, peer, handler);
 }
 
-void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure) noexcept(true)
+void spawn_accept(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure) noexcept(true)
 {
     spawn_accept(io, config, host, peer, [&io, collect, failure](const identity& host, const identity& peer, const udp::endpoint& bind, const reference& gateway, const reference& faraway)
     {
@@ -197,7 +197,7 @@ void spawn_accept(boost::asio::io_service& io, const options& config, const iden
     }, failure);
 }
 
-void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure) noexcept(true)
+void spawn_invite(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure) noexcept(true)
 {
     spawn_invite(io, config, host, peer, [&io, collect, failure](const identity& host, const identity& peer, const udp::endpoint& bind, const reference& gateway, const reference& faraway)
     {
@@ -232,7 +232,7 @@ void spawn_invite(boost::asio::io_service& io, const options& config, const iden
     }, failure);
 }
 
-void forward_advent(boost::asio::io_service& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
     _inf_ << "forwarding advent from " << host << " for " << peer;
 
@@ -241,7 +241,7 @@ void forward_advent(boost::asio::io_service& io, const rendezvous& mediator, con
         : forward_advent(io, context<dhtnode>(app, repo, std::get<dhtnode>(mediator)), host, peer, handler, failure);
 }
 
-void receive_advent(boost::asio::io_service& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+void receive_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
     _inf_ << "receiving advent from " << peer << " for " << host;
 

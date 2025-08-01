@@ -111,18 +111,18 @@ using fallback = std::function<void(const identity& /* host */,
                                     const std::string& /* error */)>;
 
 LIBPLEXUS_EXPORT
-void explore_network(boost::asio::io_service& io, const udp::endpoint& bind, const udp::endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
+void explore_network(boost::asio::io_context& io, const udp::endpoint& bind, const udp::endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
 LIBPLEXUS_EXPORT
-void forward_advent(boost::asio::io_service& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
+void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT
-void receive_advent(boost::asio::io_service& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
+void receive_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT
-void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
+void spawn_accept(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
 LIBPLEXUS_EXPORT
-void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
+void spawn_invite(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
 LIBPLEXUS_EXPORT
-void spawn_accept(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure = nullptr) noexcept(true);
+void spawn_accept(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure = nullptr) noexcept(true);
 LIBPLEXUS_EXPORT
-void spawn_invite(boost::asio::io_service& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure = nullptr) noexcept(true);
+void spawn_invite(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure = nullptr) noexcept(true);
 
 }

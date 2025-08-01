@@ -36,7 +36,7 @@ class channel
 
 public:
 
-    channel(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+    channel(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
     {
         try
         {
@@ -197,7 +197,7 @@ class smtp
 
 public:
     
-    smtp(boost::asio::io_service& io, const context& conf, const identity& host, const identity& peer)
+    smtp(boost::asio::io_context& io, const context& conf, const identity& host, const identity& peer)
         : m_io(io)
         , m_config(conf)
         , m_host(host)
@@ -253,7 +253,7 @@ public:
 
 private:
 
-    boost::asio::io_service& m_io;
+    boost::asio::io_context& m_io;
     context m_config;
     identity m_host;
     identity m_peer;
@@ -433,7 +433,7 @@ class imap
 
 public:
 
-    imap(boost::asio::io_service& io, const context& conf, const identity& host, const identity& peer)
+    imap(boost::asio::io_context& io, const context& conf, const identity& host, const identity& peer)
         : m_io(io)
         , m_config(conf)
         , m_host(host)
@@ -569,7 +569,7 @@ public:
 
 private:
 
-    boost::asio::io_service& m_io;
+    boost::asio::io_context& m_io;
     context m_config;
     bool m_idle = false;
     uint64_t m_validity = 0;
@@ -630,7 +630,7 @@ public:
 }
 
 template<>
-void spawn_accept(boost::asio::io_service& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+void spawn_accept(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
     {
@@ -653,11 +653,11 @@ void spawn_accept(boost::asio::io_service& io, const email::context& conf, const
             puller.peer(peer);
         }
         while (true);
-    });
+    }, boost::asio::detached);
 }
 
 template<>
-void spawn_invite(boost::asio::io_service& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+void spawn_invite(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
     {
@@ -667,11 +667,11 @@ void spawn_invite(boost::asio::io_service& io, const email::context& conf, const
         puller.init(yield);
 
         handler(yield, std::make_shared<email::pipe_impl>(pusher, puller));
-    });
+    }, boost::asio::detached);
 }
 
 template<>
-void forward_advent(boost::asio::io_service& io, const email::context& conf, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+void forward_advent(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler, failure](boost::asio::yield_context yield)
     {
@@ -689,11 +689,11 @@ void forward_advent(boost::asio::io_service& io, const email::context& conf, con
             _err_ << "advent " << host << " -> " << peer << " failed: " << ex.what();
             failure(host, peer, ex.what());
         }
-    });
+    }, boost::asio::detached);
 }
 
 template<>
-void receive_advent(boost::asio::io_service& io, const email::context& conf, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+void receive_advent(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler, failure](boost::asio::yield_context yield)
     {
@@ -704,7 +704,7 @@ void receive_advent(boost::asio::io_service& io, const email::context& conf, con
             {
                 puller.wait(yield, email::advent_token);
 
-                io.post(std::bind(handler, puller.host(), puller.peer()));
+                boost::asio::post(io, std::bind(handler, puller.host(), puller.peer()));
 
                 _inf_ << "advent " << puller.host() << " <- " << puller.peer();
 
@@ -718,7 +718,7 @@ void receive_advent(boost::asio::io_service& io, const email::context& conf, con
             _err_ << "advent " << host << " <- " << peer << " failed: " << ex.what();
             failure(host, peer, ex.what());
         }
-    });
+    }, boost::asio::detached);
 }
 
 }

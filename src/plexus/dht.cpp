@@ -222,7 +222,7 @@ class listen : public operation<notice>
 
 protected:
 
-    listen(boost::asio::io_service& io) noexcept(true)
+    listen(boost::asio::io_context& io) noexcept(true)
         : timer(io)
     {}
 
@@ -254,7 +254,7 @@ public:
         return res;
     }
 
-    static listen_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, const std::string& subject) noexcept(false)
+    static listen_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, const std::string& subject) noexcept(false)
     {
         _dbg_ << "listen " << repo.app << "#invite for " << host;
 
@@ -313,7 +313,7 @@ class acquire : public operation<reference>
 
 protected:
 
-    acquire(boost::asio::io_service& io) noexcept(true)
+    acquire(boost::asio::io_context& io) noexcept(true)
         : timer(io)
     {
     }
@@ -341,7 +341,7 @@ public:
         return data;
     }
 
-    static acquire_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject) noexcept(false)
+    static acquire_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject) noexcept(false)
     {
         _dbg_ << "acquire " << repo.app << "#" << subject << " for " << host << " from " << peer;
 
@@ -404,7 +404,7 @@ class forward : public operation<void>
 
 protected:
 
-    forward(boost::asio::io_service& io, uint64_t id) noexcept(true)
+    forward(boost::asio::io_context& io, uint64_t id) noexcept(true)
         : timer(io)
         , val(id)
     {
@@ -430,7 +430,7 @@ public:
             throw plexus::context_error(__FUNCTION__, ec);
     }
 
-    static forward_ptr start(boost::asio::io_service& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway = {}) noexcept(false)
+    static forward_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway = {}) noexcept(false)
     {
         _dbg_ << "forward " << repo.app << "#" << subject << " for " << peer << " from " << host;
 
@@ -466,7 +466,7 @@ public:
 
 class pipe_impl : public pipe
 {
-    boost::asio::io_service& m_io;
+    boost::asio::io_context& m_io;
     repository               m_repo;
     uint64_t                 m_id;
     identity                 m_host;
@@ -476,7 +476,7 @@ class pipe_impl : public pipe
 
 public:
 
-    pipe_impl(boost::asio::io_service& io, const repository& repo, uint64_t id, const identity& host, const identity& peer) noexcept(true)
+    pipe_impl(boost::asio::io_context& io, const repository& repo, uint64_t id, const identity& host, const identity& peer) noexcept(true)
         : m_io(io)
         , m_repo(repo)
         , m_id(id)
@@ -516,7 +516,7 @@ public:
             {
                 _err_ << ex.what();
             }
-        });
+        }, boost::asio::detached);
 
         _inf_ << "pushed request " << gateway;
     }
@@ -534,7 +534,7 @@ public:
             {
                 _err_ << ex.what();
             }
-        });
+        }, boost::asio::detached);
 
         _inf_ << "pushed response " << gateway;
     }
@@ -553,7 +553,7 @@ public:
 }
 
 template<>
-void spawn_accept(boost::asio::io_service& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+void spawn_accept(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
@@ -565,24 +565,24 @@ void spawn_accept(boost::asio::io_service& io, const opendht::context& ctx, cons
             boost::asio::spawn(io, [&io, repo, invite, handler](boost::asio::yield_context yield)
             {
                 handler(yield, std::make_shared<opendht::pipe_impl>(io, repo, std::get<0>(invite), std::get<1>(invite), std::get<2>(invite)));
-            });
+            }, boost::asio::detached);
         }
         while (true);
-    });
+    }, boost::asio::detached);
 }
 
 template<>
-void spawn_invite(boost::asio::io_service& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+void spawn_invite(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
         opendht::repository repo(ctx);
         handler(yield, std::make_shared<opendht::pipe_impl>(io, repo, std::time(nullptr), host, peer));
-    });
+    }, boost::asio::detached);
 }
 
 template<>
-void forward_advent(boost::asio::io_service& io, const opendht::context& ctx, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+void forward_advent(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler, failure](boost::asio::yield_context yield)
     {
@@ -601,11 +601,11 @@ void forward_advent(boost::asio::io_service& io, const opendht::context& ctx, co
             _err_ << "advent " << host << " -> " << peer << " failed: " << ex.what();
             failure(host, peer, ex.what());
         }
-    });
+    }, boost::asio::detached);
 }
 
 template<>
-void receive_advent(boost::asio::io_service& io, const opendht::context& ctx, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
+void receive_advent(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler, failure](boost::asio::yield_context yield)
     {
@@ -616,7 +616,7 @@ void receive_advent(boost::asio::io_service& io, const opendht::context& ctx, co
             do
             {
                 auto advent = op->wait(yield);
-                io.post(std::bind(handler, std::get<1>(advent), std::get<2>(advent)));
+                boost::asio::post(io, std::bind(handler, std::get<1>(advent), std::get<2>(advent)));
 
                 _inf_ << "advent " << std::get<1>(advent) << " <- " << std::get<2>(advent);
             }
@@ -627,7 +627,7 @@ void receive_advent(boost::asio::io_service& io, const opendht::context& ctx, co
             _err_ << "advent " << host << " <- " << peer << " failed: " << ex.what();
             failure(host, peer, ex.what());
         }
-    });
+    }, boost::asio::detached);
 }
 
 }

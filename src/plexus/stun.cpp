@@ -180,7 +180,7 @@ class message : public tubus::mutable_buffer
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
                 return boost::asio::ip::udp::endpoint(
-                    boost::asio::ip::address::from_string(utils::format("%d.%d.%d.%d", ptr[8], ptr[9], ptr[10], ptr[11])),
+                    boost::asio::ip::make_address(utils::format("%d.%d.%d.%d", ptr[8], ptr[9], ptr[10], ptr[11])),
                     read_short(ptr, 6)
                 );
             }
@@ -190,7 +190,7 @@ class message : public tubus::mutable_buffer
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
                 return boost::asio::ip::udp::endpoint(
-                    boost::asio::ip::address::from_string(utils::format("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
+                    boost::asio::ip::make_address(utils::format("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
                     read_short(ptr, 6)
                 );
             }
@@ -272,13 +272,13 @@ public:
 
 class client_impl : public stun_client
 {
-    boost::asio::io_service& m_io;
+    boost::asio::io_context& m_io;
     boost::asio::ip::udp::endpoint m_stun;
     boost::asio::ip::udp::endpoint m_bind;
 
 public:
 
-    client_impl(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) 
+    client_impl(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) 
         : m_io(io)
         , m_stun(stun)
         , m_bind(bind)
@@ -465,7 +465,7 @@ public:
 
 }
 
-std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local) noexcept(true)
+std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local) noexcept(true)
 {
     return std::make_shared<plexus::stun::client_impl>(io, server, local);
 }

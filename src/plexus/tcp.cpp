@@ -19,7 +19,7 @@ class ssl_socket_impl : public ssl_socket
 
 public:
 
-    ssl_socket_impl(const boost::asio::ip::tcp::endpoint& remote, boost::asio::io_service& io, boost::asio::ssl::context&& ssl)
+    ssl_socket_impl(const boost::asio::ip::tcp::endpoint& remote, boost::asio::io_context& io, boost::asio::ssl::context&& ssl)
         : ssl_socket(remote, io, ssl)
         , m_ssl(std::move(ssl))
     {
@@ -27,16 +27,14 @@ public:
     }
 };
 
-std::shared_ptr<tcp_socket> create_tcp_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local, uint8_t hops)
+std::shared_ptr<tcp_socket> create_tcp_client(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local)
 {
     auto socket = std::make_shared<tcp_socket>(remote, io);
-    socket->set_option(boost::asio::ip::unicast::hops(hops));
     socket->set_option(boost::asio::socket_base::keep_alive(true));
-
     return socket;
 }
 
-std::shared_ptr<ssl_socket> create_ssl_client(boost::asio::io_service& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+std::shared_ptr<ssl_socket> create_ssl_client(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
 {
     boost::asio::ssl::context ssl = boost::asio::ssl::context(boost::asio::ssl::context::sslv23);
     

@@ -16,11 +16,11 @@
 
 BOOST_AUTO_TEST_CASE(sync_udp_exchange)
 {
-    boost::asio::io_service io;
+    boost::asio::io_context io;
     boost::asio::spawn(io, [&](boost::asio::yield_context yield)
     {
-        const boost::asio::ip::udp::endpoint lep(boost::asio::ip::address::from_string("127.0.0.1"), 1234);
-        const boost::asio::ip::udp::endpoint rep(boost::asio::ip::address::from_string("127.0.0.1"), 4321);
+        const boost::asio::ip::udp::endpoint lep(boost::asio::ip::make_address("127.0.0.1"), 1234);
+        const boost::asio::ip::udp::endpoint rep(boost::asio::ip::make_address("127.0.0.1"), 4321);
 
         auto lend = plexus::network::create_udp_transport(io, lep);
         auto rend = plexus::network::create_udp_transport(io, rep);
@@ -41,17 +41,17 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
         BOOST_REQUIRE_EQUAL(wb, rb);
 
         BOOST_REQUIRE_THROW(lend->receive_from(boost::asio::buffer(rb), rep, yield), boost::system::system_error);
-    });
+    }, boost::asio::detached);
 
     io.run();
 }
 
 BOOST_AUTO_TEST_CASE(async_udp_exchange)
 {
-    boost::asio::io_service io;
+    boost::asio::io_context io;
 
-    const boost::asio::ip::udp::endpoint lep(boost::asio::ip::address::from_string("127.0.0.1"), 1234);
-    const boost::asio::ip::udp::endpoint rep(boost::asio::ip::address::from_string("127.0.0.1"), 4321);
+    const boost::asio::ip::udp::endpoint lep(boost::asio::ip::make_address("127.0.0.1"), 1234);
+    const boost::asio::ip::udp::endpoint rep(boost::asio::ip::make_address("127.0.0.1"), 4321);
 
     auto lend = plexus::network::create_udp_transport(io, lep);
     auto rend = plexus::network::create_udp_transport(io, rep);
@@ -80,12 +80,12 @@ BOOST_AUTO_TEST_CASE(async_udp_exchange)
     boost::asio::spawn(io, [work, lend, rep](boost::asio::yield_context yield)
     {
         work(yield, lend, rep);
-    });
+    }, boost::asio::detached);
 
     boost::asio::spawn(io, [work, rend, lep](boost::asio::yield_context yield)
     {
         work(yield, rend, lep);
-    });
+    }, boost::asio::detached);
 
     io.run();
 }

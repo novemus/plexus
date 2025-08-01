@@ -98,7 +98,7 @@ namespace
 
 BOOST_AUTO_TEST_CASE(plexus_meeting, *boost::unit_test::precondition(is_enabled))
 {
-    boost::asio::io_service io;
+    boost::asio::io_context io;
 
     std::atomic<bool> host_done = false;
     std::atomic<bool> peer_done = false;
@@ -170,7 +170,7 @@ BOOST_AUTO_TEST_CASE(plexus_meeting, *boost::unit_test::precondition(is_enabled)
 
 BOOST_AUTO_TEST_CASE(plexus_streaming, *boost::unit_test::precondition(is_enabled))
 {
-    boost::asio::io_service io;
+    boost::asio::io_context io;
 
     static const boost::system::error_code NONE_ERROR;
 

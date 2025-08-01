@@ -26,7 +26,7 @@ template<typename socket_impl, int64_t timeout_ms> struct asio_socket : public s
     typedef typename socket_impl::lowest_layer_type::endpoint_type endpoint_type;
 
     template<typename protocol_type, typename ...arguments>
-    asio_socket(const protocol_type& protocol, boost::asio::io_service& io, arguments&... args)
+    asio_socket(const protocol_type& protocol, boost::asio::io_context& io, arguments&... args)
         : socket_impl(io, args...), m_io(io)
     {
         socket_impl::lowest_layer().open(protocol);
@@ -40,7 +40,7 @@ template<typename socket_impl, int64_t timeout_ms> struct asio_socket : public s
     }
 
     template<typename ...arguments>
-    asio_socket(const endpoint_type& remote, boost::asio::io_service& io, arguments&... args)
+    asio_socket(const endpoint_type& remote, boost::asio::io_context& io, arguments&... args)
         : asio_socket(remote.protocol(), io, args...)
     {
         m_remote = remote;
@@ -185,7 +185,7 @@ private:
         return res;
     }
 
-    boost::asio::io_service& m_io;
+    boost::asio::io_context& m_io;
     endpoint_type m_remote; 
 };
 

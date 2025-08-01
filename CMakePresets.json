@@ -37,8 +37,11 @@
         {
             "name": "windows-static-debug",
             "displayName": "Static (Debug)",
-            "description": "Configure Debug static build",
-            "inherits": ["static-config-base", "vcpkg-config-base"],
+            "description": "Configure static Debug build",
+            "inherits": [
+                "static-config-base",
+                "vcpkg-config-base"
+            ],
             "cacheVariables": {
                 "VCPKG_TARGET_TRIPLET": "x64-windows-static",
                 "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
@@ -54,8 +57,35 @@
         {
             "name": "windows-static-release",
             "displayName": "Static (Release)",
-            "description": "Configure Release static build",
+            "description": "Configure static Release build",
             "inherits": "windows-static-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CONFIGURATION_TYPES": "Release"
+            }
+        },
+        {
+            "name": "windows-shared-debug",
+            "displayName": "Shared (Debug)",
+            "description": "Configure shared Debug build",
+            "inherits": ["shared-config-base", "vcpkg-config-base"],
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
+                "CMAKE_CONFIGURATION_TYPES": "Debug",
+                "CMAKE_BUILD_TYPE": "Debug"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-shared-release",
+            "displayName": "Shared (Release)",
+            "description": "Configure shared Release build",
+            "inherits": "windows-shared-debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_CONFIGURATION_TYPES": "Release"
@@ -245,6 +275,38 @@
             }
         },
         {
+            "name": "windows-shared-release",
+            "configurePreset": "windows-shared-release",
+            "displayName": "Test",
+            "description": "All project tests",
+            "configuration": "Release",
+            "inherits": "test-base",
+            "environment": {
+                "PATH": "${sourceDir}/build/${presetName}/vcpkg_installed/x64-windows/bin;${sourceParentDir}/install/x64/bin"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-shared-debug",
+            "configurePreset": "windows-shared-debug",
+            "displayName": "Test",
+            "description": "All project tests",
+            "configuration": "Debug",
+            "inherits": "test-base",
+            "environment": {
+                "PATH": "${sourceDir}/build/${presetName}/vcpkg_installed/x64-windows/debug/bin;${sourceParentDir}/install/x64/bin"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
             "name": "darwin-static-release",
             "configurePreset": "darwin-static-release",
             "displayName": "Test",
@@ -310,6 +372,28 @@
             "displayName": "Release",
             "configuration": "Release",
             "configurePreset": "windows-static-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-shared-debug",
+            "displayName": "Debug",
+            "configuration": "Debug",
+            "configurePreset": "windows-shared-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-shared-release",
+            "displayName": "Release",
+            "configuration": "Release",
+            "configurePreset": "windows-shared-release",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",

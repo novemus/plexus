@@ -57,7 +57,7 @@ struct stun_client
     virtual traverse punch_hole(boost::asio::yield_context yield) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) noexcept(true);
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) noexcept(true);
 
 struct stun_binder : public stun_client
 {
@@ -65,7 +65,7 @@ struct stun_binder : public stun_client
     virtual void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_binder> create_stun_binder(boost::asio::io_service& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(false);
+std::shared_ptr<stun_binder> create_stun_binder(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(false);
 
 struct pipe
 {
@@ -153,13 +153,13 @@ template<class mediator> struct context : public mediator
 };
 
 template<class mediator>
-void spawn_accept(boost::asio::io_service& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
+void spawn_accept(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
 template<class mediator>
-void spawn_invite(boost::asio::io_service& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
+void spawn_invite(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
 
 template<class mediator>
-void forward_advent(boost::asio::io_service& io, const context<mediator>& conf, const identity& host, const identity& peer, const observer& reveal, const fallback& failure = nullptr) noexcept(true);
+void forward_advent(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const observer& reveal, const fallback& failure = nullptr) noexcept(true);
 template<class mediator>
-void receive_advent(boost::asio::io_service& io, const context<mediator>& conf, const identity& host, const identity& peer, const observer& reveal, const fallback& failure = nullptr) noexcept(true);
+void receive_advent(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const observer& reveal, const fallback& failure = nullptr) noexcept(true);
 
 }

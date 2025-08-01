@@ -174,7 +174,7 @@ int main(int argc, char** argv)
                     }}
         };
 
-        boost::asio::io_service io;
+        boost::asio::io_context io;
         vm["accept"].as<bool>()
             ? plexus::spawn_accept(io, config, vm["host-info"].as<plexus::identity>(), vm["peer-info"].as<plexus::identity>(), launch)
             : plexus::spawn_invite(io, config, vm["host-info"].as<plexus::identity>(), vm["peer-info"].as<plexus::identity>(), launch);
