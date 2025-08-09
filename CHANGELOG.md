@@ -1,5 +1,9 @@
 # Change Log
 
+## 3.1.5 (Aug 9, 2025)
+
+- Added functions to investigate NAT, forward and receive service advent.
+
 ## 3.1.4 (Mar 23, 2025)
 
 - Increased reliability of DHT rendezvous.
