@@ -558,7 +558,7 @@ void spawn_accept(boost::asio::io_context& io, const opendht::context& ctx, cons
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
         opendht::repository repo(ctx);
-        auto op = opendht::listen::start(io, repo, host, peer, opendht::accept_token);
+        auto op = opendht::listen::start(io, repo, host, peer, opendht::invite_token);
         do
         {
             auto invite = op->wait(yield);
