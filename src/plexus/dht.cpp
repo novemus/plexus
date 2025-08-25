@@ -25,6 +25,11 @@
 #include <deque>
 #include <map>
 
+extern "C" 
+{
+    #include <gnutls/gnutls.h>
+}
+
 namespace plexus { namespace opendht {
 
 const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
@@ -59,8 +64,22 @@ class repository : public context
 
 public:
 
-    repository(const context& ctx) noexcept(false) : context(ctx)
+    repository(const context& ctx) noexcept(false) 
+        : context(ctx)
     {
+#ifdef _MSC_VER
+        static std::shared_ptr<void> s_gnutls = []()
+        {
+            if (auto err = gnutls_global_init())
+                throw plexus::context_error(__FUNCTION__, gnutls_strerror(err));
+
+            return std::shared_ptr<void>(nullptr, [](void*)
+            {
+                gnutls_global_deinit();
+            });
+        }();
+#endif
+
         for (auto const& iowner : std::filesystem::directory_iterator(std::filesystem::path(repo)))
         {
             if (!iowner.is_directory())
@@ -222,8 +241,9 @@ class listen : public operation<notice>
 
 protected:
 
-    listen(boost::asio::io_context& io) noexcept(true)
+    listen(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> n) noexcept(true)
         : timer(io)
+        , node(n)
     {}
 
 public:
@@ -258,8 +278,7 @@ public:
     {
         _dbg_ << "listen " << repo.app << "#invite for " << host;
 
-        std::shared_ptr<listen> op(new listen(io));
-        op->node = repo.node();
+        std::shared_ptr<listen> op(new listen(io, repo.node()));
         op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + subject);
 
         auto match = [peer](const identity& info)
@@ -313,8 +332,9 @@ class acquire : public operation<reference>
 
 protected:
 
-    acquire(boost::asio::io_context& io) noexcept(true)
+    acquire(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> n) noexcept(true)
         : timer(io)
+        , node(n)
     {
     }
 
@@ -345,9 +365,8 @@ public:
     {
         _dbg_ << "acquire " << repo.app << "#" << subject << " for " << host << " from " << peer;
 
-        std::shared_ptr<acquire> op(new acquire(io));
+        std::shared_ptr<acquire> op(new acquire(io, repo.node()));
 
-        op->node = repo.node();
         op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + subject);
         op->timer.expires_from_now(boost::posix_time::milliseconds(response_timeout));
 
@@ -404,8 +423,9 @@ class forward : public operation<void>
 
 protected:
 
-    forward(boost::asio::io_context& io, uint64_t id) noexcept(true)
+    forward(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> n, uint64_t id) noexcept(true)
         : timer(io)
+        , node(n)
         , val(id)
     {
     }
@@ -434,12 +454,11 @@ public:
     {
         _dbg_ << "forward " << repo.app << "#" << subject << " for " << peer << " from " << host;
 
-        std::shared_ptr<forward> op(new forward(io, id));
+        std::shared_ptr<forward> op(new forward(io, repo.node(), id));
 
         auto to = repo.load_cert(peer);
         auto from = repo.load_key(host);
 
-        op->node = repo.node();
         op->hash = dht::InfoHash::get(to->getId().toString() + repo.app + subject);
         op->timer.expires_from_now(boost::posix_time::milliseconds(hangup_timeout));
 
