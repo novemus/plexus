@@ -196,7 +196,8 @@
             },
             "execution": {
                 "noTestsAction": "error",
-                "stopOnFailure": true
+                "stopOnFailure": true,
+                "timeout": 300
             },
             "hidden": true
         },

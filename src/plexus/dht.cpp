@@ -25,11 +25,6 @@
 #include <deque>
 #include <map>
 
-extern "C" 
-{
-    #include <gnutls/gnutls.h>
-}
-
 namespace plexus { namespace opendht {
 
 const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
