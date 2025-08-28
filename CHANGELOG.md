@@ -1,6 +1,6 @@
 # Change Log
 
-## 3.1.5 (Aug 9, 2025)
+## 3.2.0 (Aug 28, 2025)
 
 - Added functions to investigate NAT, forward and receive service advent.
 
