@@ -38,13 +38,13 @@ message("* OpenSSL Version: ${OPENSSL_VERSION}")
 message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
-find_package(tubus REQUIRED COMPONENTS libtubus)
+find_package(tubus 1.2 REQUIRED COMPONENTS libtubus)
 
 message("* tubus Version: ${tubus_VERSION}")
 message("* tubus Include Dirs: ${tubus_INCLUDE_DIRS}")
 message("* tubus Library: ${tubus_LIBRARY}")
 
-find_package(wormhole REQUIRED COMPONENTS libwormhole)
+find_package(wormhole 1.2 REQUIRED COMPONENTS libwormhole)
 
 message("* wormhole Version: ${wormhole_VERSION}")
 message("* wormhole Include Dirs: ${wormhole_INCLUDE_DIRS}")
@@ -139,8 +139,8 @@ endif()
 target_sources(${LIBPLEXUS} PRIVATE ${SOURCES})
 target_sources(${BINPLEXUS} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> src/plexus/main.cpp)
 
-target_link_libraries(${LIBPLEXUS} PUBLIC tubus::libtubus PRIVATE wormhole::libwormhole Boost::coroutine OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp)
-target_link_libraries(${BINPLEXUS} PRIVATE tubus::libtubus wormhole::libwormhole Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp)
+target_link_libraries(${LIBPLEXUS} PUBLIC tubus::libtubus PRIVATE wormhole::libwormhole Boost::coroutine OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
+target_link_libraries(${BINPLEXUS} PRIVATE tubus::libtubus wormhole::libwormhole Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
 
 target_compile_features(${LIBPLEXUS} PRIVATE cxx_std_17)
 target_compile_features(${BINPLEXUS} PRIVATE cxx_std_17)
@@ -231,7 +231,7 @@ if(NOT PLEXUS_SKIP_TEST_RULES)
                                   tests/smime_tests.cpp
                                   tests/exec_tests.cpp
                                   tests/plexus_tests.cpp)
-    target_link_libraries(${PLEXUS_TEST} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> tubus::libtubus wormhole::libwormhole Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp)
+    target_link_libraries(${PLEXUS_TEST} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> tubus::libtubus wormhole::libwormhole Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
 
     target_include_directories(${PLEXUS_TEST} PRIVATE
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"

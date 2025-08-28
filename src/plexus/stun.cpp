@@ -18,8 +18,12 @@
 
 #ifndef _WIN32
 #include <netinet/in.h>
+#include <ifaddrs.h>
+#include <arpa/inet.h>
 #else
-#include <winsock.h>
+#include <winsock2.h>
+#include <iphlpapi.h>
+#include <ws2tcpip.h>
 #endif
 
 /* 
@@ -344,23 +348,122 @@ public:
         throw plexus::timeout_error(__FUNCTION__);
     }
 
+    static bool identical(const boost::asio::ip::udp::endpoint& lhs, const boost::asio::ip::udp::endpoint& rhs)
+    {
+        if(lhs.port() != rhs.port())
+            return false;
+
+        if (lhs.address() != boost::asio::ip::address() && rhs.address() != boost::asio::ip::address())
+            return lhs == rhs;
+
+        if (lhs.address() == boost::asio::ip::address() && rhs.address() == boost::asio::ip::address())
+            return true;
+
+        auto addr = lhs.address() != boost::asio::ip::address() ? lhs.address() : rhs.address();
+        bool local = false;
+
+#ifndef _WIN32
+        struct ifaddrs *ifaddr, *ifa;
+        int family, s;
+        char host[NI_MAXHOST];
+
+        if (getifaddrs(&ifaddr) == -1)
+        {
+            _err_ << "getifaddrs() failed: " << errno;
+            return false;
+        }
+
+        for (ifa = ifaddr; ifa != NULL && !local; ifa = ifa->ifa_next)
+        {
+            if (ifa->ifa_addr == NULL)
+                continue;
+
+            family = ifa->ifa_addr->sa_family;
+
+            if (family == AF_INET || family == AF_INET6)
+            {
+                s = getnameinfo(ifa->ifa_addr,
+                                (family == AF_INET) ? sizeof(struct sockaddr_in) :
+                                sizeof(struct sockaddr_in6),
+                                host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+                if (s != 0)
+                {
+                    _err_ << "getnameinfo() failed: " << gai_strerror(s);
+                    continue;
+                }
+
+                local = addr == boost::asio::ip::make_address(host);
+            }
+        }
+
+        freeifaddrs(ifaddr);
+#else
+        ULONG bufferSize = 15000;
+        std::vector<BYTE> buffer(bufferSize);
+        PIP_ADAPTER_ADDRESSES pAdapterAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
+
+        DWORD dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, nullptr, pAdapterAddresses, &bufferSize);
+
+        if (dwRetVal == ERROR_BUFFER_OVERFLOW)
+        {
+            buffer.resize(bufferSize);
+            pAdapterAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
+            dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, nullptr, pAdapterAddresses, &bufferSize);
+        }
+
+        if (dwRetVal == NO_ERROR)
+        {
+            for (PIP_ADAPTER_ADDRESSES pAdapter = pAdapterAddresses; pAdapter != nullptr && !local; pAdapter = pAdapter->Next)
+            {
+                for (PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pAdapter->FirstUnicastAddress; pUnicast != nullptr && !local; pUnicast = pUnicast->Next)
+                {
+                    char ipString[INET6_ADDRSTRLEN];
+                    if (pUnicast->Address.lpSockaddr->sa_family == AF_INET)
+                    {
+                        sockaddr_in* pSockAddrV4 = reinterpret_cast<sockaddr_in*>(pUnicast->Address.lpSockaddr);
+                        inet_ntop(AF_INET, &(pSockAddrV4->sin_addr), ipString, sizeof(ipString));
+                    }
+                    else if (pUnicast->Address.lpSockaddr->sa_family == AF_INET6)
+                    {
+                        sockaddr_in6* pSockAddrV6 = reinterpret_cast<sockaddr_in6*>(pUnicast->Address.lpSockaddr);
+                        inet_ntop(AF_INET6, &(pSockAddrV6->sin6_addr), ipString, sizeof(ipString));
+                    }
+
+                    local = addr == boost::asio::ip::make_address(ipString);
+                }
+            }
+        }
+        else
+        {
+            _err_ << "GetAdaptersAddresses() failed: " << dwRetVal << std::endl;
+        }
+#endif
+        return local;
+    }
+
 public:
 
     traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
     {
         _dbg_ << "punching udp hole to stun...";
-        
+
         traverse hole = { { 0 } };
 
         auto mapper = plexus::network::create_udp_transport(m_io, m_bind);
         auto response = exec_binding(mapper, yield, m_stun, m_stun);
-        
+
         hole.inner_endpoint = mapper->local_endpoint();
         hole.outer_endpoint = response.mapped_endpoint();
-        
+
         auto changed_stun = response.changed_endpoint();
 
-        if (hole.inner_endpoint != hole.outer_endpoint)
+        if (identical(hole.inner_endpoint, hole.outer_endpoint))
+        {
+            hole.traits.mapping = traverse::independent;
+            hole.traits.filtering = traverse::independent;
+            hole.traits.hairpin = true;
+        }
+        else
         {
             hole.traits.nat = true;
 
@@ -401,53 +504,49 @@ public:
                     hole.traits.variable_address = true;
                 }
             }
-        }
-        else
-        {
-            hole.traits.mapping = traverse::independent;
-        }
 
-        auto filter = plexus::network::create_udp_transport(m_io);
-        try
-        {
-            _dbg_ << "first filtering test...";
-
-            exec_binding(filter, yield, m_stun, changed_stun, message(flag::change_address | flag::change_port), 1400);
-            hole.traits.filtering = traverse::independent;
-        }
-        catch(const plexus::timeout_error&)
-        {
+            auto filter = plexus::network::create_udp_transport(m_io);
             try
             {
-                _dbg_ << "second filtering test...";
+                _dbg_ << "first filtering test...";
 
-                exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(changed_stun.address(), m_stun.port()), message(flag::change_address), 1400);
-                hole.traits.filtering = traverse::port_dependent;
+                exec_binding(filter, yield, m_stun, changed_stun, message(flag::change_address | flag::change_port), 1400);
+                hole.traits.filtering = traverse::independent;
             }
             catch(const plexus::timeout_error&)
             {
                 try
                 {
-                    _dbg_ << "third filtering test...";
+                    _dbg_ << "second filtering test...";
 
-                    exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(m_stun.address(), changed_stun.port()), message(flag::change_port), 1400);
-                    hole.traits.filtering = traverse::address_dependent;
+                    exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(changed_stun.address(), m_stun.port()), message(flag::change_address), 1400);
+                    hole.traits.filtering = traverse::port_dependent;
                 }
                 catch(const plexus::timeout_error&)
                 {
-                    hole.traits.filtering = traverse::address_and_port_dependent;
+                    try
+                    {
+                        _dbg_ << "third filtering test...";
+
+                        exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(m_stun.address(), changed_stun.port()), message(flag::change_port), 1400);
+                        hole.traits.filtering = traverse::address_dependent;
+                    }
+                    catch(const plexus::timeout_error&)
+                    {
+                        hole.traits.filtering = traverse::address_and_port_dependent;
+                    }
                 }
             }
-        }
 
-        try
-        {
-            _dbg_ << "hairpin test...";
+            try
+            {
+                _dbg_ << "hairpin test...";
 
-            exec_binding(mapper, yield, hole.outer_endpoint , hole.outer_endpoint , message(0), 1400);
-            hole.traits.hairpin = true;
+                exec_binding(mapper, yield, hole.outer_endpoint , hole.outer_endpoint , message(0), 1400);
+                hole.traits.hairpin = true;
+            }
+            catch(const plexus::timeout_error&) { }
         }
-        catch(const plexus::timeout_error&) { }
 
         _inf_ << "\ntraverse:"
               << "\n\tnat: " << hole.traits.nat
