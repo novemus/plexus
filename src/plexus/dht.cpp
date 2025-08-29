@@ -104,22 +104,50 @@ public:
             }
         }
 
-        static std::map<uint64_t, std::shared_ptr<dht::DhtRunner>> s_nodes;
+        static std::map<uint64_t, std::weak_ptr<dht::DhtRunner>> s_nodes;
         static std::mutex s_mutex;
 
         std::lock_guard<std::mutex> lock(s_mutex);
 
         auto key = uint64_t(port) << 32 | network;
 
-        auto iter = s_nodes.find(key);
-        if (iter != s_nodes.end())
-            m_node = iter->second;
+        auto iter = s_nodes.begin();
+        while (iter != s_nodes.end())
+        {
+            auto node = iter->second.lock();
+            if (node)
+            {
+                if (iter->first == key)
+                    m_node = node;
+                ++iter;
+            }
+            else
+            {
+                iter = s_nodes.erase(iter);
+            }
+        }
 
         try
         {
             if (!m_node)
             {
-                m_node = std::make_shared<dht::DhtRunner>();
+                m_node = std::shared_ptr<dht::DhtRunner>(new dht::DhtRunner(), [](dht::DhtRunner* node)
+                {
+                    try
+                    {
+                        _dbg_ << "shutdown dht: node=" << node->getNodeId();
+
+                        node->shutdown({}, true);
+                        node->join();
+
+                        delete node;
+                    }
+                    catch (const std::exception& ex)
+                    {
+                        _err_ << ex.what();
+                    }
+                });
+
                 m_node->run(port, {}, true, network);
 
                 _dbg_ << "startup dht: node=" << m_node->getNodeId() << " port=" << port << " bootstrap=" << bootstrap << " network=" << network;
@@ -136,29 +164,6 @@ public:
         catch (const std::exception& ex)
         {
             throw plexus::context_error(__FUNCTION__, ex.what());
-        }
-
-        try
-        {
-            iter = s_nodes.begin();
-            while (iter != s_nodes.end())
-            {
-                if (iter->second.use_count() == 1)
-                {
-                    _dbg_ << "shutdown dht: node=" << m_node->getNodeId();
-
-                    iter->second->shutdown({}, true);
-                    iter->second->join();
-
-                    iter = s_nodes.erase(iter);
-                }
-                else
-                    ++iter;
-            }
-        }
-        catch (const std::exception& ex)
-        {
-            _err_ << ex.what();
         }
     }
 
