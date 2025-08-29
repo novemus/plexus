@@ -83,7 +83,7 @@ public:
         _dbg_ << "stun client: " << bind;
     }
 
-    void reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
+    std::shared_ptr<network::udp_socket> reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "reaching peer...";
 
@@ -107,7 +107,7 @@ public:
                 if (out.flag() == 1)
                 {
                     _dbg_ << "handshake peer=" << peer;
-                    return;
+                    return pin;
                 }
 
                 in.truncate(pin->receive_from(in, peer, yield));
@@ -129,7 +129,7 @@ public:
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
+    std::shared_ptr<network::udp_socket> await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "punching upd hole to peer...";
         
@@ -166,7 +166,7 @@ public:
                 else
                 {
                     _dbg_ << "handshake peer=" << peer;
-                    return;
+                    return pin;
                 }
             }
             catch(const boost::system::system_error& ex)

@@ -61,8 +61,8 @@ std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, con
 
 struct stun_binder : public stun_client
 {
-    virtual void reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
-    virtual void await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual std::shared_ptr<network::udp_socket> reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual std::shared_ptr<network::udp_socket> await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
 std::shared_ptr<stun_binder> create_stun_binder(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(false);
