@@ -14,7 +14,6 @@
 #include <boost/test/unit_test.hpp>
 #include <plexus/utils.h>
 #include <plexus/plexus.h>
-#include <wormhole/logger.h>
 
 namespace
 {
@@ -129,6 +128,64 @@ namespace
     }
 }
 
+void make_advent_test(const plexus::rendezvous& receiver, const plexus::rendezvous& forwarder, const std::string& app, const std::string& repo, const plexus::identity& host, const plexus::identity& peer)
+{
+    auto rcv = std::async(std::launch::async, [&]()
+    {
+        boost::asio::io_context io;
+
+        plexus::receive_advent(io, receiver, app, repo, host, peer, 
+            [&](const plexus::identity& h, const plexus::identity& p)
+            {
+                BOOST_CHECK_EQUAL(host.owner, h.owner);
+                BOOST_CHECK_EQUAL(host.pin, h.pin);
+                BOOST_CHECK_EQUAL(peer.owner, p.owner);
+                BOOST_CHECK_EQUAL(peer.pin, p.pin);
+                io.stop();
+            },
+            [&](const plexus::identity& h, const plexus::identity& p, const std::string& error)
+            {
+                BOOST_CHECK_EQUAL(host.owner, h.owner);
+                BOOST_CHECK_EQUAL(host.pin, h.pin);
+                BOOST_CHECK_EQUAL(peer.owner, p.owner);
+                BOOST_CHECK_EQUAL(peer.pin, p.pin);
+                BOOST_VERIFY_MSG(false, error.c_str());
+                io.stop();
+            });
+
+        io.run();
+    });
+
+    auto fwd = std::async(std::launch::async, [&]()
+    {
+        boost::asio::io_context io;
+
+        plexus::forward_advent(io, forwarder, app, repo, peer, host,
+            [&](const plexus::identity& h, const plexus::identity& p)
+            {
+                BOOST_CHECK_EQUAL(host.owner, p.owner);
+                BOOST_CHECK_EQUAL(host.pin, p.pin);
+                BOOST_CHECK_EQUAL(peer.owner, h.owner);
+                BOOST_CHECK_EQUAL(peer.pin, h.pin);
+                io.stop();
+            },
+            [&](const plexus::identity& h, const plexus::identity& p, const std::string& error)
+            {
+                BOOST_CHECK_EQUAL(host.owner, p.owner);
+                BOOST_CHECK_EQUAL(host.pin, p.pin);
+                BOOST_CHECK_EQUAL(peer.owner, h.owner);
+                BOOST_CHECK_EQUAL(peer.pin, h.pin);
+                BOOST_VERIFY_MSG(false, error.c_str());
+                io.stop();
+            });
+
+        io.run();
+    });
+
+    rcv.wait();
+    fwd.wait();
+}
+
 void make_rendezvous_test(const context& info)
 {
     auto acc = std::async(std::launch::async, [&]()
@@ -167,7 +224,7 @@ void make_rendezvous_test(const context& info)
     auto inv = std::async(std::launch::async, [&]()
     {
         boost::asio::io_context io;
-        
+
         plexus::spawn_invite(io, info.conf, info.peer, info.host, 
             [&](const plexus::identity& host, const plexus::identity& peer, const plexus::udp::endpoint& bind, const plexus::reference& gateway, const plexus::reference& faraway)
             {
@@ -298,6 +355,24 @@ BOOST_AUTO_TEST_CASE(plexus_dht_rendezvous, *boost::unit_test::precondition(is_d
 {
     BOOST_TEST_MESSAGE("testing plexus dht rendezvous...");
     make_rendezvous_test(with_dhtnode);
+}
+
+BOOST_AUTO_TEST_CASE(plexus_email_advent, *boost::unit_test::precondition(is_emailer_context_defined))
+{
+    BOOST_TEST_MESSAGE("testing plexus email advent...");
+    make_advent_test(with_emailer.conf.mediator, with_emailer.conf.mediator, with_emailer.conf.app, with_emailer.conf.repo, with_emailer.host, with_emailer.peer);
+}
+
+BOOST_AUTO_TEST_CASE(plexus_dht_advent, *boost::unit_test::precondition(is_dhtnode_context_defined))
+{
+    BOOST_TEST_MESSAGE("testing plexus dht advent...");
+
+    std::srand(std::time(nullptr));
+
+    auto forwarder = std::get<plexus::dhtnode>(with_dhtnode.conf.mediator);
+    forwarder.port = uint16_t(49152u + std::rand() % 16383u);
+
+    make_advent_test(with_dhtnode.conf.mediator, forwarder, with_dhtnode.conf.app, with_dhtnode.conf.repo, with_dhtnode.host, with_dhtnode.peer);
 }
 
 BOOST_AUTO_TEST_CASE(plexus_streaming_with_emailer, *boost::unit_test::precondition(is_emailer_context_defined))
