@@ -38,13 +38,13 @@ message("* OpenSSL Version: ${OPENSSL_VERSION}")
 message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
-find_package(tubus 1.2 REQUIRED COMPONENTS libtubus)
+find_package(tubus 1.2.3 REQUIRED COMPONENTS libtubus)
 
 message("* tubus Version: ${tubus_VERSION}")
 message("* tubus Include Dirs: ${tubus_INCLUDE_DIRS}")
 message("* tubus Library: ${tubus_LIBRARY}")
 
-find_package(wormhole 1.2 REQUIRED COMPONENTS libwormhole)
+find_package(wormhole 1.2.4 REQUIRED COMPONENTS libwormhole)
 
 message("* wormhole Version: ${wormhole_VERSION}")
 message("* wormhole Include Dirs: ${wormhole_INCLUDE_DIRS}")
