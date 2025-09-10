@@ -271,7 +271,7 @@ public:
 
     static listen_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, const std::string& subject) noexcept(false)
     {
-        _dbg_ << "listen " << repo.app << "#invite for " << host;
+        _dbg_ << "listen " << repo.app << "#" << subject << " for " << host;
 
         std::shared_ptr<listen> op(new listen(io, repo.node()));
         op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + subject);

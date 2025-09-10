@@ -59,8 +59,8 @@ namespace
 
             in >> smtp_addr >> smtp_port >> imap_addr >> imap_port >> login >> password >> stun_addr >> stun_port >> punch_hops;
 
-            conf.app = "plexus_test_app";
-            conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_test_app";
+            conf.app = "plexus_email_app";
+            conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_email_app";
             conf.stun = plexus::utils::parse_endpoint<plexus::udp::endpoint>(stun_addr, stun_port);
             conf.hops = boost::lexical_cast<uint16_t>(punch_hops);
             conf.mediator = plexus::emailer {
@@ -96,8 +96,8 @@ namespace
 
             in >> bootstrap >> node_port >> network >> stun_addr >> stun_port >> punch_hops;
 
-            conf.app = "plexus_test_app";
-            conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_test_app";
+            conf.app = "plexus_dht_app";
+            conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_dht_app";
             conf.stun = plexus::utils::parse_endpoint<plexus::udp::endpoint>(stun_addr, stun_port);
             conf.hops = boost::lexical_cast<uint16_t>(punch_hops);
             conf.mediator = plexus::dhtnode {
