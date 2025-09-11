@@ -21,12 +21,12 @@
 
 namespace plexus { namespace email {
 
+const int64_t max_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_EMAIL_MAX_POLLING_TIMEOUT", 30000);
+const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_EMAIL_MIN_POLLING_TIMEOUT", 10000);
 const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
-const int64_t max_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MAX_POLLING_TIMEOUT", 30000);
-const int64_t min_polling_timeout = plexus::utils::getenv<int64_t>("PLEXUS_MIN_POLLING_TIMEOUT", 10000);
 const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
 const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
-const std::string advent_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "advent");
+const std::string advent_token = plexus::utils::getenv<std::string>("PLEXUS_ADVENT_TOKEN", "advent");
 
 class channel
 {

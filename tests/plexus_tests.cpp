@@ -366,13 +366,7 @@ BOOST_AUTO_TEST_CASE(plexus_email_advent, *boost::unit_test::precondition(is_ema
 BOOST_AUTO_TEST_CASE(plexus_dht_advent, *boost::unit_test::precondition(is_dhtnode_context_defined))
 {
     BOOST_TEST_MESSAGE("testing plexus dht advent...");
-
-    std::srand(std::time(nullptr));
-
-    auto forwarder = std::get<plexus::dhtnode>(with_dhtnode.conf.mediator);
-    forwarder.port = uint16_t(49152u + std::rand() % 16383u);
-
-    make_advent_test(with_dhtnode.conf.mediator, forwarder, with_dhtnode.conf.app, with_dhtnode.conf.repo, with_dhtnode.host, with_dhtnode.peer);
+    make_advent_test(with_dhtnode.conf.mediator, with_dhtnode.conf.mediator, with_dhtnode.conf.app, with_dhtnode.conf.repo, with_dhtnode.host, with_dhtnode.peer);
 }
 
 BOOST_AUTO_TEST_CASE(plexus_streaming_with_emailer, *boost::unit_test::precondition(is_emailer_context_defined))

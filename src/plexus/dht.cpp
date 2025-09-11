@@ -27,11 +27,12 @@
 
 namespace plexus { namespace opendht {
 
+const int64_t await_timeout = plexus::utils::getenv<int64_t>("PLEXUS_DHT_AWAIT_TIMEOUT", 20000);
+const int64_t delay_timeout = plexus::utils::getenv<int64_t>("PLEXUS_DHT_DELAY_TIMEOUT", 2000);
 const int64_t response_timeout = plexus::utils::getenv<int64_t>("PLEXUS_RESPONSE_TIMEOUT", 60000);
-const int64_t hangup_timeout = plexus::utils::getenv<int64_t>("PLEXUS_HANGUP_TIMEOUT", 20000);
 const std::string invite_token = plexus::utils::getenv<std::string>("PLEXUS_INVITE_TOKEN", "invite");
 const std::string accept_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "accept");
-const std::string advent_token = plexus::utils::getenv<std::string>("PLEXUS_ACCEPT_TOKEN", "advent");
+const std::string advent_token = plexus::utils::getenv<std::string>("PLEXUS_ADVENT_TOKEN", "advent");
 
 using context = context<plexus::dhtnode>;
 
@@ -236,9 +237,9 @@ class listen : public operation<notice>
 
 protected:
 
-    listen(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> n) noexcept(true)
+    listen(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> node) noexcept(true)
         : timer(io)
-        , node(n)
+        , node(node)
     {}
 
 public:
@@ -296,7 +297,7 @@ public:
                 if (id > value->id)
                     continue;
 
-                _trc_ << "listen value=" << value->id << " key=" << ptr->hash << " owner=" << value->getOwner()->getId();
+                _trc_ << "listen: value=" << value->id << " key=" << ptr->hash << " owner=" << value->getOwner()->getId();
 
                 auto peer = repo.fetch_identity(value->getOwner()->getId());
                 if (not match(peer))
@@ -327,9 +328,9 @@ class acquire : public operation<reference>
 
 protected:
 
-    acquire(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> n) noexcept(true)
+    acquire(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> node) noexcept(true)
         : timer(io)
-        , node(n)
+        , node(node)
     {
     }
 
@@ -377,7 +378,7 @@ public:
 
             for (auto& value : values)
             {
-                _trc_ << "acquire value=" << value->id << " key=" << ptr->hash << " owner=" << value->getOwner()->getId();
+                _trc_ << "acquire: value=" << value->id << " key=" << ptr->hash << " owner=" << value->getOwner()->getId();
 
                 if (value->getOwner()->getId() != from->getId())
                     continue;
@@ -409,20 +410,58 @@ public:
 
 using forward_ptr = std::shared_ptr<operation<void>>;
 
-class forward : public operation<void>
+class forward : public operation<void>, public std::enable_shared_from_this<forward>
 {
+    boost::asio::io_context&        io;
     boost::asio::deadline_timer     timer;
     std::shared_ptr<dht::DhtRunner> node;
     dht::InfoHash                   hash;
-    uint64_t                        val;
+    std::shared_ptr<dht::Value>     value;
 
 protected:
 
-    forward(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> n, uint64_t id) noexcept(true)
-        : timer(io)
-        , node(n)
-        , val(id)
+    forward(boost::asio::io_context& io, std::shared_ptr<dht::DhtRunner> node) noexcept(true)
+        : io(io)
+        , timer(io)
+        , node(node)
     {
+    }
+
+    void put()
+    {
+        std::weak_ptr<forward> weak = shared_from_this();
+        node->put(hash, value, [weak](bool ok)
+        {
+            auto ptr = weak.lock();
+            if (not ptr)
+                return;
+
+            _trc_ << "forward: value=" << ptr->value->id << " key=" << ptr->hash << " owner=" << ptr->value->getOwner()->getId() << " ok=" << ok;
+
+            if (ok)
+            {
+                boost::system::error_code ec;
+                ptr->timer.cancel(ec);
+            }
+            else
+            {
+                boost::asio::spawn(ptr->io, [weak](boost::asio::yield_context yield)
+                {
+                    auto ptr = weak.lock();
+                    if (not ptr)
+                        return;
+
+                    boost::asio::deadline_timer timer(ptr->io);
+                    timer.expires_from_now(boost::posix_time::milliseconds(delay_timeout));
+
+                    boost::system::error_code ec;
+                    timer.async_wait(yield[ec]);
+
+                    if (!ec)
+                        ptr->put();
+                }, boost::asio::detached);
+            }
+        });
     }
 
 public:
@@ -431,7 +470,7 @@ public:
     {
         boost::system::error_code ec;
         timer.cancel(ec);
-        node->cancelPut(hash, val);
+        node->cancelPut(hash, value->id);
     }
 
     void wait(boost::asio::yield_context yield) noexcept(false) override
@@ -449,30 +488,18 @@ public:
     {
         _dbg_ << "forward " << repo.app << "#" << subject << " for " << peer << " from " << host;
 
-        std::shared_ptr<forward> op(new forward(io, repo.node(), id));
+        std::shared_ptr<forward> op(new forward(io, repo.node()));
 
         auto to = repo.load_cert(peer);
         auto from = repo.load_key(host);
+        auto message = plexus::utils::format("PLEXUS 3.0 %s %u %llu", gateway.endpoint.address().to_string().c_str(), gateway.endpoint.port(), gateway.puzzle);
 
         op->hash = dht::InfoHash::get(to->getId().toString() + repo.app + subject);
-        op->timer.expires_from_now(boost::posix_time::milliseconds(hangup_timeout));
+        op->timer.expires_from_now(boost::posix_time::milliseconds(await_timeout));
+        op->value = std::make_shared<dht::Value>(dht::ValueType::USER_DATA.id, to->getPublicKey().encrypt(dht::packMsg(message)), id);
+        op->value->sign(*from);
 
-        auto message = plexus::utils::format("PLEXUS 3.0 %s %u %llu", gateway.endpoint.address().to_string().c_str(), gateway.endpoint.port(), gateway.puzzle);
-        auto value = std::make_shared<dht::Value>(dht::ValueType::USER_DATA.id, to->getPublicKey().encrypt(dht::packMsg(message)), op->val);
-        value->sign(*from);
-
-        std::weak_ptr<forward> weak = op;
-        op->node->put(op->hash, value, [weak, value](bool ok)
-        {
-            auto ptr = weak.lock();
-            if (not ptr)
-                return;
-
-            _trc_ << "forward value=" << ptr->val << " key=" << ptr->hash << " owner=" << value->getOwner()->getId() << " ok=" << ok;
-
-            boost::system::error_code ec;
-            ptr->timer.cancel(ec);
-        });
+        op->put();
 
         return op;
     }
