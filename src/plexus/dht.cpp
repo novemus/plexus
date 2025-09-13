@@ -113,9 +113,32 @@ public:
 
         auto key = uint64_t(port) << 32 | network;
 
-        auto iter = s_nodes.find(key);
-        if (iter != s_nodes.end())
-            m_node = iter->second;
+        auto iter = s_nodes.begin();
+        while (iter != s_nodes.end())
+        {
+            if (iter->second.use_count() == 1)
+            {
+                try
+                {
+                    _dbg_ << "shutdown dht: node=" << iter->second->getNodeId();
+
+                    iter->second->shutdown({}, true);
+                    iter->second->join();
+                }
+                catch (const std::exception& ex)
+                {
+                    _err_ << ex.what();
+                }
+                iter = s_nodes.erase(iter);
+            }
+            else
+            {
+                if (iter->first == key)
+                    m_node = iter->second;
+
+                ++iter;
+            }
+        }
 
         try
         {
@@ -148,29 +171,6 @@ public:
         catch (const std::exception& ex)
         {
             throw plexus::context_error(__FUNCTION__, ex.what());
-        }
-
-        try
-        {
-            iter = s_nodes.begin();
-            while (iter != s_nodes.end())
-            {
-                if (iter->second.use_count() == 1)
-                {
-                    _dbg_ << "shutdown dht: node=" << m_node->getNodeId();
-
-                    iter->second->shutdown({}, true);
-                    iter->second->join();
-
-                    iter = s_nodes.erase(iter);
-                }
-                else
-                    ++iter;
-            }
-        }
-        catch (const std::exception& ex)
-        {
-            _err_ << ex.what();
         }
     }
 
@@ -523,8 +523,6 @@ class pipe_impl : public pipe
     uint64_t                 m_id;
     identity                 m_host;
     identity                 m_peer;
-    forward_ptr              m_fwd;
-    acquire_ptr              m_acq;
 
 public:
 
@@ -539,8 +537,8 @@ public:
 
     reference pull_request(boost::asio::yield_context yield) noexcept(false) override
     {
-        m_acq = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
-        auto faraway = m_acq->wait(yield);
+        auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
+        auto faraway = op->wait(yield);
 
         _inf_ << "pulled request " << faraway;
         return faraway;
@@ -548,8 +546,8 @@ public:
 
     reference pull_response(boost::asio::yield_context yield) noexcept(false) override
     {        
-        m_acq = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
-        auto faraway = m_acq->wait(yield);
+        auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
+        auto faraway = op->wait(yield);
 
         _inf_ << "pulled response " << faraway;
         return faraway;
@@ -557,8 +555,8 @@ public:
 
     void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
-        m_fwd = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, invite_token, gateway);
-        boost::asio::spawn(m_io, [op = m_fwd](boost::asio::yield_context yield)
+        auto op = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, invite_token, gateway);
+        boost::asio::spawn(m_io, [op](boost::asio::yield_context yield)
         {
             try
             {
@@ -575,8 +573,8 @@ public:
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
-        m_fwd = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, accept_token, gateway);
-        boost::asio::spawn(m_io, [op = m_fwd](boost::asio::yield_context yield)
+        auto op = opendht::forward::start(m_io, m_repo, m_host, m_peer, m_id, accept_token, gateway);
+        boost::asio::spawn(m_io, [op](boost::asio::yield_context yield)
         {
             try
             {

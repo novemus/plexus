@@ -234,7 +234,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
 
 void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
-    _inf_ << "forwarding advent from " << host << " for " << peer;
+    _inf_ << "forward advent from " << host << " for " << peer;
 
     mediator.index() == 0
         ? forward_advent(io, context<emailer>(app, repo, std::get<emailer>(mediator)), host, peer, handler, failure)
@@ -243,7 +243,7 @@ void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, con
 
 void receive_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
-    _inf_ << "receiving advent from " << peer << " for " << host;
+    _inf_ << "receive advent from " << peer << " for " << host;
 
     mediator.index() == 0
         ? receive_advent(io, context<emailer>(app, repo, std::get<emailer>(mediator)), host, peer, handler, failure)
