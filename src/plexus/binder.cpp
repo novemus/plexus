@@ -106,7 +106,7 @@ public:
 
                 if (out.flag() == 1)
                 {
-                    _dbg_ << "handshake peer=" << peer;
+                    _dbg_ << "handshake peer: " << peer;
                     return pin;
                 }
 
@@ -131,7 +131,7 @@ public:
 
     std::shared_ptr<network::udp_socket> await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
-        _dbg_ << "punching upd hole to peer...";
+        _dbg_ << "awaiting peer...";
         
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -148,8 +148,6 @@ public:
         pin->send_to(handshake(0, mask), peer, yield, 2000);
         pin->set_option(old);
 
-        _dbg_ << "awaiting peer...";
-
         handshake out(1, mask);
         handshake in(mask);
 
@@ -165,7 +163,7 @@ public:
                 }
                 else
                 {
-                    _dbg_ << "handshake peer=" << peer;
+                    _dbg_ << "handshake peer: " << peer;
                     return pin;
                 }
             }
@@ -181,10 +179,10 @@ public:
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
+    traverse explore_network(boost::asio::yield_context yield) noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
-        return stun->punch_hole(yield);
+        return stun->explore_network(yield);
     }
 };
 

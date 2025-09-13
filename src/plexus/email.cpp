@@ -66,7 +66,7 @@ public:
             } 
             while (!parse(response));
 
-            _trc_ << ">>>>>\n" << response << "\n*****";
+            _trc_ << ">>>>>\n" << response;
         }
         catch (const boost::system::system_error& ex)
         {
@@ -76,7 +76,7 @@ public:
 
     void request(boost::asio::yield_context yield, const std::string& request, const response_parser_t& parse, int64_t timeout = 0)
     {
-        _trc_ << "<<<<<\n" << request << "\n*****";
+        _trc_ << "<<<<<\n" << request;
 
         try
         {
@@ -98,7 +98,7 @@ public:
             }
             while (!parse(response));
 
-            _trc_ << ">>>>>\n" << response << "\n*****";
+            _trc_ << ">>>>>\n" << response;
         }
         catch (const boost::system::system_error& ex)
         {
@@ -344,6 +344,8 @@ class imap
                         if (uid > m_position)
                         {
                             m_position = uid;
+ 
+                            _dbg_ << "search: uid=" << uid;
                             break;
                         }
                     }
@@ -682,11 +684,11 @@ void forward_advent(boost::asio::io_context& io, const email::context& conf, con
 
             handler(host, peer);
 
-            _inf_ << "advent " << host << " -> " << peer;
+            _dbg_ << "advent: " << peer << " -> " << host << ":" << conf.app;
         }
         catch(const std::exception& ex)
         {
-            _err_ << "advent " << host << " -> " << peer << " failed: " << ex.what();
+            _err_ << "advent: " << peer << " -> " << host << ":" << conf.app << " error: " << ex.what();
             failure(host, peer, ex.what());
         }
     }, boost::asio::detached);
@@ -706,7 +708,7 @@ void receive_advent(boost::asio::io_context& io, const email::context& conf, con
 
                 boost::asio::post(io, std::bind(handler, puller.host(), puller.peer()));
 
-                _inf_ << "advent " << puller.host() << " <- " << puller.peer();
+                _dbg_ << "advent: " << puller.host() << " -> " << puller.peer() << ":" << conf.app;
 
                 puller.host(host);
                 puller.peer(peer);
@@ -715,7 +717,7 @@ void receive_advent(boost::asio::io_context& io, const email::context& conf, con
         }
         catch(const std::exception& ex)
         {
-            _err_ << "advent " << host << " <- " << peer << " failed: " << ex.what();
+            _err_ << "advent: " << host << " -> " << peer << ":" << conf.app << " error: " << ex.what();
             failure(host, peer, ex.what());
         }
     }, boost::asio::detached);

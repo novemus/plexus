@@ -319,7 +319,7 @@ public:
                         auto se = resp.source_endpoint();
                         auto ce = resp.changed_endpoint();
 
-                        _dbg_ << "mapped_endpoint=" << me
+                        _trc_ << "mapped_endpoint=" << me
                               << " source_endpoint=" << se
                               << " changed_endpoint=" << ce;
                         break;
@@ -443,9 +443,9 @@ public:
 
 public:
 
-    traverse punch_hole(boost::asio::yield_context yield) noexcept(false) override
+    traverse explore_network(boost::asio::yield_context yield) noexcept(false) override
     {
-        _dbg_ << "punching udp hole to stun...";
+        _trc_ << "exploring network...";
 
         traverse hole = { { 0 } };
 
@@ -472,7 +472,7 @@ public:
                 hole.traits.random_port = true;
             }
 
-            _dbg_ << "first mapping test...";
+            _trc_ << "first mapping test...";
 
             auto first_endpoint = exec_binding(mapper, yield, changed_stun, changed_stun).mapped_endpoint();
             if (first_endpoint == hole.outer_endpoint)
@@ -481,7 +481,7 @@ public:
             }
             else
             {
-                _dbg_ << "second mapping test...";
+                _trc_ << "second mapping test...";
 
                 boost::asio::ip::udp::endpoint stun(changed_stun.address(), m_stun.port());
                 auto second_endpoint = exec_binding(mapper, yield, stun, stun).mapped_endpoint();
@@ -508,7 +508,7 @@ public:
             auto filter = plexus::network::create_udp_transport(m_io);
             try
             {
-                _dbg_ << "first filtering test...";
+                _trc_ << "first filtering test...";
 
                 exec_binding(filter, yield, m_stun, changed_stun, message(flag::change_address | flag::change_port), 1400);
                 hole.traits.filtering = traverse::independent;
@@ -517,7 +517,7 @@ public:
             {
                 try
                 {
-                    _dbg_ << "second filtering test...";
+                    _trc_ << "second filtering test...";
 
                     exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(changed_stun.address(), m_stun.port()), message(flag::change_address), 1400);
                     hole.traits.filtering = traverse::port_dependent;
@@ -526,7 +526,7 @@ public:
                 {
                     try
                     {
-                        _dbg_ << "third filtering test...";
+                        _trc_ << "third filtering test...";
 
                         exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(m_stun.address(), changed_stun.port()), message(flag::change_port), 1400);
                         hole.traits.filtering = traverse::address_dependent;
@@ -540,7 +540,7 @@ public:
 
             try
             {
-                _dbg_ << "hairpin test...";
+                _trc_ << "hairpin test...";
 
                 exec_binding(mapper, yield, hole.outer_endpoint , hole.outer_endpoint , message(0), 1400);
                 hole.traits.hairpin = true;

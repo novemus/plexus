@@ -54,7 +54,7 @@ std::istream& operator>>(std::istream& in, identity& level);
 struct stun_client
 {
     virtual ~stun_client() {}
-    virtual traverse punch_hole(boost::asio::yield_context yield) noexcept(false) = 0;
+    virtual traverse explore_network(boost::asio::yield_context yield) noexcept(false) = 0;
 };
 
 std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) noexcept(true);

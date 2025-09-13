@@ -120,7 +120,7 @@ public:
             {
                 try
                 {
-                    _dbg_ << "shutdown dht: node=" << iter->second->getNodeId();
+                    _dbg_ << "destroy: node=" << iter->second->getNodeId();
 
                     iter->second->shutdown({}, true);
                     iter->second->join();
@@ -147,18 +147,18 @@ public:
                 m_node = std::make_shared<dht::DhtRunner>();
                 m_node->run(port, {}, true, network);
 
-                _dbg_ << "startup dht: node=" << m_node->getNodeId() << " port=" << port << " network=" << network << " bootstrap=" << bootstrap;
+                _dbg_ << "startup: node=" << m_node->getNodeId() << " port=" << port << " network=" << network << " bootstrap=" << bootstrap;
 
                 m_node->setOnStatusChanged([id = m_node->getNodeId()](dht::NodeStatus v4, dht::NodeStatus v6)
                 {
-                    _dbg_ << "about dht: node=" << id << " IPv4=" << dht::statusToStr(v4) << " IPv6=" << dht::statusToStr(v6);
+                    _dbg_ << "network: node=" << id << " IPv4=" << dht::statusToStr(v4) << " IPv6=" << dht::statusToStr(v6);
                 });
 
                 s_nodes.emplace(key, m_node);
             }
             else
             {
-                _dbg_ << "refresh dht: node=" << m_node->getNodeId() << " port=" << port << " network=" << network << " bootstrap=" << bootstrap;
+                _trc_ << "refresh: node=" << m_node->getNodeId() << " port=" << port << " network=" << network << " bootstrap=" << bootstrap;
             }
 
             std::set<std::string> urls;
@@ -283,8 +283,6 @@ public:
 
     static listen_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, const std::string& subject) noexcept(false)
     {
-        _dbg_ << "listen " << repo.app << "#" << subject << " for " << host;
-
         std::shared_ptr<listen> op(new listen(io, repo.node()));
         op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + subject);
 
@@ -295,6 +293,8 @@ public:
 
         op->timer.expires_from_now(boost::posix_time::time_duration(boost::posix_time::pos_infin));
         uint64_t id = std::time(nullptr);
+
+        _dbg_ << "listen: subject=" << subject << " app=" << repo.app << " host=" << host << " peer=" << peer << " value=" << id << " hash=" << op->hash;
 
         std::weak_ptr<listen> weak = op;
         op->token = op->node->listen(op->hash, [weak, repo, id, host, match](const std::vector<std::shared_ptr<dht::Value>>& values)
@@ -308,7 +308,7 @@ public:
                 if (id > value->id)
                     continue;
 
-                _trc_ << "listen: value=" << value->id << " key=" << ptr->hash << " owner=" << value->getOwner()->getId();
+                _trc_ << "listen: value=" << value->id << " hash=" << ptr->hash << " owner=" << value->getOwner()->getId();
 
                 auto peer = repo.fetch_identity(value->getOwner()->getId());
                 if (not match(peer))
@@ -370,8 +370,6 @@ public:
 
     static acquire_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject) noexcept(false)
     {
-        _dbg_ << "acquire " << repo.app << "#" << subject << " for " << host << " from " << peer;
-
         std::shared_ptr<acquire> op(new acquire(io, repo.node()));
 
         op->hash = dht::InfoHash::get(repo.load_cert(host)->getId().toString() + repo.app + subject);
@@ -379,6 +377,8 @@ public:
 
         auto from = repo.load_cert(peer);
         auto to = repo.load_key(host);
+
+        _dbg_ << "acquire: subject=" << subject << " app=" << repo.app << " host=" << host << " peer=" << peer << " value=" << id << " hash=" << op->hash;
 
         std::weak_ptr<acquire> weak = op;
         op->token = op->node->listen(op->hash, [weak, from, to](const std::vector<std::shared_ptr<dht::Value>>& values)
@@ -389,7 +389,7 @@ public:
 
             for (auto& value : values)
             {
-                _trc_ << "acquire: value=" << value->id << " key=" << ptr->hash << " owner=" << value->getOwner()->getId();
+                _trc_ << "acquire: value=" << value->id << " hash=" << ptr->hash << " owner=" << value->getOwner()->getId();
 
                 if (value->getOwner()->getId() != from->getId())
                     continue;
@@ -447,7 +447,7 @@ protected:
             if (not ptr)
                 return;
 
-            _trc_ << "forward: value=" << ptr->value->id << " key=" << ptr->hash << " owner=" << ptr->value->getOwner()->getId() << " ok=" << ok;
+            _trc_ << "forward: value=" << ptr->value->id << " hash=" << ptr->hash << " owner=" << ptr->value->getOwner()->getId() << " ok=" << ok;
 
             if (ok)
             {
@@ -497,8 +497,6 @@ public:
 
     static forward_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway = {}) noexcept(false)
     {
-        _dbg_ << "forward " << repo.app << "#" << subject << " for " << peer << " from " << host;
-
         std::shared_ptr<forward> op(new forward(io, repo.node()));
 
         auto to = repo.load_cert(peer);
@@ -509,6 +507,8 @@ public:
         op->timer.expires_from_now(boost::posix_time::milliseconds(await_timeout));
         op->value = std::make_shared<dht::Value>(dht::ValueType::USER_DATA.id, to->getPublicKey().encrypt(dht::packMsg(message)), id);
         op->value->sign(*from);
+
+        _dbg_ << "forward: subject=" << subject << " app=" << repo.app << " host=" << host << " peer=" << peer << " value=" << id << " hash=" << op->hash;
 
         op->put();
 
@@ -642,13 +642,12 @@ void forward_advent(boost::asio::io_context& io, const opendht::context& ctx, co
             auto op = opendht::forward::start(io, repo, host, peer, std::time(nullptr), opendht::advent_token);
             op->wait(yield);
 
-            _inf_ << "advent " << host << " -> " << peer;
-
+            _dbg_ << "advent: " << peer << " -> " << host << ":" << ctx.app;
             handler(host, peer);
         }
         catch(const std::exception& ex)
         {
-            _err_ << "advent " << host << " -> " << peer << " failed: " << ex.what();
+            _err_ << "advent: " << peer << " -> " << host << ":" << ctx.app << " error: " << ex.what();
             failure(host, peer, ex.what());
         }
     }, boost::asio::detached);
@@ -675,12 +674,12 @@ void receive_advent(boost::asio::io_context& io, const opendht::context& ctx, co
                     auto op = opendht::acquire::start(io, repo, host, peer, id, opendht::advent_token);
                     op->wait(yield);
 
-                    _inf_ << "advent " << host << " <- " << peer;
+                    _dbg_ << "advent: " << host << " -> " << peer << ":" << repo.app;
                     handler(host, peer);
                 }
                 catch (const std::exception& ex) 
                 {
-                    _err_ << "advent " << host << " <- " << peer << " failed: " << ex.what();
+                    _err_ << "advent: " << host << " -> " << peer << ":" << repo.app << " error: " << ex.what();
                     failure(host, peer, ex.what());
                 }
             }, boost::asio::detached);

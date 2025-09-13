@@ -70,13 +70,13 @@ void explore_network(boost::asio::io_context& io, const udp::endpoint& bind, con
         try
         {
             auto client = plexus::create_stun_client(io, stun, bind);
-            auto hole = client->punch_hole(yield);
+            auto hole = client->explore_network(yield);
 
             handler(hole);
         }
         catch (const std::exception& e)
         {
-            _err_ << "exploring network by stun " << stun << " from " << bind << " failed: " << e.what();
+            _err_ << "exploring network by stun " << stun << " from " << bind << " error: " << e.what();
 
             if (failure)
                 failure(e.what());
@@ -91,13 +91,13 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
         auto peer = pipe->peer();
         auto host = pipe->host();
 
-        _inf_ << "accepting " << peer << " by " << host << " for " << config.app;
+        _inf_ << "accepting " << peer << " -> " << host << ":" << config.app;
 
         try
         {
             auto binder = plexus::create_stun_binder(io, config.stun, config.bind, config.hops);
 
-            auto hole = binder->punch_hole(yield);
+            auto hole = binder->explore_network(yield);
             if (hole.traits.mapping != traverse::independent)
                 throw plexus::context_error(__FUNCTION__, "bad network");
 
@@ -111,7 +111,7 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
         }
         catch (const std::exception& e)
         {
-            _err_ << "accepting " << peer << " by " << host << " for " << config.app << " failed: " << e.what();
+            _err_ << "accepting " << peer << " -> " << host << ":" << config.app << " error: " << e.what();
 
             if (failure)
                 failure(host, peer, e.what());
@@ -130,13 +130,13 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
         auto peer = pipe->peer();
         auto host = pipe->host();
 
-        _inf_ << "inviting " << peer << " by " << host << " for " << config.app;
+        _inf_ << "inviting " << host << " -> " << peer << ":" << config.app;
 
         try
         {
             auto binder = plexus::create_stun_binder(io, config.stun, config.bind, config.hops);
 
-            auto hole = binder->punch_hole(yield);
+            auto hole = binder->explore_network(yield);
             if (hole.traits.mapping != traverse::independent)
                 throw plexus::context_error(__FUNCTION__, "bad network");
 
@@ -150,7 +150,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
         }
         catch (const std::exception& e)
         {
-            _err_ << "inviting " << peer << " by " << host << " for " << config.app << " failed: " << e.what();
+            _err_ << "inviting " << host << " -> " << peer << ":" << config.app << " error: " << e.what();
 
             if (failure)
                 failure(pipe->host(), pipe->peer(), e.what());
@@ -166,7 +166,7 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
 {
     spawn_accept(io, config, host, peer, [&io, collect, failure](const identity& host, const identity& peer, const udp::endpoint& bind, const reference& gateway, const reference& faraway)
     {
-        _inf_ << "accepting from " << faraway.endpoint << " on " << bind;
+        _inf_ << "accepting " << faraway.endpoint << " -> " << bind;
 
         auto socket = std::make_shared<tubus::socket>(io, faraway.puzzle ^ gateway.puzzle);
         boost::system::error_code ec;
@@ -181,11 +181,11 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
             return;
         }
 
-        socket->async_accept(faraway.endpoint, [socket, faraway, host, peer, collect, failure](const boost::system::error_code& ec)
+        socket->async_accept(faraway.endpoint, [socket, faraway, bind, host, peer, collect, failure](const boost::system::error_code& ec)
         {
             if (ec)
             {
-                _err_ << "accepting from " << faraway.endpoint << " failed: " << ec.message();
+                _err_ << "accepting " << faraway.endpoint << " -> " << bind << " error: " << ec.message();
                 
                 if (failure)
                     failure(host, peer, ec.message());
@@ -201,7 +201,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
 {
     spawn_invite(io, config, host, peer, [&io, collect, failure](const identity& host, const identity& peer, const udp::endpoint& bind, const reference& gateway, const reference& faraway)
     {
-        _inf_ << "connecting to " << faraway.endpoint << " from " << bind;
+        _inf_ << "connecting " << bind << " -> " << faraway.endpoint;
 
         auto socket = std::make_shared<tubus::socket>(io, faraway.puzzle ^ gateway.puzzle);
         boost::system::error_code ec;
@@ -216,11 +216,11 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
             return;
         }
 
-        socket->async_connect(faraway.endpoint, [socket, faraway, host, peer, collect, failure](const boost::system::error_code& ec)
+        socket->async_connect(faraway.endpoint, [socket, faraway, bind, host, peer, collect, failure](const boost::system::error_code& ec)
         {
             if (ec)
             {
-                _err_ << "connecting to " << faraway.endpoint << " failed: " << ec.message();
+                _err_ << "connecting " << bind << " -> " << faraway.endpoint << " error: " << ec.message();
 
                 if (failure)
                     failure(host, peer, ec.message());
@@ -234,7 +234,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
 
 void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
-    _inf_ << "forward advent from " << host << " for " << peer;
+    _inf_ << "forward advent " << peer << " -> " << host << ":" << app;
 
     mediator.index() == 0
         ? forward_advent(io, context<emailer>(app, repo, std::get<emailer>(mediator)), host, peer, handler, failure)
@@ -243,7 +243,7 @@ void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, con
 
 void receive_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true)
 {
-    _inf_ << "receive advent from " << peer << " for " << host;
+    _inf_ << "receive advent " << host << " -> " << peer << ":" << app;
 
     mediator.index() == 0
         ? receive_advent(io, context<emailer>(app, repo, std::get<emailer>(mediator)), host, peer, handler, failure)
