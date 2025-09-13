@@ -650,24 +650,33 @@ void receive_advent(boost::asio::io_context& io, const opendht::context& ctx, co
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler, failure](boost::asio::yield_context yield)
     {
-        try
+        opendht::repository repo(ctx);
+        auto op = opendht::listen::start(io, repo, host, peer, opendht::advent_token);
+        do
         {
-            opendht::repository repo(ctx);
-            auto op = opendht::listen::start(io, repo, host, peer, opendht::advent_token);
-            do
+            auto advent = op->wait(yield);
+            boost::asio::spawn(io, [&io, repo, advent, handler, failure](boost::asio::yield_context yield)
             {
-                auto advent = op->wait(yield);
-                boost::asio::post(io, std::bind(handler, std::get<1>(advent), std::get<2>(advent)));
+                auto id = std::get<0>(advent);
+                auto host = std::get<1>(advent);
+                auto peer = std::get<2>(advent);
 
-                _inf_ << "advent " << std::get<1>(advent) << " <- " << std::get<2>(advent);
-            }
-            while (true);
+                try
+                {
+                    auto op = opendht::acquire::start(io, repo, host, peer, id, opendht::advent_token);
+                    op->wait(yield);
+
+                    _inf_ << "advent " << host << " <- " << peer;
+                    handler(host, peer);
+                }
+                catch (const std::exception& ex) 
+                {
+                    _err_ << "advent " << host << " <- " << peer << " failed: " << ex.what();
+                    failure(host, peer, ex.what());
+                }
+            }, boost::asio::detached);
         }
-        catch(const std::exception& ex)
-        {
-            _err_ << "advent " << host << " <- " << peer << " failed: " << ex.what();
-            failure(host, peer, ex.what());
-        }
+        while (true);
     }, boost::asio::detached);
 }
 
