@@ -19,6 +19,7 @@
 #include <boost/asio/spawn.hpp>
 #include <boost/date_time/posix_time/posix_time_config.hpp>
 #include <boost/date_time/posix_time/ptime.hpp>
+#include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <filesystem>
 #include <regex>
@@ -123,15 +124,25 @@ public:
                 m_node = std::make_shared<dht::DhtRunner>();
                 m_node->run(port, {}, true, network);
 
-                _dbg_ << "startup dht: node=" << m_node->getNodeId() << " port=" << port << " bootstrap=" << bootstrap << " network=" << network;
+                _dbg_ << "startup dht: node=" << m_node->getNodeId() << " port=" << port << " network=" << network << " bootstrap=" << bootstrap;
 
-                m_node->bootstrap(bootstrap);
+                m_node->setOnStatusChanged([id = m_node->getNodeId()](dht::NodeStatus v4, dht::NodeStatus v6)
+                {
+                    _dbg_ << "about dht: node=" << id << " IPv4=" << dht::statusToStr(v4) << " IPv6=" << dht::statusToStr(v6);
+                });
+
                 s_nodes.emplace(key, m_node);
             }
             else
             {
-                m_node->bootstrap(bootstrap);
-                _dbg_ << "refresh dht: node=" << m_node->getNodeId() << " bootstrap=" << bootstrap;
+                _dbg_ << "refresh dht: node=" << m_node->getNodeId() << " port=" << port << " network=" << network << " bootstrap=" << bootstrap;
+            }
+
+            std::set<std::string> urls;
+            boost::split(urls, bootstrap, boost::is_any_of(",;"));
+            for(auto& url : urls)
+            {
+                m_node->bootstrap(url);
             }
         }
         catch (const std::exception& ex)
