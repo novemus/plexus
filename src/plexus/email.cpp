@@ -417,16 +417,16 @@ class imap
 
     std::string make_filter(const std::string& subject)
     {
-        std::string filter = utils::format("(UID %d:*) (Subject %s) (Subject %s)", m_position + 1, m_config.app.c_str(), subject.c_str());
+        std::string filter = utils::format("UID %d:* SUBJECT %s SUBJECT %s", m_position + 1, m_config.app.c_str(), subject.c_str());
 
         if (!m_peer.pin.empty())
-            filter += utils::format(" (From %s)", m_peer.pin.c_str());
+            filter += utils::format(" FROM %s", m_peer.pin.c_str());
         if (!m_peer.owner.empty())
-            filter += utils::format(" (From %s)", m_peer.owner.c_str());
+            filter += utils::format(" FROM %s", m_peer.owner.c_str());
         if (!m_host.pin.empty())
-            filter += utils::format(" (To %s)", m_host.pin.c_str());
+            filter += utils::format(" TO %s", m_host.pin.c_str());
         if (!m_host.owner.empty())
-            filter += utils::format(" (To %s)", m_host.owner.c_str());
+            filter += utils::format(" TO %s", m_host.owner.c_str());
 
         return filter;
     }
@@ -526,7 +526,7 @@ public:
             else
             {
                 session->request(yield,
-                    utils::format("%u UID FETCH %d (BODY.PEEK[TEXT] BODY[HEADER.FIELDS (From To)])\r\n", ++seq, m_position),
+                    utils::format("%u UID FETCH %d (BODY.PEEK[TEXT] BODY[HEADER.FIELDS (FROM TO)])\r\n", ++seq, m_position),
                     fetch_parser
                 );
             }
