@@ -106,7 +106,7 @@ public:
             }
         }
 
-        static std::map<uint64_t, std::shared_ptr<dht::DhtRunner>> s_nodes;
+        static std::map<uint64_t, std::pair<std::shared_ptr<dht::DhtRunner>, std::set<std::pair<std::string, std::string>>>> s_nodes;
         static std::mutex s_mutex;
 
         std::lock_guard<std::mutex> lock(s_mutex);
@@ -116,14 +116,14 @@ public:
         auto iter = s_nodes.begin();
         while (iter != s_nodes.end())
         {
-            if (iter->second.use_count() == 1)
+            if (iter->second.first.use_count() == 1)
             {
                 try
                 {
-                    _dbg_ << "destroy: node=" << iter->second->getNodeId();
+                    _dbg_ << "destroy: node=" << iter->second.first->getNodeId();
 
-                    iter->second->shutdown({}, true);
-                    iter->second->join();
+                    iter->second.first->shutdown({}, true);
+                    iter->second.first->join();
                 }
                 catch (const std::exception& ex)
                 {
@@ -134,7 +134,9 @@ public:
             else
             {
                 if (iter->first == key)
-                    m_node = iter->second;
+                {
+                    m_node = iter->second.first;
+                }
 
                 ++iter;
             }
@@ -147,25 +149,34 @@ public:
                 m_node = std::make_shared<dht::DhtRunner>();
                 m_node->run(port, {}, true, network);
 
-                _dbg_ << "startup: node=" << m_node->getNodeId() << " port=" << port << " network=" << network << " bootstrap=" << bootstrap;
+                _dbg_ << "startup: node=" << m_node->getNodeId() << " port=" << port << " network=" << network;
 
                 m_node->setOnStatusChanged([id = m_node->getNodeId()](dht::NodeStatus v4, dht::NodeStatus v6)
                 {
-                    _dbg_ << "network: node=" << id << " IPv4=" << dht::statusToStr(v4) << " IPv6=" << dht::statusToStr(v6);
+                    _dbg_ << "network: node=" << id << " v4=" << dht::statusToStr(v4) << " v6=" << dht::statusToStr(v6);
                 });
 
-                s_nodes.emplace(key, m_node);
-            }
-            else
-            {
-                _trc_ << "refresh: node=" << m_node->getNodeId() << " port=" << port << " network=" << network << " bootstrap=" << bootstrap;
+                s_nodes.emplace(key, std::make_pair(m_node, std::set<std::pair<std::string, std::string>>()));
             }
 
             std::set<std::string> urls;
             boost::split(urls, bootstrap, boost::is_any_of(",;"));
+
+            auto& presented = s_nodes[key].second;
             for(auto& url : urls)
             {
-                m_node->bootstrap(url);
+                auto endpoint = dht::splitPort(url);
+
+                if (endpoint.second.empty())
+                    endpoint.second = std::to_string(dht::net::DHT_DEFAULT_PORT);
+
+                if (presented.count(endpoint) == 0)
+                {
+                    _dbg_ << "connect: node=" << m_node->getNodeId() << " url=" << url;
+
+                    m_node->bootstrap(endpoint.first, endpoint.second);
+                    presented.insert(endpoint);
+                }
             }
         }
         catch (const std::exception& ex)
