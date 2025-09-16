@@ -14,6 +14,7 @@
 #include <wormhole/logger.h>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 #include <opendht.h>
 #include <opendht/crypto.h>
 #include <boost/asio/spawn.hpp>
@@ -22,6 +23,7 @@
 #include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <filesystem>
+#include <atomic>
 #include <regex>
 #include <deque>
 #include <map>
@@ -37,10 +39,151 @@ const std::string advent_token = plexus::utils::getenv<std::string>("PLEXUS_ADVE
 
 using context = context<plexus::dhtnode>;
 
+class node_factory
+{
+    struct node_context
+    {
+        std::shared_ptr<dht::DhtRunner> node;
+        std::set<std::pair<std::string, std::string>> peers;
+
+        node_context() 
+            : node(std::make_shared<dht::DhtRunner>())
+        {}
+    };
+
+    std::map<uint64_t, node_context> m_nodes;
+    std::thread m_thread;
+    std::condition_variable m_waiter;
+    std::atomic_bool m_alive;
+    std::mutex m_mutex;
+
+    std::shared_ptr<dht::DhtRunner> retrieve_node(uint16_t port, uint32_t network, const std::string& bootstrap)
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        
+        auto key = uint64_t(port) << 32 | network;
+
+        auto iter = m_nodes.find(key);
+        if (iter == m_nodes.end())
+            iter = m_nodes.emplace(key, node_context{}).first;
+
+        auto node = iter->second.node;
+        auto& peers = iter->second.peers;
+
+        if (!node->isRunning())
+        {
+            node->run(port, {}, true, network);
+
+            _dbg_ << "startup: node=" << node->getNodeId() << " port=" << port << " network=" << network;
+
+            node->setOnStatusChanged([id = node->getNodeId()](dht::NodeStatus v4, dht::NodeStatus v6)
+            {
+                _dbg_ << "network: node=" << id << " v4=" << dht::statusToStr(v4) << " v6=" << dht::statusToStr(v6);
+            });
+        }
+        else
+        {
+            node->connectivityChanged();
+        }
+
+        std::set<std::string> urls;
+        boost::split(urls, bootstrap, boost::is_any_of(",;"));
+
+        for(auto& url : urls)
+        {
+            auto ep = dht::splitPort(url);
+
+            if (ep.second.empty())
+                ep.second = std::to_string(dht::net::DHT_DEFAULT_PORT);
+
+            if (peers.count(ep) == 0)
+            {
+                _dbg_ << "connect: node=" << node->getNodeId() << " url=" << url;
+
+                node->bootstrap(ep.first, ep.second);
+                peers.insert(ep);
+            }
+        }
+
+        return node;
+    }
+
+public:
+
+    node_factory() : m_alive(true)
+    {
+#ifdef _MSC_VER
+        static std::shared_ptr<void> s_gnutls = []()
+        {
+            if (auto err = gnutls_global_init())
+                throw plexus::context_error(__FUNCTION__, gnutls_strerror(err));
+
+            return std::shared_ptr<void>(nullptr, [](void*)
+            {
+                gnutls_global_deinit();
+            });
+        }();
+#endif
+        m_thread = std::thread([this]()
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+
+            while (m_alive)
+            {
+                m_waiter.wait_for(lock, std::chrono::seconds(300));
+
+                auto iter = m_nodes.begin();
+                while (iter != m_nodes.end())
+                {
+                    if (iter->second.node.use_count() == 1)
+                    {
+                        _dbg_ << "destroy: node=" << iter->second.node->getNodeId();
+
+                        iter->second.node->shutdown({}, true);
+                        iter->second.node->join();
+
+                        iter = m_nodes.erase(iter);
+                    }
+                    else 
+                    {
+                        ++iter;
+                    }
+                }
+            }
+
+            auto iter = m_nodes.begin();
+            while (iter != m_nodes.end())
+            {
+                _dbg_ << "destroy: node=" << iter->second.node->getNodeId();
+
+                iter->second.node->shutdown({}, true);
+                iter->second.node->join();
+
+                ++iter;
+            }
+
+            m_nodes.clear();
+        });
+    }
+
+    ~node_factory()
+    {
+        m_alive = false;
+        m_waiter.notify_all();
+        m_thread.join();
+    }
+
+    static std::shared_ptr<dht::DhtRunner> create_node(uint16_t port, uint32_t network, const std::string& bootstrap)
+    {
+        static node_factory s_factory;
+        return s_factory.retrieve_node(port, network, bootstrap);
+    }
+};
+
 class repository : public context
 {
-    std::map<dht::InfoHash, identity> m_index;
     std::shared_ptr<dht::DhtRunner>   m_node;
+    std::map<dht::InfoHash, identity> m_index;
 
     static std::vector<uint8_t> load_file(const std::string& path) noexcept(false)
     {
@@ -63,31 +206,19 @@ public:
 
     repository(const context& ctx) noexcept(false) 
         : context(ctx)
+        , m_node(node_factory::create_node(port, network, bootstrap))
     {
-#ifdef _MSC_VER
-        static std::shared_ptr<void> s_gnutls = []()
+        for (auto const& owner : std::filesystem::directory_iterator(std::filesystem::path(repo)))
         {
-            if (auto err = gnutls_global_init())
-                throw plexus::context_error(__FUNCTION__, gnutls_strerror(err));
-
-            return std::shared_ptr<void>(nullptr, [](void*)
-            {
-                gnutls_global_deinit();
-            });
-        }();
-#endif
-
-        for (auto const& iowner : std::filesystem::directory_iterator(std::filesystem::path(repo)))
-        {
-            if (!iowner.is_directory())
+            if (!owner.is_directory())
                 continue;
 
-            for (auto const& ipin : std::filesystem::directory_iterator(iowner.path()))
+            for (auto const& pin : std::filesystem::directory_iterator(owner.path()))
             {
-                if (!ipin.is_directory())
+                if (!pin.is_directory())
                     continue;
 
-                identity info { iowner.path().filename().string(), ipin.path().filename().string() };
+                identity info { owner.path().filename().string(), pin.path().filename().string() };
                 if (!has_cert(info))
                     continue;
 
@@ -104,84 +235,6 @@ public:
                     _err_ << ex.what();
                 }
             }
-        }
-
-        static std::map<uint64_t, std::pair<std::shared_ptr<dht::DhtRunner>, std::set<std::pair<std::string, std::string>>>> s_nodes;
-        static std::mutex s_mutex;
-
-        std::lock_guard<std::mutex> lock(s_mutex);
-
-        auto key = uint64_t(port) << 32 | network;
-
-        auto iter = s_nodes.begin();
-        while (iter != s_nodes.end())
-        {
-            if (iter->second.first.use_count() == 1)
-            {
-                try
-                {
-                    _dbg_ << "destroy: node=" << iter->second.first->getNodeId();
-
-                    iter->second.first->shutdown({}, true);
-                    iter->second.first->join();
-                }
-                catch (const std::exception& ex)
-                {
-                    _err_ << ex.what();
-                }
-                iter = s_nodes.erase(iter);
-            }
-            else
-            {
-                if (iter->first == key)
-                {
-                    m_node = iter->second.first;
-                }
-
-                ++iter;
-            }
-        }
-
-        try
-        {
-            if (!m_node)
-            {
-                m_node = std::make_shared<dht::DhtRunner>();
-                m_node->run(port, {}, true, network);
-
-                _dbg_ << "startup: node=" << m_node->getNodeId() << " port=" << port << " network=" << network;
-
-                m_node->setOnStatusChanged([id = m_node->getNodeId()](dht::NodeStatus v4, dht::NodeStatus v6)
-                {
-                    _dbg_ << "network: node=" << id << " v4=" << dht::statusToStr(v4) << " v6=" << dht::statusToStr(v6);
-                });
-
-                s_nodes.emplace(key, std::make_pair(m_node, std::set<std::pair<std::string, std::string>>()));
-            }
-
-            std::set<std::string> urls;
-            boost::split(urls, bootstrap, boost::is_any_of(",;"));
-
-            auto& presented = s_nodes[key].second;
-            for(auto& url : urls)
-            {
-                auto endpoint = dht::splitPort(url);
-
-                if (endpoint.second.empty())
-                    endpoint.second = std::to_string(dht::net::DHT_DEFAULT_PORT);
-
-                if (presented.count(endpoint) == 0)
-                {
-                    _dbg_ << "connect: node=" << m_node->getNodeId() << " url=" << url;
-
-                    m_node->bootstrap(endpoint.first, endpoint.second);
-                    presented.insert(endpoint);
-                }
-            }
-        }
-        catch (const std::exception& ex)
-        {
-            throw plexus::context_error(__FUNCTION__, ex.what());
         }
     }
 
