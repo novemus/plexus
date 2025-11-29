@@ -303,12 +303,13 @@ using notice = std::tuple<uint64_t, identity, identity>;
 
 class listen : public operation<notice>
 {
-    boost::asio::deadline_timer     timer;
-    std::shared_ptr<dht::DhtRunner> node;
-    dht::InfoHash                   hash;
-    std::future<size_t>             token;
-    std::deque<notice>              queue;
-    std::mutex                      mutex;
+    boost::asio::deadline_timer       timer;
+    std::shared_ptr<dht::DhtRunner>   node;
+    dht::InfoHash                     hash;
+    std::future<size_t>               token;
+    std::deque<notice>                queue;
+    std::map<dht::InfoHash, uint64_t> recent;
+    std::mutex                        mutex;
 
 protected:
 
@@ -361,7 +362,7 @@ public:
         _dbg_ << "listen: subject=" << subject << " app=" << repo.app << " host=" << host << " peer=" << peer << " value=" << id << " hash=" << op->hash;
 
         std::weak_ptr<listen> weak = op;
-        op->token = op->node->listen(op->hash, [weak, repo, id, host, match](const std::vector<std::shared_ptr<dht::Value>>& values)
+        op->token = op->node->listen(op->hash, [weak, repo, id, host, match](const std::vector<std::shared_ptr<dht::Value>>& values) mutable
         {
             auto ptr = weak.lock();
             if (not ptr)
@@ -369,16 +370,24 @@ public:
 
             for (auto& value : values)
             {
-                if (id > value->id)
+                if (id > value->id) // skip stale messages
                     continue;
 
                 _trc_ << "listen: value=" << value->id << " hash=" << ptr->hash << " owner=" << value->getOwner()->getId();
 
-                auto peer = repo.fetch_identity(value->getOwner()->getId());
+                auto owner = value->getOwner()->getId();
+
+                auto peer = repo.fetch_identity(owner);
                 if (not match(peer))
                     continue;
 
                 std::lock_guard<std::mutex> lock(ptr->mutex);
+
+                auto iter = ptr->recent.find(owner);
+                if (iter != ptr->recent.end() && iter->second >= value->id) // skip duplicate and straggler messages
+                    continue;
+
+                ptr->recent[owner] = value->id;
                 ptr->queue.emplace_back(value->id, host, peer);
 
                 boost::system::error_code ec;
