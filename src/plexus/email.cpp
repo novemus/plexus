@@ -595,27 +595,27 @@ public:
     reference pull_request(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, invite_token);
-        _inf_ << "pulled request " << faraway;
+        _inf_ << "pulled request " << faraway.endpoint;
         return faraway;
     }
 
     reference pull_response(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, accept_token);
-        _inf_ << "pulled response " << faraway;
+        _inf_ << "pulled response " << faraway.endpoint;
         return faraway;
     }
 
     void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         m_pusher.push(yield, invite_token, gateway);
-        _inf_ << "pushed request " << gateway;
+        _inf_ << "pushed request " << gateway.endpoint;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         m_pusher.push(yield, accept_token, gateway);
-        _inf_ << "pushed response " << gateway;
+        _inf_ << "pushed response " << gateway.endpoint;
     }
 
     const identity& host() const noexcept(true) override

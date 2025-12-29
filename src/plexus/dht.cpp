@@ -613,7 +613,7 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled request " << faraway;
+        _inf_ << "pulled request " << faraway.endpoint;
         return faraway;
     }
 
@@ -622,7 +622,7 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled response " << faraway;
+        _inf_ << "pulled response " << faraway.endpoint;
         return faraway;
     }
 
@@ -641,7 +641,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed request " << gateway;
+        _inf_ << "pushed request " << gateway.endpoint;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
@@ -659,7 +659,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed response " << gateway;
+        _inf_ << "pushed response " << gateway.endpoint;
     }
 
     const identity& host() const noexcept(true) override
