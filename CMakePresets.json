@@ -18,7 +18,7 @@
             "cacheVariables": {
                 "BUILD_SHARED_LIBS": "OFF"
             },
-            "installDir": "${sourceParentDir}/out/$env{HOSTNAME}/install/x64-static"
+            "installDir": "${sourceParentDir}/out/$env{HOSTNAME}/install/$env{ARCHITECTURE}-static"
         },
         {
             "name": "shared-config-base",
@@ -27,7 +27,7 @@
             "cacheVariables": {
                 "BUILD_SHARED_LIBS": "ON"
             },
-            "installDir": "${sourceParentDir}/out/$env{HOSTNAME}/install/x64"
+            "installDir": "${sourceParentDir}/out/$env{HOSTNAME}/install/$env{ARCHITECTURE}"
         },
         {
             "name": "vcpkg-config-base",
@@ -42,7 +42,7 @@
                 "vcpkg-config-base"
             ],
             "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+                "VCPKG_TARGET_TRIPLET": "$env{ARCHITECTURE}-windows-static",
                 "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
                 "CMAKE_CONFIGURATION_TYPES": "Debug",
                 "CMAKE_BUILD_TYPE": "Debug"
@@ -76,7 +76,7 @@
             "displayName": "Shared (Debug)",
             "inherits": ["shared-config-base", "vcpkg-config-base"],
             "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "VCPKG_TARGET_TRIPLET": "$env{ARCHITECTURE}-windows",
                 "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
                 "CMAKE_CONFIGURATION_TYPES": "Debug",
                 "CMAKE_BUILD_TYPE": "Debug"
@@ -170,7 +170,7 @@
             "displayName": "Shared (Debug)",
             "inherits": ["shared-config-base", "vcpkg-config-base"],
             "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "x64-osx-dynamic",
+                "VCPKG_TARGET_TRIPLET": "$env{ARCHITECTURE}-osx-dynamic",
                 "CMAKE_BUILD_TYPE": "Debug"
             },
             "condition": {
@@ -200,7 +200,7 @@
             "displayName": "Static (Debug)",
             "inherits": ["static-config-base", "vcpkg-config-base"],
             "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "x64-osx",
+                "VCPKG_TARGET_TRIPLET": "$env{ARCHITECTURE}-osx",
                 "CMAKE_BUILD_TYPE": "Debug"
             },
             "condition": {
@@ -358,7 +358,7 @@
             "configuration": "Release",
             "inherits": "test-base",
             "environment": {
-                "PATH": "${sourceParentDir}/out/$env{HOSTNAME}/build/${sourceDirName}/${presetName}/vcpkg_installed/x64-windows/bin;${sourceParentDir}/out/$env{HOSTNAME}/install/x64/bin"
+                "PATH": "${sourceParentDir}/out/$env{HOSTNAME}/build/${sourceDirName}/${presetName}/vcpkg_installed/$env{ARCHITECTURE}-windows/bin;${sourceParentDir}/out/$env{HOSTNAME}/install/$env{ARCHITECTURE}/bin"
             },
             "condition": {
                 "type": "equals",
@@ -374,7 +374,7 @@
             "inherits": "test-base",
             "configuration": "RelWithDebInfo",
             "environment": {
-                "PATH": "${sourceParentDir}/out/$env{HOSTNAME}/build/${sourceDirName}/${presetName}/vcpkg_installed/x64-windows/bin;${sourceParentDir}/out/$env{HOSTNAME}/install/x64/bin"
+                "PATH": "${sourceParentDir}/out/$env{HOSTNAME}/build/${sourceDirName}/${presetName}/vcpkg_installed/$env{ARCHITECTURE}-windows/bin;${sourceParentDir}/out/$env{HOSTNAME}/install/$env{ARCHITECTURE}/bin"
             },
             "condition": {
                 "type": "equals",
@@ -390,7 +390,7 @@
             "configuration": "Debug",
             "inherits": "test-base",
             "environment": {
-                "PATH": "${sourceParentDir}/out/$env{HOSTNAME}/build/${sourceDirName}/${presetName}/vcpkg_installed/x64-windows/debug/bin;${sourceParentDir}/out/$env{HOSTNAME}/install/x64/bin"
+                "PATH": "${sourceParentDir}/out/$env{HOSTNAME}/build/${sourceDirName}/${presetName}/vcpkg_installed/$env{ARCHITECTURE}-windows/debug/bin;${sourceParentDir}/out/$env{HOSTNAME}/install/$env{ARCHITECTURE}/bin"
             },
             "condition": {
                 "type": "equals",
