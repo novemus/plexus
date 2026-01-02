@@ -797,6 +797,54 @@
             },
             "packageName": "plexus",
             "packageDirectory": ".."
+        },
+        {
+            "name": "linux-archive",
+            "displayName": "plexus (ZIP)",
+            "description": "Portable ZIP archive",
+            "configurePreset": "linux-static-relwithdebinfo",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "generators": [
+                "ZIP"
+            ],
+            "configurations": [
+                "RelWithDebInfo"
+            ],
+            "variables": {
+                "CPACK_COMPONENTS_ALL": "binary_files;runtime_files;library_files;archive_files;header_files;cmake_files;lib_doc_files",
+                "CPACK_ARCHIVE_COMPONENT_INSTALL": "ON",
+                "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON"
+            },
+            "packageName": "plexus",
+            "packageDirectory": ".."
+        },
+        {
+            "name": "darwin-archive",
+            "displayName": "plexus (ZIP)",
+            "description": "Portable ZIP archive",
+            "configurePreset": "darwin-static-relwithdebinfo",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "generators": [
+                "ZIP"
+            ],
+            "configurations": [
+                "RelWithDebInfo"
+            ],
+            "variables": {
+                "CPACK_COMPONENTS_ALL": "binary_files;runtime_files;library_files;archive_files;header_files;cmake_files;lib_doc_files",
+                "CPACK_ARCHIVE_COMPONENT_INSTALL": "ON",
+                "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON"
+            },
+            "packageName": "plexus",
+            "packageDirectory": ".."
         }
     ],
     "workflowPresets": [
