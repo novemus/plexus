@@ -1,0 +1,8 @@
+include("@CMAKE_CURRENT_BINARY_DIR@/CPackConfig.cmake")
+
+set(CPACK_PACKAGE_NAME "@LIBPLEXUS@-devel")
+set(CPACK_PACKAGE_FILE_NAME "@LIBPLEXUS@-devel-@PROJECT_VERSION@-@CPACK_PACKAGE_RELEASE@.@CMAKE_HOST_SYSTEM_PROCESSOR@")
+set(CPACK_RPM_PACKAGE_SUMMARY "C++ development library for connecting network applications through NAT")
+set(CPACK_RPM_PACKAGE_DESCRIPTION "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.")
+set(CPACK_RPM_PACKAGE_REQUIRES "boost-devel, openssl-devel, libtubus-devel >= 1.2.3, libwormhole-devel >= 1.2.4, libopendht-opt-devel >= 3.4.0, libplexus = %{version}-%{release}")
+set(CPACK_COMPONENTS_ALL "archive_files;header_files;cmake_files")

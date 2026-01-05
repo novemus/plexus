@@ -3,4 +3,5 @@
 *.d
 *.o
 build/**
+out/**
 .idea

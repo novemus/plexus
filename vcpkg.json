@@ -10,20 +10,23 @@
         "boost-date-time",
         "boost-coroutine",
         "fmt",
-        "pkgconf",
+        {
+          "name": "pkgconf",
+          "platform": "!android"
+        },
         {
             "name": "shiftmedia-libgnutls",
             "platform": "windows"
         },
         {
             "name": "libgnutls",
-            "platform": "osx"
+            "platform": "!windows",
+            "version>=": "3.8.10"
         },
         "openssl",
         "msgpack",
         "nettle",
         "argon2",
         "jsoncpp"
-    ],
-    "builtin-baseline": "ef7dbf94b9198bc58f45951adcf1f041fcbc5ea0"
+    ]
 }

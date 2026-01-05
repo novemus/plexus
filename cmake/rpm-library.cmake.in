@@ -1,0 +1,9 @@
+include("@CMAKE_CURRENT_BINARY_DIR@/CPackConfig.cmake")
+
+set(CPACK_PACKAGE_NAME "@LIBPLEXUS@")
+set(CPACK_PACKAGE_FILE_NAME "@LIBPLEXUS@-@PROJECT_VERSION@-@CPACK_PACKAGE_RELEASE@.@CMAKE_HOST_SYSTEM_PROCESSOR@")
+set(CPACK_RPM_DEBUGINFO_PACKAGE ON)
+set(CPACK_RPM_DEBUGINFO_SINGLE_PACKAGE ON)
+set(CPACK_RPM_PACKAGE_SUMMARY "Library for connecting network applications through NAT")
+set(CPACK_RPM_PACKAGE_DESCRIPTION "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.")
+set(CPACK_COMPONENTS_ALL "library_files")

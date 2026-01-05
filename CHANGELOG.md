@@ -1,5 +1,12 @@
 # Change Log
 
+## 3.2.1 (Jan 14, 2026)
+
+- Added RelWithDebInfo presets.
+- Added RPM package presets.
+- Improved build scripts.
+- Introduced Github workflow.
+
 ## 3.2.0 (Aug 28, 2025)
 
 - Added functions to investigate NAT, forward and receive service advent.

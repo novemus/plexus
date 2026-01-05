@@ -1,3 +1,12 @@
+plexus (3.2.1-1) unstable; urgency=low
+
+  * Added RelWithDebInfo presets.
+  * Added RPM package presets.
+  * Improved build scripts.
+  * Introduced Github workflow.
+
+ -- Novemus Band <nineletters@mail.ru>  Wed, 14 Jan 2026 21:57:00 +0300
+
 plexus (3.2.0-1) unstable; urgency=low
 
   * Added functions to investigate NAT, forward and receive service advent.

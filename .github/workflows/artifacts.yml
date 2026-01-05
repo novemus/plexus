@@ -1,0 +1,182 @@
+name: Artifacts
+
+on: 
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  ubuntu:
+    name: Ubuntu packages
+    runs-on: ubuntu-latest
+    env:
+      TARGET_OS: ubuntu
+      TARGET_ARCH: x64
+      MAINTAINER: "Novemus Band <nineletters@mail.ru>"
+      HOMEPAGE: "https://github.com/novemus/plexus"
+      DEPENDENCIES: "libssl-dev libboost-system-dev libboost-program-options-dev libboost-coroutine-dev libboost-test-dev libtubus-dev libwormhole-dev libopendht-opt-dev"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ env.DEPENDENCIES }}
+
+      - name: Build static
+        run: |
+          cmake --preset static-relwithdebinfo
+          cmake --build --preset static-relwithdebinfo --target all
+          ctest --preset static-relwithdebinfo
+
+      - name: Build shared
+        run: |
+          cmake --preset shared-relwithdebinfo
+          cmake --build --preset shared-relwithdebinfo --target all
+          ctest --preset shared-relwithdebinfo
+
+      - name: Build packages
+        run: |
+          cpack --preset debian-package-bin \
+            -DCPACK_DEBIAN_PACKAGE_MAINTAINER="${{ env.MAINTAINER }}" \
+            -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}"
+          cpack --preset debian-package-lib \
+            -DCPACK_DEBIAN_PACKAGE_MAINTAINER="${{ env.MAINTAINER }}" \
+            -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}"
+          cpack --preset debian-package-dev \
+            -DCPACK_DEBIAN_PACKAGE_MAINTAINER="${{ env.MAINTAINER }}" \
+            -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}" \
+            -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
+
+      - name: Rename packages
+        run: |
+          rev=$(git rev-parse --short HEAD)
+
+          cd out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build
+
+          for file in *.deb; do
+            mv "$file" "${file%-1_amd64.deb}-${rev}_amd64.deb"
+          done
+
+          for file in *.ddeb; do
+            mv "$file" "${file%-1_amd64.ddeb}-${rev}_amd64.ddeb"
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-packages
+          path: |
+            out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*.deb
+            out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*.ddeb
+          retention-days: 7
+
+  windows:
+    name: Windows archive
+    runs-on: windows-latest
+    env:
+      TARGET_OS: windows
+      TARGET_ARCH: x64
+      TOOLCHAIN_FILE: "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build static
+        run: |
+          cmake --preset static-relwithdebinfo \
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static \
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
+          cmake --build --preset static-relwithdebinfo --target all
+          ctest --preset static-relwithdebinfo
+
+      - name: Build shared
+        run: |
+          cmake --preset shared-relwithdebinfo \
+            -DVCPKG_TARGET_TRIPLET=x64-windows \
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
+          cmake --build --preset shared-relwithdebinfo --target all
+          ctest --preset shared-relwithdebinfo
+
+      - name: Build archive
+        run: |
+          cpack --preset archive \
+            -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
+
+      - name: Rename archive
+        shell: powershell
+        run: |
+          $rev = $(git rev-parse --short HEAD).Trim()
+          cd "out\$env:TARGET_OS\$env:TARGET_ARCH\build"
+          Get-ChildItem "*.zip" | ForEach-Object {
+            $baseName = $_.BaseName -replace 'win64$', "_g${rev}-win64"
+            $newPath = "${baseName}$($_.Extension)"
+            Move-Item $_.FullName $newPath
+          }
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-archive
+          path: |
+            out\\${{ env.TARGET_OS }}\\${{ env.TARGET_ARCH }}\\build\\*.zip
+          retention-days: 7
+
+  macos:
+    name: MacOS archive
+    runs-on: macos-latest
+    env:
+      TARGET_OS: macos
+      TARGET_ARCH: x64
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+      VCPKG_FORCE_SYSTEM_BINARIES: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git $VCPKG_ROOT
+          $VCPKG_ROOT/bootstrap-vcpkg.sh
+
+      - name: Build static
+        run: |
+          cmake --preset static-relwithdebinfo \
+            -DVCPKG_TARGET_TRIPLET=x64-osx \
+            -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE"
+          cmake --build --preset static-relwithdebinfo --target all
+          ctest --preset static-relwithdebinfo
+
+      - name: Build shared
+        run: |
+          cmake --preset shared-relwithdebinfo \
+            -DVCPKG_TARGET_TRIPLET=x64-osx-dynamic \
+            -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE"
+          cmake --build --preset shared-relwithdebinfo --target all
+          ctest --preset shared-relwithdebinfo
+
+      - name: Build archive
+        run: |
+          cpack --preset archive \
+            -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
+
+      - name: Rename archive
+        run: |
+          rev=$(git rev-parse --short HEAD)
+
+          cd out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build
+
+          for file in *.zip; do
+            mv "$file" "${file%-Darwin.zip}-${rev}-Darwin.zip"
+          done
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-archive
+          path: |
+            out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*.zip
+          retention-days: 7
