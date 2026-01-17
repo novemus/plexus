@@ -197,9 +197,6 @@
                 "RelWithDebInfo"
             ],
             "variables": {
-                "CPACK_PACKAGING_INSTALL_PREFIX": "/opt",
-                "CPACK_DEBIAN_PACKAGE_RELEASE": "1",
-                "CPACK_DEBIAN_PACKAGE_MAINTAINER": "Community",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "A tool for connecting network applications through NAT",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' utility provides the ability to connect network\napplications based on UDP protocol through NAT.",
                 "CPACK_COMPONENTS_ALL": "binary_files;bin_deb_files",
@@ -231,9 +228,6 @@
                 "RelWithDebInfo"
             ],
             "variables": {
-                "CPACK_PACKAGING_INSTALL_PREFIX": "/opt",
-                "CPACK_DEBIAN_PACKAGE_RELEASE": "1",
-                "CPACK_DEBIAN_PACKAGE_MAINTAINER": "Community",
                 "CPACK_DEBIAN_PACKAGE_DEPENDS": "libtubus (>= 1.2.3), libwormhole (>= 1.2.4)",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "Library for connecting network applications through NAT",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.",
@@ -265,10 +259,7 @@
                 "RelWithDebInfo"
             ],
             "variables": {
-                "CPACK_PACKAGING_INSTALL_PREFIX": "/opt",
-                "CPACK_DEBIAN_PACKAGE_RELEASE": "1",
-                "CPACK_DEBIAN_PACKAGE_MAINTAINER": "Community",
-                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.2.3), libwormhole-dev (>= 1.2.4), libplexus (= 3.2.1-1), libopendht-opt-dev (>= 3.4.0)",
+                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.2.3), libwormhole-dev (>= 1.2.4), libopendht-dev (>= 3.4.0), libplexus (>= 3.2.1)",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "C++ development library for connecting network applications through NAT",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.",
                 "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_deb_files;dev_doc_files",

@@ -15,7 +15,7 @@ jobs:
       TARGET_ARCH: x64
       MAINTAINER: "Novemus Band <nineletters@mail.ru>"
       HOMEPAGE: "https://github.com/novemus/plexus"
-      DEPENDENCIES: "libssl-dev libboost-system-dev libboost-program-options-dev libboost-coroutine-dev libboost-test-dev libtubus-dev libwormhole-dev libopendht-opt-dev"
+      DEPENDENCIES: "libssl-dev libboost-system-dev libboost-program-options-dev libboost-coroutine-dev libboost-test-dev libtubus-dev libwormhole-dev libopendht-dev"
 
     steps:
       - uses: actions/checkout@v4
