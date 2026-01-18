@@ -6,34 +6,48 @@ on:
   pull_request:
     branches: [ master ]
 
+env:
+  PACKAGE_RELEASE: ${{ vars.PACKAGE_RELEASE || "1" }}
+  MAINTAINER: "Novemus Band <nineletters@mail.ru>"
+  HOMEPAGE: "https://github.com/novemus/plexus"
+
 jobs:
   ubuntu:
-    name: Ubuntu packages
+    name: Debian packages
     runs-on: ubuntu-latest
+    container: debian:13
     env:
-      TARGET_OS: ubuntu
+      TARGET_OS: debian-trixie
       TARGET_ARCH: x64
-      MAINTAINER: "Novemus Band <nineletters@mail.ru>"
-      HOMEPAGE: "https://github.com/novemus/plexus"
-      DEPENDENCIES: "libssl-dev libboost-system-dev libboost-program-options-dev libboost-coroutine-dev libboost-test-dev libtubus-dev libwormhole-dev libopendht-dev"
+      REPO_HOST: ${{ secrets.DEB_REPO_HOST }}
+      REPO_PORT: ${{ secrets.DEB_REPO_PORT }}
+      REPO_URL: "https://${{ secrets.DEB_REPO_HOST }}:${{ secrets.DEB_REPO_PORT }}/${{ secrets.DEB_REPO_PATH }}"
+      REPO_GPG_URL: "https://${{ secrets.DEB_REPO_HOST }}:${{ secrets.DEB_REPO_PORT }}/${{ secrets.DEB_GPG_PATH }}"
+      DEPENDENCIES: "build-essential cmake sudo debhelper devscripts fakeroot pkg-config libssl-dev libboost-system-dev libboost-program-options-dev libboost-coroutine-dev libboost-test-dev libtubus-dev libwormhole-dev libopendht-dev"
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
+          echo | openssl s_client -connect ${{ env.REPO_HOST }}:${{ env.REPO_PORT }} -servername ${{ env.REPO_HOST }} 2>/dev/null | openssl x509 > vendor.crt
+          sudo cp vendor.crt /usr/local/share/ca-certificates/
+          sudo update-ca-certificates
+          rm vendor.crt
+          wget -qO- ${{ env.REPO_GPG_URL }} | sudo gpg --dearmor -o /usr/share/keyrings/vendor.gpg
+          echo "deb [signed-by=/usr/share/keyrings/vendor.gpg] ${{ env.REPO_URL }} $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/vendor.list
           sudo apt-get update
           sudo apt-get install -y ${{ env.DEPENDENCIES }}
 
       - name: Build static
         run: |
-          cmake --preset static-relwithdebinfo
+          cmake --preset static-relwithdebinfo -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}
           cmake --build --preset static-relwithdebinfo --target all
           ctest --preset static-relwithdebinfo
 
       - name: Build shared
         run: |
-          cmake --preset shared-relwithdebinfo
+          cmake --preset shared-relwithdebinfo -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}
           cmake --build --preset shared-relwithdebinfo --target all
           ctest --preset shared-relwithdebinfo
 
@@ -50,27 +64,62 @@ jobs:
             -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}" \
             -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
 
-      - name: Rename packages
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-packages
+          path: |
+            out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*.deb
+            out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*.ddeb
+          retention-days: 7
+
+  fedora:
+    name: Fedora packages
+    runs-on: ubuntu-latest
+    container: fedora:42
+    env:
+      TARGET_OS: fedora-42
+      TARGET_ARCH: x64
+      DEPENDENCIES: "clang clang-tools-extra cmake rpmdevtools boost-devel boost-static gnutls-devel asio-devel openssl-devel cppunit-devel fmt-devel nettle-devel libargon2-devel jsoncpp-devel msgpack-devel libtubus-devel libwormhole-devel libopendht-devel"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
         run: |
-          rev=$(git rev-parse --short HEAD)
+          dnf -y --setopt=tsflags=nodocs install ${{ env.DEPENDENCIES }}
 
-          cd out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build
+      - name: Build static
+        run: |
+          cmake --preset static-relwithdebinfo -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}
+          cmake --build --preset static-relwithdebinfo --target all
+          ctest --preset static-relwithdebinfo
 
-          for file in *.deb; do
-            mv "$file" "${file%-1_amd64.deb}-${rev}_amd64.deb"
-          done
+      - name: Build shared
+        run: |
+          cmake --preset shared-relwithdebinfo -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}
+          cmake --build --preset shared-relwithdebinfo --target all
+          ctest --preset shared-relwithdebinfo
 
-          for file in *.ddeb; do
-            mv "$file" "${file%-1_amd64.ddeb}-${rev}_amd64.ddeb"
-          done
+      - name: Build packages
+        run: |
+          cpack --preset rpm-package-bin \
+            -DCPACK_RPM_PACKAGE_VENDOR="${{ env.MAINTAINER }}" \
+            -DCPACK_RPM_PACKAGE_URL="${{ env.HOMEPAGE }}"
+          cpack --preset rpm-package-lib \
+            -DCPACK_RPM_PACKAGE_VENDOR="${{ env.MAINTAINER }}" \
+            -DCPACK_RPM_PACKAGE_URL="${{ env.HOMEPAGE }}"
+          cpack --preset rpm-package-dev \
+            -DCPACK_RPM_PACKAGE_VENDOR="${{ env.MAINTAINER }}" \
+            -DCPACK_RPM_PACKAGE_URL="${{ env.HOMEPAGE }}" \
+            -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
-          name: ubuntu-packages
+          name: fedora-packages
           path: |
-            out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*.deb
-            out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*.ddeb
+            out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*.rpm
           retention-days: 7
 
   windows:
@@ -87,6 +136,7 @@ jobs:
       - name: Build static
         run: |
           cmake --preset static-relwithdebinfo \
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
             -DVCPKG_TARGET_TRIPLET=x64-windows-static \
             -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
           cmake --build --preset static-relwithdebinfo --target all
@@ -95,6 +145,7 @@ jobs:
       - name: Build shared
         run: |
           cmake --preset shared-relwithdebinfo \
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
             -DVCPKG_TARGET_TRIPLET=x64-windows \
             -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
           cmake --build --preset shared-relwithdebinfo --target all
@@ -104,17 +155,6 @@ jobs:
         run: |
           cpack --preset archive \
             -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
-
-      - name: Rename archive
-        shell: powershell
-        run: |
-          $rev = $(git rev-parse --short HEAD).Trim()
-          cd "out\$env:TARGET_OS\$env:TARGET_ARCH\build"
-          Get-ChildItem "*.zip" | ForEach-Object {
-            $baseName = $_.BaseName -replace 'win64$', "_g${rev}-win64"
-            $newPath = "${baseName}$($_.Extension)"
-            Move-Item $_.FullName $newPath
-          }
 
       - name: Upload archive
         uses: actions/upload-artifact@v4
@@ -145,6 +185,7 @@ jobs:
       - name: Build static
         run: |
           cmake --preset static-relwithdebinfo \
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
             -DVCPKG_TARGET_TRIPLET=x64-osx \
             -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE"
           cmake --build --preset static-relwithdebinfo --target all
@@ -153,6 +194,7 @@ jobs:
       - name: Build shared
         run: |
           cmake --preset shared-relwithdebinfo \
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}  \
             -DVCPKG_TARGET_TRIPLET=x64-osx-dynamic \
             -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE"
           cmake --build --preset shared-relwithdebinfo --target all
@@ -162,16 +204,6 @@ jobs:
         run: |
           cpack --preset archive \
             -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
-
-      - name: Rename archive
-        run: |
-          rev=$(git rev-parse --short HEAD)
-
-          cd out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build
-
-          for file in *.zip; do
-            mv "$file" "${file%-Darwin.zip}-${rev}-Darwin.zip"
-          done
 
       - name: Upload archive
         uses: actions/upload-artifact@v4
