@@ -7,9 +7,9 @@ on:
     branches: [ master ]
 
 env:
-  PACKAGE_RELEASE: ${{ vars.PACKAGE_RELEASE || "1" }}
-  MAINTAINER: "Novemus Band <nineletters@mail.ru>"
-  HOMEPAGE: "https://github.com/novemus/plexus"
+  PACKAGE_RELEASE: ${{ github.run_number }}
+  MAINTAINER: "${{ vars.MAINTAINER }}"
+  HOMEPAGE: "${{ github.server_url }}/${{ github.repository }}"
 
 jobs:
   ubuntu:
@@ -19,50 +19,51 @@ jobs:
     env:
       TARGET_OS: debian-trixie
       TARGET_ARCH: x64
-      REPO_HOST: ${{ secrets.DEB_REPO_HOST }}
-      REPO_PORT: ${{ secrets.DEB_REPO_PORT }}
-      REPO_URL: "https://${{ secrets.DEB_REPO_HOST }}:${{ secrets.DEB_REPO_PORT }}/${{ secrets.DEB_REPO_PATH }}"
-      REPO_GPG_URL: "https://${{ secrets.DEB_REPO_HOST }}:${{ secrets.DEB_REPO_PORT }}/${{ secrets.DEB_GPG_PATH }}"
-      DEPENDENCIES: "build-essential cmake sudo debhelper devscripts fakeroot pkg-config libssl-dev libboost-system-dev libboost-program-options-dev libboost-coroutine-dev libboost-test-dev libtubus-dev libwormhole-dev libopendht-dev"
+      DEPENDENCIES: "build-essential cmake curl debhelper devscripts fakeroot pkg-config libssl-dev libboost-system-dev libboost-program-options-dev libboost-coroutine-dev libboost-test-dev"
+      TUBUS_LIB_PACKAGE: ${{ vars.TUBUS_LIB_DEB_PACKAGE }}
+      TUBUS_DEV_PACKAGE: ${{ vars.TUBUS_DEV_DEB_PACKAGE }}
+      WORMHOLE_LIB_PACKAGE: ${{ vars.WORMHOLE_LIB_DEB_PACKAGE }}
+      WORMHOLE_DEV_PACKAGE: ${{ vars.WORMHOLE_DEV_DEB_PACKAGE }}
+      OPENDHT_LIB_PACKAGE: ${{ vars.OPENDHT_LIB_DEB_PACKAGE }}
+      OPENDHT_DEV_PACKAGE: ${{ vars.OPENDHT_DEV_DEB_PACKAGE }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          echo | openssl s_client -connect ${{ env.REPO_HOST }}:${{ env.REPO_PORT }} -servername ${{ env.REPO_HOST }} 2>/dev/null | openssl x509 > vendor.crt
-          sudo cp vendor.crt /usr/local/share/ca-certificates/
-          sudo update-ca-certificates
-          rm vendor.crt
-          wget -qO- ${{ env.REPO_GPG_URL }} | sudo gpg --dearmor -o /usr/share/keyrings/vendor.gpg
-          echo "deb [signed-by=/usr/share/keyrings/vendor.gpg] ${{ env.REPO_URL }} $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/vendor.list
-          sudo apt-get update
-          sudo apt-get install -y ${{ env.DEPENDENCIES }}
+          apt-get update
+          apt-get install -y ${{ env.DEPENDENCIES }}
+          curl -sL -o /tmp/libtubus.deb ${{ env.TUBUS_LIB_PACKAGE }} && apt-get install -y /tmp/libtubus.deb
+          curl -sL -o /tmp/libtubus-dev.deb ${{ env.TUBUS_DEV_PACKAGE }} && apt-get install -y /tmp/libtubus-dev.deb
+          curl -sL -o /tmp/libwormhole.deb ${{ env.WORMHOLE_LIB_PACKAGE }} && apt-get install -y /tmp/libwormhole.deb
+          curl -sL -o /tmp/libwormhole-dev.deb ${{ env.WORMHOLE_DEV_PACKAGE }} && apt-get install -y /tmp/libwormhole-dev.deb
+          curl -sL -o /tmp/libopendht.deb ${{ env.OPENDHT_LIB_PACKAGE }} && apt-get install -y /tmp/libopendht.deb
+          curl -sL -o /tmp/libopendht-dev.deb ${{ env.OPENDHT_DEV_PACKAGE }} && apt-get install -y /tmp/libopendht-dev.deb
 
       - name: Build static
         run: |
-          cmake --preset static-relwithdebinfo -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}
+          cmake --preset static-relwithdebinfo \
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
+            -DCPACK_DEBIAN_PACKAGE_MAINTAINER="${{ env.MAINTAINER }}" \
+            -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}"
           cmake --build --preset static-relwithdebinfo --target all
           ctest --preset static-relwithdebinfo
 
       - name: Build shared
         run: |
-          cmake --preset shared-relwithdebinfo -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}
+          cmake --preset shared-relwithdebinfo \
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
+            -DCPACK_DEBIAN_PACKAGE_MAINTAINER="${{ env.MAINTAINER }}" \
+            -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}"
           cmake --build --preset shared-relwithdebinfo --target all
           ctest --preset shared-relwithdebinfo
 
       - name: Build packages
         run: |
-          cpack --preset debian-package-bin \
-            -DCPACK_DEBIAN_PACKAGE_MAINTAINER="${{ env.MAINTAINER }}" \
-            -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}"
-          cpack --preset debian-package-lib \
-            -DCPACK_DEBIAN_PACKAGE_MAINTAINER="${{ env.MAINTAINER }}" \
-            -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}"
-          cpack --preset debian-package-dev \
-            -DCPACK_DEBIAN_PACKAGE_MAINTAINER="${{ env.MAINTAINER }}" \
-            -DCPACK_DEBIAN_PACKAGE_HOMEPAGE="${{ env.HOMEPAGE }}" \
-            -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
+          cpack --preset debian-package-bin
+          cpack --preset debian-package-lib
+          cpack --preset debian-package-dev
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -80,7 +81,13 @@ jobs:
     env:
       TARGET_OS: fedora-42
       TARGET_ARCH: x64
-      DEPENDENCIES: "clang clang-tools-extra cmake rpmdevtools boost-devel boost-static gnutls-devel asio-devel openssl-devel cppunit-devel fmt-devel nettle-devel libargon2-devel jsoncpp-devel msgpack-devel libtubus-devel libwormhole-devel libopendht-devel"
+      DEPENDENCIES: "clang clang-tools-extra cmake curl rpmdevtools boost-devel boost-static gnutls-devel asio-devel openssl-devel cppunit-devel fmt-devel nettle-devel libargon2-devel jsoncpp-devel msgpack-devel"
+      TUBUS_LIB_PACKAGE: ${{ vars.TUBUS_LIB_RPM_PACKAGE }}
+      TUBUS_DEV_PACKAGE: ${{ vars.TUBUS_DEV_RPM_PACKAGE }}
+      WORMHOLE_LIB_PACKAGE: ${{ vars.WORMHOLE_LIB_RPM_PACKAGE }}
+      WORMHOLE_DEV_PACKAGE: ${{ vars.WORMHOLE_DEV_RPM_PACKAGE }}
+      OPENDHT_LIB_PACKAGE: ${{ vars.OPENDHT_LIB_RPM_PACKAGE }}
+      OPENDHT_DEV_PACKAGE: ${{ vars.OPENDHT_DEV_RPM_PACKAGE }}
 
     steps:
       - uses: actions/checkout@v4
@@ -88,31 +95,36 @@ jobs:
       - name: Install dependencies
         run: |
           dnf -y --setopt=tsflags=nodocs install ${{ env.DEPENDENCIES }}
+          curl -sL -o /tmp/libtubus.rpm ${{ env.TUBUS_LIB_PACKAGE }} && dnf -y install /tmp/libtubus.rpm
+          curl -sL -o /tmp/libtubus-devel.rpm ${{ env.TUBUS_DEV_PACKAGE }} && dnf -y install /tmp/libtubus-devel.rpm
+          curl -sL -o /tmp/libwormhole.rpm ${{ env.WORMHOLE_LIB_PACKAGE }} && dnf -y install /tmp/libwormhole.rpm
+          curl -sL -o /tmp/libwormhole-devel.rpm ${{ env.WORMHOLE_DEV_PACKAGE }} && dnf -y install /tmp/libwormhole-devel.rpm
+          curl -sL -o /tmp/libopendht.rpm ${{ env.OPENDHT_LIB_PACKAGE }} && dnf -y install /tmp/libopendht.rpm
+          curl -sL -o /tmp/libopendht-devel.rpm ${{ env.OPENDHT_DEV_PACKAGE }} && dnf -y install /tmp/libopendht-devel.rpm
 
       - name: Build static
         run: |
-          cmake --preset static-relwithdebinfo -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}
+          cmake --preset static-relwithdebinfo \
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
+            -DCPACK_RPM_PACKAGE_VENDOR="${{ env.MAINTAINER }}" \
+            -DCPACK_RPM_PACKAGE_URL="${{ env.HOMEPAGE }}"
           cmake --build --preset static-relwithdebinfo --target all
           ctest --preset static-relwithdebinfo
 
       - name: Build shared
         run: |
-          cmake --preset shared-relwithdebinfo -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}
+          cmake --preset shared-relwithdebinfo \
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
+            -DCPACK_RPM_PACKAGE_VENDOR="${{ env.MAINTAINER }}" \
+            -DCPACK_RPM_PACKAGE_URL="${{ env.HOMEPAGE }}"
           cmake --build --preset shared-relwithdebinfo --target all
           ctest --preset shared-relwithdebinfo
 
       - name: Build packages
         run: |
-          cpack --preset rpm-package-bin \
-            -DCPACK_RPM_PACKAGE_VENDOR="${{ env.MAINTAINER }}" \
-            -DCPACK_RPM_PACKAGE_URL="${{ env.HOMEPAGE }}"
-          cpack --preset rpm-package-lib \
-            -DCPACK_RPM_PACKAGE_VENDOR="${{ env.MAINTAINER }}" \
-            -DCPACK_RPM_PACKAGE_URL="${{ env.HOMEPAGE }}"
-          cpack --preset rpm-package-dev \
-            -DCPACK_RPM_PACKAGE_VENDOR="${{ env.MAINTAINER }}" \
-            -DCPACK_RPM_PACKAGE_URL="${{ env.HOMEPAGE }}" \
-            -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
+          cpack --preset rpm-package-bin
+          cpack --preset rpm-package-lib
+          cpack --preset rpm-package-dev
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -128,33 +140,59 @@ jobs:
     env:
       TARGET_OS: windows
       TARGET_ARCH: x64
-      TOOLCHAIN_FILE: "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
+      VCPKG_TOOLCHAIN_FILE: "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
+      TUBUS_ARCHIVE: ${{ vars.TUBUS_WINDOWS_ARCHIVE }}
+      WORMHOLE_ARCHIVE: ${{ vars.WORMHOLE_WINDOWS_ARCHIVE }}
+      OPENDHT_ARCHIVE: ${{ vars.OPENDHT_WINDOWS_ARCHIVE }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build static
+      - name: Cache vcpkg dependencies
+        uses: actions/cache@v4
+        id: cache-vcpkg
+        with:
+          path: out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\build\*\vcpkg_installed
+          key: ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+            ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-
+
+      - name: Install dependencies
+        shell: pwsh
         run: |
-          cmake --preset static-relwithdebinfo \
-            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static \
-            -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
-          cmake --build --preset static-relwithdebinfo --target all
+          New-Item -ItemType Directory -Path C:\tmp -Force
+          Invoke-WebRequest -Uri ${{ env.TUBUS_ARCHIVE }} -OutFile C:\tmp\tubus.zip
+          Expand-Archive -Path C:\tmp\tubus.zip -DestinationPath "}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
+          Invoke-WebRequest -Uri ${{ env.WORMHOLE_ARCHIVE }} -OutFile C:\tmp\wormhole.zip
+          Expand-Archive -Path C:\tmp\wormhole.zip -DestinationPath "}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
+          Invoke-WebRequest -Uri ${{ env.OPENDHT_ARCHIVE }} -OutFile C:\tmp\opendht.zip
+          Expand-Archive -Path C:\tmp\opendht.zip -DestinationPath "}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
+          echo "${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\build\shared-relwithdebinfo\vcpkg_installed\${{ env.TARGET_ARCH }}-windows\bin;${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install\bin" >> $env:GITHUB_PATH
+
+      - name: Build static
+        shell: pwsh
+        run: |
+          cmake --preset static-relwithdebinfo `
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} `
+            -DVCPKG_TARGET_TRIPLET=${{ env.TARGET_ARCH }}-windows-static `
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_TOOLCHAIN_FILE }}"
+          cmake --build --preset static-relwithdebinfo --target ALL_BUILD
           ctest --preset static-relwithdebinfo
 
       - name: Build shared
+        shell: pwsh
         run: |
-          cmake --preset shared-relwithdebinfo \
-            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
-            -DVCPKG_TARGET_TRIPLET=x64-windows \
-            -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
-          cmake --build --preset shared-relwithdebinfo --target all
+          cmake --preset shared-relwithdebinfo `
+            -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} `
+            -DVCPKG_TARGET_TRIPLET=${{ env.TARGET_ARCH }}-windows `
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_TOOLCHAIN_FILE }}"
+          cmake --build --preset shared-relwithdebinfo --target ALL_BUILD
           ctest --preset shared-relwithdebinfo
 
       - name: Build archive
         run: |
-          cpack --preset archive \
-            -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
+          cpack --preset archive
 
       - name: Upload archive
         uses: actions/upload-artifact@v4
@@ -171,8 +209,11 @@ jobs:
       TARGET_OS: macos
       TARGET_ARCH: x64
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-      CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+      VCPKG_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       VCPKG_FORCE_SYSTEM_BINARIES: 1
+      TUBUS_ARCHIVE: ${{ vars.TUBUS_DARWIN_ARCHIVE }}
+      WORMHOLE_ARCHIVE: ${{ vars.WORMHOLE_DARWIN_ARCHIVE }}
+      OPENDHT_ARCHIVE: ${{ vars.OPENDHT_DARWIN_ARCHIVE }}
 
     steps:
       - uses: actions/checkout@v4
@@ -182,12 +223,32 @@ jobs:
           git clone https://github.com/Microsoft/vcpkg.git $VCPKG_ROOT
           $VCPKG_ROOT/bootstrap-vcpkg.sh
 
+      - name: Cache vcpkg dependencies
+        uses: actions/cache@v4
+        id: cache-vcpkg
+        with:
+          path: out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*/vcpkg_installed
+          key: ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+            ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-
+
+      - name: Install dependencies
+        run: |
+          mkdir -p "${{ github.workspace }}/out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/install"
+          curl -sL -o /tmp/tubus.zip ${{ env.TUBUS_ARCHIVE }} \
+            && unzip /tmp/tubus.zip -d "${{ github.workspace }}/out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/install" \
+          curl -sL -o /tmp/wormhole.zip ${{ env.WORMHOLE_ARCHIVE }} \
+            && unzip /tmp/wormhole.zip -d "${{ github.workspace }}/out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/install"
+          curl -sL -o /tmp/opendht.zip ${{ env.OPENDHT_ARCHIVE }} \
+            && unzip /tmp/opendht.zip -d "${{ github.workspace }}/out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/install"
+
       - name: Build static
         run: |
           cmake --preset static-relwithdebinfo \
             -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }} \
-            -DVCPKG_TARGET_TRIPLET=x64-osx \
-            -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE"
+            -DVCPKG_TARGET_TRIPLET=${{ env.TARGET_ARCH }}-osx \
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_TOOLCHAIN_FILE }}"
           cmake --build --preset static-relwithdebinfo --target all
           ctest --preset static-relwithdebinfo
 
@@ -195,15 +256,14 @@ jobs:
         run: |
           cmake --preset shared-relwithdebinfo \
             -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}  \
-            -DVCPKG_TARGET_TRIPLET=x64-osx-dynamic \
-            -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE"
+            -DVCPKG_TARGET_TRIPLET=${{ env.TARGET_ARCH }}-osx-dynamic \
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_TOOLCHAIN_FILE }}"
           cmake --build --preset shared-relwithdebinfo --target all
           ctest --preset shared-relwithdebinfo
 
       - name: Build archive
         run: |
-          cpack --preset archive \
-            -DCPACK_INSTALL_CMAKE_PROJECTS="../static-relwithdebinfo;static-relwithdebinfo;ALL;/;../shared-relwithdebinfo;shared-relwithdebinfo;ALL;/"
+          cpack --preset archive
 
       - name: Upload archive
         uses: actions/upload-artifact@v4

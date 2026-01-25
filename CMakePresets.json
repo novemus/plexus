@@ -139,6 +139,7 @@
         {
             "name": "static-release",
             "configurePreset": "static-release",
+            "configuration": "Release",
             "displayName": "Test",
             "description": "All project tests",
             "inherits": "test-base"
@@ -146,6 +147,7 @@
         {
             "name": "static-relwithdebinfo",
             "configurePreset": "static-relwithdebinfo",
+            "configuration": "RelWithDebInfo",
             "displayName": "Test",
             "description": "All project tests",
             "inherits": "test-base"
@@ -153,6 +155,7 @@
         {
             "name": "static-debug",
             "configurePreset": "static-debug",
+            "configuration": "Debug",
             "displayName": "Test",
             "description": "All project tests",
             "inherits": "test-base"
@@ -160,6 +163,7 @@
         {
             "name": "shared-release",
             "configurePreset": "shared-release",
+            "configuration": "Release",
             "displayName": "Test",
             "description": "All project tests",
             "inherits": "test-base"
@@ -167,6 +171,7 @@
         {
             "name": "shared-relwithdebinfo",
             "configurePreset": "shared-relwithdebinfo",
+            "configuration": "RelWithDebInfo",
             "displayName": "Test",
             "description": "All project tests",
             "inherits": "test-base"
@@ -174,6 +179,7 @@
         {
             "name": "shared-debug",
             "configurePreset": "shared-debug",
+            "configuration": "Debug",
             "displayName": "Test",
             "description": "All project tests",
             "inherits": "test-base"
