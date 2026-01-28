@@ -256,7 +256,8 @@
                 "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.2.3), libwormhole-dev (>= 1.2.4), libopendht-dev (>= 3.4.0), libplexus (>= 3.2.1)",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "C++ development library for connecting network applications through NAT",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.",
-                "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_deb_files;dev_doc_files"
+                "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_deb_files;dev_doc_files",
+                "CPACK_INSTALL_CMAKE_PROJECTS": "../static-relwithdebinfo;tubus;ALL;/;../shared-relwithdebinfo;tubus;ALL;/"
             },
             "packageName": "libplexus-dev",
             "packageDirectory": ".."
@@ -333,7 +334,8 @@
                 "CPACK_RPM_PACKAGE_SUMMARY": "C++ development library for connecting network applications through NAT",
                 "CPACK_RPM_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.",
                 "CPACK_RPM_PACKAGE_REQUIRES": "boost-devel, openssl-devel, libtubus-devel >= 1.2.3, libwormhole-devel >= 1.2.4, libopendht-devel >= 3.4.0, libplexus = %{version}-%{release}",
-                "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_doc_files"
+                "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_doc_files",
+                "CPACK_INSTALL_CMAKE_PROJECTS": "../static-relwithdebinfo;tubus;ALL;/;../shared-relwithdebinfo;tubus;ALL;/"
             },
             "packageName": "libplexus-devel",
             "packageDirectory": ".."
@@ -352,7 +354,8 @@
             "variables": {
                 "CPACK_COMPONENTS_ALL": "binary_files;runtime_files;library_files;archive_files;header_files;cmake_files;lib_doc_files;pdb_files",
                 "CPACK_ARCHIVE_COMPONENT_INSTALL": "ON",
-                "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON"
+                "CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE": "ON",
+                "CPACK_INSTALL_CMAKE_PROJECTS": "../static-relwithdebinfo;tubus;ALL;/;../shared-relwithdebinfo;tubus;ALL;/"
             },
             "packageName": "plexus",
             "packageDirectory": ".."

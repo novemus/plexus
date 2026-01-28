@@ -40,6 +40,7 @@ jobs:
           curl -sL -o /tmp/libwormhole-dev.deb ${{ env.WORMHOLE_DEV_PACKAGE }} && apt-get install -y /tmp/libwormhole-dev.deb
           curl -sL -o /tmp/libopendht.deb ${{ env.OPENDHT_LIB_PACKAGE }} && apt-get install -y /tmp/libopendht.deb
           curl -sL -o /tmp/libopendht-dev.deb ${{ env.OPENDHT_DEV_PACKAGE }} && apt-get install -y /tmp/libopendht-dev.deb
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/lib" >> $GITHUB_ENV
 
       - name: Build static
         run: |
@@ -163,11 +164,11 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path C:\tmp -Force
           Invoke-WebRequest -Uri ${{ env.TUBUS_ARCHIVE }} -OutFile C:\tmp\tubus.zip
-          Expand-Archive -Path C:\tmp\tubus.zip -DestinationPath "}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
+          Expand-Archive -Path C:\tmp\tubus.zip -DestinationPath "${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
           Invoke-WebRequest -Uri ${{ env.WORMHOLE_ARCHIVE }} -OutFile C:\tmp\wormhole.zip
-          Expand-Archive -Path C:\tmp\wormhole.zip -DestinationPath "}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
+          Expand-Archive -Path C:\tmp\wormhole.zip -DestinationPath "${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
           Invoke-WebRequest -Uri ${{ env.OPENDHT_ARCHIVE }} -OutFile C:\tmp\opendht.zip
-          Expand-Archive -Path C:\tmp\opendht.zip -DestinationPath "}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
+          Expand-Archive -Path C:\tmp\opendht.zip -DestinationPath "${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
           echo "${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\build\shared-relwithdebinfo\vcpkg_installed\${{ env.TARGET_ARCH }}-windows\bin;${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install\bin" >> $env:GITHUB_PATH
 
       - name: Build static
@@ -206,11 +207,10 @@ jobs:
     name: MacOS archive
     runs-on: macos-latest
     env:
-      TARGET_OS: macos
-      TARGET_ARCH: x64
+      TARGET_OS: darwin
+      TARGET_ARCH: arm64
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
       VCPKG_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
-      VCPKG_FORCE_SYSTEM_BINARIES: 1
       TUBUS_ARCHIVE: ${{ vars.TUBUS_DARWIN_ARCHIVE }}
       WORMHOLE_ARCHIVE: ${{ vars.WORMHOLE_DARWIN_ARCHIVE }}
       OPENDHT_ARCHIVE: ${{ vars.OPENDHT_DARWIN_ARCHIVE }}
@@ -218,10 +218,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install vcpkg
+      - name: Install dependencies
         run: |
           git clone https://github.com/Microsoft/vcpkg.git $VCPKG_ROOT
           $VCPKG_ROOT/bootstrap-vcpkg.sh
+          brew install autoconf automake libtool
 
       - name: Cache vcpkg dependencies
         uses: actions/cache@v4
@@ -237,7 +238,7 @@ jobs:
         run: |
           mkdir -p "${{ github.workspace }}/out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/install"
           curl -sL -o /tmp/tubus.zip ${{ env.TUBUS_ARCHIVE }} \
-            && unzip /tmp/tubus.zip -d "${{ github.workspace }}/out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/install" \
+            && unzip /tmp/tubus.zip -d "${{ github.workspace }}/out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/install"
           curl -sL -o /tmp/wormhole.zip ${{ env.WORMHOLE_ARCHIVE }} \
             && unzip /tmp/wormhole.zip -d "${{ github.workspace }}/out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/install"
           curl -sL -o /tmp/opendht.zip ${{ env.OPENDHT_ARCHIVE }} \
