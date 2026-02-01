@@ -1,0 +1,13 @@
+[requires]
+jsoncpp/1.9.6
+argon2/20190702
+msgpack-cxx/7.0.0
+nettle/3.9.1
+fmt/12.1.0
+gnutls/3.8.7
+openssl/3.6.1
+boost/[>=1.80 <=1.88]
+
+[generators]
+CMakeDeps
+CMakeToolchain
