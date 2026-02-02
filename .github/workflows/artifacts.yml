@@ -257,7 +257,7 @@ jobs:
         run: |
           cmake --preset shared-relwithdebinfo \
             -DCPACK_PACKAGE_RELEASE=${{ env.PACKAGE_RELEASE }}  \
-            -DVCPKG_TARGET_TRIPLET=${{ env.TARGET_ARCH }}-osx-dynamic \
+            -DVCPKG_TARGET_TRIPLET=${{ env.TARGET_ARCH }}-osx \
             -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_TOOLCHAIN_FILE }}"
           cmake --build --preset shared-relwithdebinfo --target all
           ctest --preset shared-relwithdebinfo
