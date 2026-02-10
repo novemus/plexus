@@ -7,7 +7,7 @@ on:
     branches: [ master ]
 
 env:
-  PACKAGE_RELEASE: ${{ github.run_number }}
+  PACKAGE_RELEASE: ${{ vars.PACKAGE_RELEASE || 1 }}
   MAINTAINER: "${{ vars.MAINTAINER }}"
   HOMEPAGE: "${{ github.server_url }}/${{ github.repository }}"
 
@@ -154,9 +154,9 @@ jobs:
         id: cache-vcpkg
         with:
           path: out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\build\*\vcpkg_installed
-          key: ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          key: ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
           restore-keys: |
-            ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+            ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
             ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-
 
       - name: Install dependencies
@@ -229,9 +229,9 @@ jobs:
         id: cache-vcpkg
         with:
           path: out/${{ env.TARGET_OS }}/${{ env.TARGET_ARCH }}/build/*/vcpkg_installed
-          key: ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          key: ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
           restore-keys: |
-            ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+            ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
             ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-
 
       - name: Install dependencies

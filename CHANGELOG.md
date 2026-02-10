@@ -1,5 +1,10 @@
 # Change Log
 
+## 3.2.2 (Fef 10, 2026)
+
+- Link with libtubus 1.2.5
+- Link with libwormhole 1.2.6
+
 ## 3.2.1 (Jan 14, 2026)
 
 - Added RelWithDebInfo presets.
