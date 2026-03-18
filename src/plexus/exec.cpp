@@ -14,12 +14,18 @@
     #include <boost/process/v1/child.hpp>
     #ifdef WIN32
         #include <boost/process/v1/windows.hpp>
+    #else
+        #include <spawn.h>
+        #include <boost/process/v1/extend.hpp>
     #endif
     namespace bp = boost::process::v1;
 #else
     #include <boost/process.hpp>
     #ifdef WIN32
         #include <boost/process/windows.hpp>
+    #else
+        #include <spawn.h>
+        #include <boost/process/extend.hpp>
     #endif
     namespace bp = boost::process;
 #endif
@@ -122,9 +128,11 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
             bp::child c(
                 exe, bp::args = utils::make_args(args), utils::make_env(env), bp::start_dir = utils::make_workdir(dir),
                 (bp::std_out & bp::std_err) > log,
-                bp::std_in < stdin
+                bp::std_in < stdin,
 #ifdef WIN32
-                , bp::windows::hide
+                bp::windows::hide,
+#else
+                bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
 #endif
             );
             finalize(c, true);
@@ -134,9 +142,11 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
             bp::child c(
                 exe, bp::args = utils::make_args(args), utils::make_env(env), bp::start_dir = utils::make_workdir(dir),
                 (bp::std_out & bp::std_err) > log,
-                bp::std_in < bp::null
+                bp::std_in < bp::null,
 #ifdef WIN32
-                , bp::windows::hide
+                bp::windows::hide
+#else
+                bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
 #endif
             );
             finalize(c, false);
@@ -148,9 +158,11 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
             exe, bp::args = utils::make_args(args), utils::make_env(env), bp::start_dir = utils::make_workdir(dir),
             bp::std_out > stdout,
             bp::std_err > stderr,
-            bp::std_in < stdin
+            bp::std_in < stdin,
 #ifdef WIN32
-            , bp::windows::hide
+                bp::windows::hide
+#else
+                bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
 #endif
         );
         finalize(c, true);
@@ -161,9 +173,11 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
             exe, bp::args = utils::make_args(args), utils::make_env(env), bp::start_dir = utils::make_workdir(dir),
             bp::std_out > bp::null,
             bp::std_err > bp::null,
-            bp::std_in < bp::null
+            bp::std_in < bp::null,
 #ifdef WIN32
-            , bp::windows::hide
+                bp::windows::hide
+#else
+                bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
 #endif
         );
         finalize(c, false);
