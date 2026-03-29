@@ -218,11 +218,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set Xcode version
+        run: |
+          ls /Applications | grep Xcode
+          sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
+
       - name: Install dependencies
         run: |
           git clone https://github.com/Microsoft/vcpkg.git $VCPKG_ROOT
           $VCPKG_ROOT/bootstrap-vcpkg.sh
-          brew install autoconf automake libtool
+          brew install autoconf automake libtool autoconf-archive
 
       - name: Cache vcpkg dependencies
         uses: actions/cache@v4
