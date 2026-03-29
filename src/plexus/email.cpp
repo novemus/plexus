@@ -345,7 +345,7 @@ class imap
                         {
                             m_position = uid;
  
-                            _dbg_ << "search: uid=" << uid;
+                            _trc_ << "search: uid=" << uid;
                             break;
                         }
                     }
@@ -649,7 +649,7 @@ void spawn_accept(boost::asio::io_context& io, const email::context& conf, const
             boost::asio::spawn(io, [pipe = std::make_shared<email::pipe_impl>(pusher, puller), handler](boost::asio::yield_context yield)
             {
                 handler(yield, pipe);
-            });
+            }, boost::asio::detached);
 
             puller.host(host);
             puller.peer(peer);
