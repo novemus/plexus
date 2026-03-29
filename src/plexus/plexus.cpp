@@ -105,7 +105,7 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
             reference gateway = {hole.outer_endpoint, plexus::utils::random<uint64_t>()};
             pipe->push_response(yield, gateway);
 
-            auto pin = binder->await_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
+            binder->await_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle).reset();
 
             connect(host, peer, hole.inner_endpoint, gateway, faraway);
         }
@@ -144,7 +144,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
             pipe->push_request(yield, gateway);
             plexus::reference faraway = pipe->pull_response(yield);
 
-            auto pin = binder->reach_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle);
+            binder->reach_peer(yield, faraway.endpoint, faraway.puzzle ^ gateway.puzzle).reset();
 
             connect(host, peer, hole.inner_endpoint, gateway, faraway);
         }

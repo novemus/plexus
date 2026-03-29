@@ -253,7 +253,7 @@
                 "RelWithDebInfo"
             ],
             "variables": {
-                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.2.5), libwormhole-dev (>= 1.2.6), libopendht-dev (>= 3.4.0), libplexus (>= 3.2.2)",
+                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.2.5), libwormhole-dev (>= 1.2.6), libopendht-dev (>= 3.4.0), libplexus (>= 3.2.3)",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "C++ development library for connecting network applications through NAT",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.",
                 "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_deb_files;dev_doc_files",

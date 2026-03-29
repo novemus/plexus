@@ -1,5 +1,10 @@
 # Change Log
 
+## 3.2.3 (Mar 29, 2026)
+
+- Fixed the bug with loss of messages by emailer
+- Fixed the "Address is already in use" error on application launching
+
 ## 3.2.2 (Fef 10, 2026)
 
 - Link with libtubus 1.2.5
