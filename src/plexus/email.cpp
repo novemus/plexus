@@ -419,7 +419,7 @@ class imap
 
     std::string make_filter(const std::string& subject)
     {
-        std::string filter = utils::format("UID %d:* SUBJECT %s SUBJECT %s", m_position + 1, m_config.app.c_str(), subject.c_str());
+        std::string filter = utils::format("SUBJECT %s SUBJECT %s", m_config.app.c_str(), subject.c_str());
 
         if (!m_peer.pin.empty())
             filter += utils::format(" FROM %s", m_peer.pin.c_str());
