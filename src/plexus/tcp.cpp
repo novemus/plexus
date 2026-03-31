@@ -19,26 +19,26 @@ class ssl_socket_impl : public ssl_socket
 
 public:
 
-    ssl_socket_impl(const boost::asio::ip::tcp::endpoint& remote, boost::asio::io_context& io, boost::asio::ssl::context&& ssl)
-        : ssl_socket(remote, io, ssl)
+    ssl_socket_impl(const boost::asio::ip::tcp::endpoint& local, const boost::asio::ip::tcp::endpoint& remote, boost::asio::io_context& io, boost::asio::ssl::context&& ssl)
+        : ssl_socket(local, remote, io, ssl)
         , m_ssl(std::move(ssl))
     {
         ssl_socket::lowest_layer().set_option(boost::asio::socket_base::keep_alive(true));
     }
 };
 
-std::shared_ptr<tcp_socket> create_tcp_client(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& remote, const boost::asio::ip::tcp::endpoint& local)
+std::shared_ptr<tcp_socket> create_tcp_socket(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& local, const boost::asio::ip::tcp::endpoint& remote)
 {
-    auto socket = std::make_shared<tcp_socket>(remote, io);
+    auto socket = std::make_shared<tcp_socket>(local, remote, io);
     socket->set_option(boost::asio::socket_base::keep_alive(true));
     return socket;
 }
 
-std::shared_ptr<ssl_socket> create_ssl_client(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert, const std::string& key, const std::string& ca)
+std::shared_ptr<ssl_socket> create_ssl_socket(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& local, const boost::asio::ip::tcp::endpoint& remote, bool client, const std::string& cert, const std::string& key, const std::string& ca)
 {
     boost::asio::ssl::context ssl = boost::asio::ssl::context(boost::asio::ssl::context::sslv23);
-    
-    ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::sslv23_client);
+
+    ssl.set_options(boost::asio::ssl::context::default_workarounds | (client ? boost::asio::ssl::context::sslv23_client : boost::asio::ssl::context::sslv23_server));
     if (!cert.empty() && !key.empty())
     {
         ssl.use_certificate_file(cert, boost::asio::ssl::context::pem);
@@ -51,7 +51,7 @@ std::shared_ptr<ssl_socket> create_ssl_client(boost::asio::io_context& io, const
         ssl.load_verify_file(ca);
     }
 
-    return std::make_shared<ssl_socket_impl>(remote, io, std::move(ssl));
+    return std::make_shared<ssl_socket_impl>(local, remote, io, std::move(ssl));
 }
 
 }}

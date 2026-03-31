@@ -22,8 +22,8 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
         const boost::asio::ip::udp::endpoint lep(boost::asio::ip::make_address("127.0.0.1"), 1234);
         const boost::asio::ip::udp::endpoint rep(boost::asio::ip::make_address("127.0.0.1"), 4321);
 
-        auto lend = plexus::network::create_udp_transport(io, lep);
-        auto rend = plexus::network::create_udp_transport(io, rep);
+        auto lend = plexus::network::create_udp_socket(io, lep);
+        auto rend = plexus::network::create_udp_socket(io, rep);
 
         std::string wb = "Hello, Plexus!";
         std::string rb;
@@ -53,8 +53,8 @@ BOOST_AUTO_TEST_CASE(async_udp_exchange)
     const boost::asio::ip::udp::endpoint lep(boost::asio::ip::make_address("127.0.0.1"), 1234);
     const boost::asio::ip::udp::endpoint rep(boost::asio::ip::make_address("127.0.0.1"), 4321);
 
-    auto lend = plexus::network::create_udp_transport(io, lep);
-    auto rend = plexus::network::create_udp_transport(io, rep);
+    auto lend = plexus::network::create_udp_socket(io, lep);
+    auto rend = plexus::network::create_udp_socket(io, rep);
 
     auto work = [](boost::asio::yield_context yield, std::shared_ptr<plexus::network::udp_socket> udp, const boost::asio::ip::udp::endpoint& peer)
     {

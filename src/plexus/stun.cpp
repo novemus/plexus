@@ -86,7 +86,7 @@ typedef std::array<uint8_t, 16> transaction_id;
 
 namespace msg
 {
-    const size_t min_size = 20;
+    const size_t header_size = 20;
     const size_t max_size = 548;
     const uint16_t binding_request = 0x0001;
     const uint16_t binding_response = 0x0101;
@@ -155,7 +155,7 @@ class message : public tubus::mutable_buffer
         return 0;
     }
 
-    boost::asio::ip::udp::endpoint fetch_endpoint(uint16_t kind) const
+    endpoint fetch_endpoint(uint16_t kind) const
     {
         const uint8_t* ptr = fetch_attribute_place(kind);
         if (ptr)
@@ -167,27 +167,27 @@ class message : public tubus::mutable_buffer
                 if (length != 8u)
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
-                return boost::asio::ip::udp::endpoint(
+                return plexus::endpoint {
                     boost::asio::ip::make_address(utils::format("%d.%d.%d.%d", ptr[8], ptr[9], ptr[10], ptr[11])),
                     read_short(ptr, 6)
-                );
+                };
             }
             else if (ptr[5] == flag::ip_v6)
             {
                 if (length != 20u)
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
-                return boost::asio::ip::udp::endpoint(
+                plexus::endpoint {
                     boost::asio::ip::make_address(utils::format("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
                     read_short(ptr, 6)
-                );
+                };
             }
         }
 
         if (type() == msg::binding_response)
             throw plexus::context_error(__FUNCTION__, utils::format("attribute %d not found", kind));
 
-        return boost::asio::ip::udp::endpoint();
+        return plexus::endpoint {};
     }
 
 public:
@@ -222,9 +222,9 @@ public:
         return read_short((uint8_t*)data());
     }
 
-    uint16_t size() const
+    uint16_t length() const
     {
-        return 20u + read_short((uint8_t*)data(), 2);
+        return read_short((uint8_t*)data(), 2);
     }
 
     std::string error() const
@@ -235,24 +235,24 @@ public:
             if (ptr)
             {
                 uint16_t length = read_short(ptr, 2);
-                return std::string((const char*)ptr + 8, length - 8);
+                return std::string((const char*)ptr + 8, length - 4);
             }
             throw plexus::context_error(__FUNCTION__, "error code attribute not found");
         }
         return std::string();
     }
 
-    boost::asio::ip::udp::endpoint source_endpoint() const
+    endpoint source_endpoint() const
     {
         return fetch_endpoint(attr::source_address);
     }
 
-    boost::asio::ip::udp::endpoint changed_endpoint() const
+    endpoint changed_endpoint() const
     {
         return fetch_endpoint(attr::changed_address);
     }
 
-    boost::asio::ip::udp::endpoint mapped_endpoint() const
+    endpoint mapped_endpoint() const
     {
         return fetch_endpoint(attr::mapped_address);
     }
@@ -261,47 +261,59 @@ public:
 class client_impl : public stun_client
 {
     boost::asio::io_context& m_io;
-    boost::asio::ip::udp::endpoint m_stun;
-    boost::asio::ip::udp::endpoint m_bind;
+    plexus::endpoint m_stun;
+    plexus::endpoint m_bind;
 
 public:
 
-    client_impl(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) 
+    client_impl(boost::asio::io_context& io, const plexus::endpoint& stun, const plexus::endpoint& bind) 
         : m_io(io)
         , m_stun(stun)
         , m_bind(bind)
-    {}
+    {
+        if (m_bind.address == boost::asio::ip::address() || m_bind.port == 0)
+        {
+            boost::asio::ip::udp::socket socket(io, stun.address.is_v6() ? boost::asio::ip::udp::v6() : boost::asio::ip::udp::v4());
+            socket.set_option(boost::asio::socket_base::reuse_address(true));
+            socket.bind(bind);
 
-    static message exec_binding(std::shared_ptr<plexus::network::udp_socket> udp, boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& to, const boost::asio::ip::udp::endpoint& from, const message& recv = message(0), int64_t deadline = 4600)
+            auto ep = socket.local_endpoint();
+
+            m_bind.address = ep.address();
+            m_bind.port = ep.port();
+        }
+    }
+
+    message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<plexus::network::udp_socket> udp, const plexus::endpoint& to, const plexus::endpoint& from, const message& req = message(0), int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        message resp;
+        message res;
 
         int64_t timeout = 200;
         while (timer().total_milliseconds() < deadline)
         {
-            udp->send_to(recv, to, yield, timeout);
+            udp->send_to(req, to, yield, timeout);
 
             try
             {
-                resp.truncate(udp->receive_from(resp, from, yield, timeout));
+                res.truncate(udp->receive_from(res, from, yield, timeout));
 
                 if (timer().total_milliseconds() >= deadline)
                     throw plexus::timeout_error(__FUNCTION__);
-                else if (recv.transaction() != resp.transaction())
+                else if (req.transaction() != res.transaction())
                     continue;
 
-                switch (resp.type())
+                switch (res.type())
                 {
                     case msg::binding_response:
                     {
-                        auto me = resp.mapped_endpoint();
-                        auto se = resp.source_endpoint();
-                        auto ce = resp.changed_endpoint();
+                        auto me = res.mapped_endpoint();
+                        auto se = res.source_endpoint();
+                        auto ce = res.changed_endpoint();
 
                         _trc_ << "mapped_endpoint=" << me
                               << " source_endpoint=" << se
@@ -311,12 +323,12 @@ public:
                     case msg::binding_request:
                         break;
                     case msg::binding_error_response:
-                        throw plexus::context_error(__FUNCTION__, resp.error());
+                        throw plexus::context_error(__FUNCTION__, res.error());
                     default:
                         throw plexus::context_error(__FUNCTION__, "server responded with unexpected message type");
                 }
 
-                return resp;
+                return res;
             }
             catch(const boost::system::system_error& ex)
             {
@@ -332,18 +344,75 @@ public:
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    static bool identical(const boost::asio::ip::udp::endpoint& lhs, const boost::asio::ip::udp::endpoint& rhs)
+    message exec_tcp_binding(boost::asio::yield_context yield, const plexus::endpoint& bind, const plexus::endpoint& stun, const message& req = message(0), int64_t deadline = 10000)
     {
-        if(lhs.port() != rhs.port())
+        auto timeout = [deadline, start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return std::max<int64_t>(deadline - (boost::posix_time::microsec_clock::universal_time() - start).total_milliseconds(), 0);
+        };
+
+        try
+        {
+            auto tcp = plexus::network::create_tcp_socket(m_io, bind, stun);
+            tcp->connect(yield, timeout());
+
+            if (tcp->write(req, yield, timeout()) != req.size())
+                throw plexus::context_error(__FUNCTION__, "can't write message");
+
+            message res;
+            if (tcp->read(boost::asio::buffer(res.data(), msg::header_size), yield, timeout()) != msg::header_size)
+                throw plexus::context_error(__FUNCTION__, "can't read message header");
+
+            if (res.length() + msg::header_size > res.size())
+                throw plexus::context_error(__FUNCTION__, "too big message size");
+
+            if (tcp->read(boost::asio::buffer((uint8_t*)res.data() + msg::header_size, res.length()), yield, timeout()) != res.length())
+                throw plexus::context_error(__FUNCTION__, "can't read frame data");
+
+            res.truncate(msg::header_size + res.length());
+
+            if (req.transaction() != res.transaction())
+                throw plexus::context_error(__FUNCTION__, "wrong transaction id");
+
+            tcp->shutdown();
+
+            switch (res.type())
+            {
+                case msg::binding_response:
+                {
+                    _trc_ << "mapped_endpoint=" << res.mapped_endpoint()
+                          << " source_endpoint=" << res.source_endpoint()
+                          << " changed_endpoint=" << res.changed_endpoint();
+                    break;
+                }
+                case msg::binding_request:
+                    break;
+                case msg::binding_error_response:
+                    throw plexus::context_error(__FUNCTION__, res.error());
+                default:
+                    throw plexus::context_error(__FUNCTION__, "server responded with unexpected message type");
+            }
+
+            return res;
+        }
+        catch(const boost::system::system_error& ex)
+        {
+            throw plexus::context_error(__FUNCTION__, ex.code());
+        }
+    }
+
+    static bool identical(const plexus::endpoint& lhs, const plexus::endpoint& rhs)
+    {
+        if(lhs.port != rhs.port)
             return false;
 
-        if (lhs.address() != boost::asio::ip::address() && rhs.address() != boost::asio::ip::address())
+        if (lhs.address != boost::asio::ip::address() && rhs.address != boost::asio::ip::address())
             return lhs == rhs;
 
-        if (lhs.address() == boost::asio::ip::address() && rhs.address() == boost::asio::ip::address())
+        if (lhs.address == boost::asio::ip::address() && rhs.address == boost::asio::ip::address())
             return true;
 
-        auto addr = lhs.address() != boost::asio::ip::address() ? lhs.address() : rhs.address();
+        auto addr = lhs.address != boost::asio::ip::address() ? lhs.address : rhs.address;
         bool local = false;
 
 #ifndef _WIN32
@@ -425,74 +494,68 @@ public:
         return local;
     }
 
-public:
-
-    traverse explore_network(boost::asio::yield_context yield) noexcept(false) override
+    void make_udp_traverse(boost::asio::yield_context yield, traverse& info) noexcept(false)
     {
-        _trc_ << "exploring network...";
+        _trc_ << "making traverse for udp...";
 
-        auto mapper = plexus::network::create_udp_transport(m_io, m_bind);
-        auto response = exec_binding(mapper, yield, m_stun, m_stun);
+        auto mapper = plexus::network::create_udp_socket(m_io, m_bind);
+        auto binding = exec_udp_binding(yield, mapper, m_stun, m_stun);
 
-        auto hosting = mapper->local_endpoint();
-        auto mapping = response.mapped_endpoint();
+        info.udp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
+        info.udp.hosting = m_bind;
+        info.udp.mapping = binding.mapped_endpoint();
 
-        plexus::traverse hole = {
-            plexus::firewall { false, true, false, false, firewall::independent, firewall::independent },
-            plexus::endpoint { hosting.address(), hosting.port() },
-            plexus::endpoint { mapping.address(), mapping.port() }
-        };
-
-        if (!identical(hosting, mapping))
+        if (!identical(info.udp.hosting, info.udp.mapping))
         {
-            hole.force.nat = true;
+            info.udp.force.nat = true;
 
-            if (hosting.port() != mapping.port())
+            if (info.udp.hosting.port != info.udp.mapping.port)
             {
-                hole.force.random_port = true;
+                info.udp.force.random_port = true;
             }
+
+            auto changed_full = binding.changed_endpoint();
+            auto changed_addr = plexus::endpoint{ changed_full.address, m_stun.port };
+            auto changed_port = plexus::endpoint{ m_stun.address, changed_full.port };
 
             _trc_ << "first mapping test...";
 
-            auto changed_stun = response.changed_endpoint();
-            auto first_endpoint = exec_binding(mapper, yield, changed_stun, changed_stun).mapped_endpoint();
-            if (first_endpoint == mapping)
+            auto first_endpoint = exec_udp_binding(yield, mapper, changed_full, changed_full).mapped_endpoint();
+            if (first_endpoint == info.udp.mapping)
             {
-                hole.force.mapping = firewall::independent;
+                info.udp.force.mapping = firewall::independent;
             }
             else
             {
                 _trc_ << "second mapping test...";
 
-                boost::asio::ip::udp::endpoint stun(changed_stun.address(), m_stun.port());
-                auto second_endpoint = exec_binding(mapper, yield, stun, stun).mapped_endpoint();
-
-                if (second_endpoint == mapping)
+                auto second_endpoint = exec_udp_binding(yield, mapper, changed_addr, changed_addr).mapped_endpoint();
+                if (second_endpoint == info.udp.mapping)
                 {
-                    hole.force.mapping = firewall::port_dependent;
+                    info.udp.force.mapping = firewall::port_dependent;
                 }
                 else if (second_endpoint == first_endpoint)
                 {
-                    hole.force.mapping = firewall::address_dependent;
+                    info.udp.force.mapping = firewall::address_dependent;
                 }
                 else
                 {
-                    hole.force.mapping = firewall::address_and_port_dependent;
+                    info.udp.force.mapping = firewall::address_and_port_dependent;
                 }
 
-                if (second_endpoint.address() != mapping.address() || second_endpoint.address() != first_endpoint.address())
+                if (second_endpoint.address != info.udp.mapping.address || second_endpoint.address != first_endpoint.address)
                 {
-                    hole.force.variable_address = true;
+                    info.udp.force.variable_address = true;
                 }
             }
 
-            auto filter = plexus::network::create_udp_transport(m_io);
+            auto filter = plexus::network::create_udp_socket(m_io);
             try
             {
                 _trc_ << "first filtering test...";
 
-                exec_binding(filter, yield, m_stun, changed_stun, message(flag::change_address | flag::change_port), 1400);
-                hole.force.filtering = firewall::independent;
+                exec_udp_binding(yield, filter, m_stun, changed_full, message(flag::change_address | flag::change_port), 1400);
+                info.udp.force.filtering = firewall::independent;
             }
             catch(const plexus::timeout_error&)
             {
@@ -500,8 +563,8 @@ public:
                 {
                     _trc_ << "second filtering test...";
 
-                    exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(changed_stun.address(), m_stun.port()), message(flag::change_address), 1400);
-                    hole.force.filtering = firewall::port_dependent;
+                    exec_udp_binding(yield, filter, m_stun, changed_addr, message(flag::change_address), 1400);
+                    info.udp.force.filtering = firewall::port_dependent;
                 }
                 catch(const plexus::timeout_error&)
                 {
@@ -509,38 +572,130 @@ public:
                     {
                         _trc_ << "third filtering test...";
 
-                        exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(m_stun.address(), changed_stun.port()), message(flag::change_port), 1400);
-                        hole.force.filtering = firewall::address_dependent;
+                        exec_udp_binding(yield, filter, m_stun, changed_port, message(flag::change_port), 1400);
+                        info.udp.force.filtering = firewall::address_dependent;
                     }
                     catch(const plexus::timeout_error&)
                     {
-                        hole.force.filtering = firewall::address_and_port_dependent;
+                        info.udp.force.filtering = firewall::address_and_port_dependent;
                     }
                 }
             }
+
+            info.udp.force.hairpin = false;
 
             try
             {
                 _trc_ << "hairpin test...";
 
-                exec_binding(mapper, yield, mapping, mapping, message(0), 1400);
-                hole.force.hairpin = true;
+                exec_udp_binding(yield, mapper, info.udp.mapping, info.udp.mapping, message(0), 1400);
+                info.udp.force.hairpin = true;
             }
-            catch(const plexus::timeout_error&)
+            catch(const plexus::timeout_error&) {}
+        }
+
+        _inf_ << "udp traverse: hosting=" << info.udp.hosting << " mapping=" << info.udp.mapping << " firewall=" << info.udp.force;
+    }
+
+    void make_tcp_traverse(boost::asio::yield_context yield, traverse& info) noexcept(false)
+    {
+        _trc_ << "making traverse for tcp...";
+
+        auto binding = exec_tcp_binding(yield, m_bind, m_stun);
+
+        info.tcp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
+        info.tcp.hosting = m_bind;
+        info.tcp.mapping = binding.mapped_endpoint();
+
+        if (!identical(info.tcp.hosting, info.tcp.mapping))
+        {
+            info.tcp.force.nat = true;
+            info.tcp.force.filtering = firewall::address_and_port_dependent;
+
+            if (info.tcp.hosting.port != info.tcp.mapping.port)
             {
-                hole.force.hairpin = false;
+                info.tcp.force.random_port = true;
+            }
+
+            auto changed_full = binding.changed_endpoint();
+            auto changed_addr = plexus::endpoint{ changed_full.address, m_stun.port };
+            auto changed_port = plexus::endpoint{ m_stun.address, changed_full.port };
+
+            _trc_ << "first mapping test...";
+
+            auto first_endpoint = exec_tcp_binding(yield, m_bind, changed_full).mapped_endpoint();
+            if (first_endpoint == info.tcp.mapping)
+            {
+                info.tcp.force.mapping = firewall::independent;
+            }
+            else
+            {
+                _trc_ << "second mapping test...";
+
+                auto second_endpoint = exec_tcp_binding(yield, m_bind, changed_addr).mapped_endpoint();
+                if (second_endpoint == info.tcp.mapping)
+                {
+                    info.tcp.force.mapping = firewall::port_dependent;
+                }
+                else if (second_endpoint == first_endpoint)
+                {
+                    info.tcp.force.mapping = firewall::address_dependent;
+                }
+                else
+                {
+                    info.tcp.force.mapping = firewall::address_and_port_dependent;
+                }
+
+                if (second_endpoint.address != info.tcp.mapping.address || second_endpoint.address != first_endpoint.address)
+                {
+                    info.tcp.force.variable_address = true;
+                }
+            }
+
+            info.tcp.force.hairpin = false;
+
+            try
+            {
+                _trc_ << "hairpin test...";
+
+                auto self = plexus::network::create_tcp_socket(m_io, m_bind, info.tcp.mapping);
+                self->connect(yield, 1400);
+                self->shutdown();
+
+                info.tcp.force.hairpin = true;
+            }
+            catch(const std::exception&) { }
+        }
+
+        _inf_ << "tcp traverse: hosting=" << info.tcp.hosting << " mapping=" << info.tcp.mapping << " firewall=" << info.tcp.force;
+    }
+
+public:
+
+    traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) override
+    {
+        traverse info;
+        make_udp_traverse(yield, info);
+
+        if (proto != protocol::udp)
+        {
+            try
+            {
+                make_tcp_traverse(yield, info);
+            }
+            catch(const std::exception& ex)
+            {
+                _wrn_ << "can't make tcp traverse: " << ex.what();
             }
         }
 
-        _inf_ << "traverse: hosting=" << hole.hosting << " mapping=" << hole.mapping << " firewall=" << hole.force;
-
-        return hole;
+        return info;
     }
 };
 
 }
 
-std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& server, const boost::asio::ip::udp::endpoint& local) noexcept(true)
+std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_context& io, const plexus::endpoint& server, const plexus::endpoint& local) noexcept(true)
 {
     return std::make_shared<plexus::stun::client_impl>(io, server, local);
 }

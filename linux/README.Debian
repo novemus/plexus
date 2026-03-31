@@ -4,12 +4,12 @@ plexus for Debian
 This package contains the 'plexus' utility.
 
 The 'plexus' utility provides the ability to establish a direct network
-connection between your UDP applications running on machines
+connection between your UDP/TCP applications running on machines
 located behind NATs. To do this, plexus implements the well-known
-UDP hole punching technique, using the STUN server and email service
+UDP/TCP hole punching technique, using STUN server and email service
 to exchange public IP addresses between the app instances running
 on local and remote hosts.
 
 https://github.com/novemus/plexus
 
- -- Novemus Band <nineletters@mail.ru>  Tue, 26 Mar 2024 21:50:00 +0300
+ -- Novemus Band <nineletters@mail.ru>  Sun, 22 Mar 2026 21:32:00 +0300

@@ -21,8 +21,6 @@
 
 namespace plexus {
 
-using udp_endpoint = boost::asio::ip::udp::endpoint;
-
 struct context_error : public std::runtime_error
 { 
     context_error(const std::string& loc, const std::string& msg) 
@@ -43,13 +41,19 @@ struct timeout_error : public context_error
 
 struct reference
 {
-    endpoint mapping;
-    firewall force;
+    struct map 
+    {
+        endpoint mapping;
+        firewall force;
+    };
+
+    map udp;
+    map tcp;
     criteria qos;
     uint64_t puzzle = 0;
 };
 
-contract make_contract(const traverse& hole, const criteria& qos, uint64_t puzzle, bool accept, const reference& peer) noexcept(false);
+contract make_contract(const endpoint& bind, const reference& host, const reference& peer, bool accept) noexcept(false);
 
 static constexpr const char* cert_file_name = "cert.crt";
 static constexpr const char* key_file_name = "private.key";
@@ -60,18 +64,18 @@ void exec(const std::string& prog, const std::string& args = "", const std::stri
 struct stun_client
 {
     virtual ~stun_client() {}
-    virtual traverse explore_network(boost::asio::yield_context yield) noexcept(false) = 0;
+    virtual traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const udp_endpoint& stun, const udp_endpoint& bind) noexcept(true);
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& stun, const endpoint& bind) noexcept(true);
 
-struct stun_binder : public stun_client
+struct sync_broker : public stun_client
 {
-    virtual std::shared_ptr<network::udp_socket> reach_peer(boost::asio::yield_context yield, const udp_endpoint& peer, uint64_t mask) noexcept(false) = 0;
-    virtual std::shared_ptr<network::udp_socket> await_peer(boost::asio::yield_context yield, const udp_endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual contract reach_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
+    virtual contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_binder> create_stun_binder(boost::asio::io_context& io, const udp_endpoint& stun, const udp_endpoint& bind, uint16_t punch) noexcept(false);
+std::shared_ptr<sync_broker> create_sync_broker(boost::asio::io_context& io, const endpoint& stun, const endpoint& bind, uint16_t punch) noexcept(false);
 
 struct pipe
 {

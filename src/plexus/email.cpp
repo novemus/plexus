@@ -13,6 +13,7 @@
 #include <plexus/utils.h>
 #include <wormhole/logger.h>
 #include <boost/asio/spawn.hpp>
+#include <optional>
 #include <string>
 #include <iostream>
 #include <memory>
@@ -40,7 +41,7 @@ public:
     {
         try
         {
-            m_ssl = network::create_ssl_client(io, remote, cert, key, ca);
+            m_ssl = network::create_ssl_socket(io, boost::asio::ip::tcp::endpoint(), remote, true, cert, key, ca);
         }
         catch (const boost::system::system_error& ex)
         {
@@ -198,11 +199,13 @@ class smtp
     std::string make_message(const reference& data)
     {
         if (data.qos.proto == protocol::udp && data.qos.role == relation::either)
-            return plexus::utils::format("PLEXUS 3.0 %s %u %llu", data.mapping.address.to_string().c_str(), data.mapping.port, data.puzzle);
+            return plexus::utils::format("PLEXUS 3.0 %s %u %llu", data.udp.mapping.address.to_string().c_str(), data.udp.mapping.port, data.puzzle);
 
-        return plexus::utils::format("PLEXUS 3.3 %s %s %s %llu",
-            endpoint::to_string(data.mapping).c_str(),
-            firewall::to_string(data.force).c_str(),
+        return plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %llu",
+            endpoint::to_string(data.udp.mapping).c_str(),
+            firewall::to_string(data.udp.force).c_str(),
+            endpoint::to_string(data.tcp.mapping).c_str(),
+            firewall::to_string(data.tcp.force).c_str(),
             criteria::to_string(data.qos).c_str(),
             data.puzzle
         );
@@ -417,19 +420,28 @@ class imap
                         std::smatch match;
                         if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                         {
-                            m_data.mapping = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
-                            m_data.puzzle = std::stoull(match.str(3));
-                            m_data.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
-                            m_data.qos = criteria { protocol::udp, relation::either };
+                            reference data;
+                            data.udp.mapping = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
+                            data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
+                            data.qos = criteria { protocol::udp, relation::either };
+                            data.puzzle = std::stoull(match.str(3));
+
+                            m_data = data;
                             m_host = host;
                             m_peer = peer;
                         }
-                        else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
+                        else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
                         {
-                            m_data.mapping = endpoint::from_string(match.str(1));
-                            m_data.force = firewall::from_string(match.str(2));
-                            m_data.qos = criteria::from_string(match.str(3));
-                            m_data.puzzle = std::stoull(match.str(4));
+                            reference data;
+
+                            data.udp.mapping = endpoint::from_string(match.str(1));
+                            data.udp.force = firewall::from_string(match.str(2));
+                            data.tcp.mapping = endpoint::from_string(match.str(3));
+                            data.tcp.force = firewall::from_string(match.str(4));
+                            data.qos = criteria::from_string(match.str(5));
+                            data.puzzle = std::stoull(match.str(6));
+
+                            m_data = data;
                             m_host = host;
                             m_peer = peer;
                         }
@@ -557,7 +569,7 @@ public:
                 );
             }
         }
-        while (m_data.mapping.port == 0);
+        while (!m_data.has_value());
 
         session->request(yield, utils::format("%u UID STORE %d +flags \\DELETED\r\n", ++seq, m_position), success_checker);
         session->request(yield, utils::format("%u LOGOUT\r\n", ++seq), success_checker);
@@ -565,10 +577,10 @@ public:
 
     const reference& pull(boost::asio::yield_context yield, const std::string& subject)
     {
-        if (m_data.mapping.port == 0)
+        if (!m_data.has_value())
             wait(yield, subject, false);
 
-        return m_data;
+        return m_data.value();
     }
 
     const identity& host() const noexcept(true)
@@ -602,7 +614,7 @@ private:
     uint64_t m_position = 0;
     identity m_host;
     identity m_peer;
-    reference m_data;
+    std::optional<reference> m_data;
 };
 
 class pipe_impl : public pipe
@@ -619,27 +631,27 @@ public:
     reference pull_request(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, invite_token);
-        _inf_ << "pulled request: " << faraway.mapping << "|" << faraway.force << "|" << faraway.qos;
+        _inf_ << "pulled request: " << faraway.udp.mapping << "|" << faraway.udp.force << "|" << faraway.tcp.mapping << "|" << faraway.tcp.force << "|" << faraway.qos;
         return faraway;
     }
 
     reference pull_response(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, accept_token);
-        _inf_ << "pulled response: " << faraway.mapping << "|" << faraway.force << "|" << faraway.qos;
+        _inf_ << "pulled response: " << faraway.udp.mapping << "|" << faraway.udp.force << "|" << faraway.tcp.mapping << "|" << faraway.tcp.force << "|" << faraway.qos;
         return faraway;
     }
 
     void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         m_pusher.push(yield, invite_token, gateway);
-        _inf_ << "pushed request: " << gateway.mapping << "|" << gateway.force << "|" << gateway.qos;
+        _inf_ << "pushed request: " << gateway.udp.mapping << "|" << gateway.udp.force << "|" << gateway.tcp.mapping << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         m_pusher.push(yield, accept_token, gateway);
-        _inf_ << "pushed response: " << gateway.mapping << "|" << gateway.force << "|" << gateway.qos;
+        _inf_ << "pushed response: " << gateway.udp.mapping << "|" << gateway.udp.force << "|" << gateway.tcp.mapping << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     const identity& host() const noexcept(true) override
@@ -704,7 +716,7 @@ void forward_advent(boost::asio::io_context& io, const email::context& conf, con
         try
         {
             email::smtp pusher(io, conf, host, peer);
-            pusher.push(yield, email::advent_token, reference { endpoint { boost::asio::ip::address {}, 1 } });
+            pusher.push(yield, email::advent_token, reference{});
 
             handler(host, peer);
 

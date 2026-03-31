@@ -474,24 +474,24 @@ public:
                 std::smatch match;
                 if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                 {
-                    ptr->data = reference {
-                        endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) },
-                        firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent },
-                        criteria { protocol::udp, relation::either },
-                        std::stoull(match.str(3))
-                    };
+                    ptr->data.udp.mapping = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
+                    ptr->data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
+                    ptr->data.qos = criteria { protocol::udp, relation::either };
+                    ptr->data.puzzle = std::stoull(match.str(3));
+
                     boost::system::error_code ec;
                     ptr->timer.cancel(ec);
                     return false;
                 }
-                else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
+                else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
                 {
-                    ptr->data = reference {
-                        endpoint::from_string(match.str(1)),
-                        firewall::from_string(match.str(2)),
-                        criteria::from_string(match.str(3)),
-                        std::stoull(match.str(4))
-                    };
+                    ptr->data.udp.mapping = endpoint::from_string(match.str(1));
+                    ptr->data.udp.force = firewall::from_string(match.str(2));
+                    ptr->data.tcp.mapping = endpoint::from_string(match.str(3));
+                    ptr->data.tcp.force = firewall::from_string(match.str(4));
+                    ptr->data.qos = criteria::from_string(match.str(5));
+                    ptr->data.puzzle = std::stoull(match.str(6));
+
                     boost::system::error_code ec;
                     ptr->timer.cancel(ec);
                     return false;
@@ -581,7 +581,7 @@ public:
             throw plexus::context_error(__FUNCTION__, ec);
     }
 
-    static forward_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway = {}) noexcept(false)
+    static forward_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway) noexcept(false)
     {
         std::shared_ptr<forward> op(new forward(io, repo.node()));
 
@@ -589,12 +589,14 @@ public:
         auto from = repo.load_key(host);
         auto message = gateway.qos.proto == protocol::udp && gateway.qos.role == relation::either
                            ? plexus::utils::format("PLEXUS 3.0 %s %u %llu",
-                                 gateway.mapping.address.to_string().c_str(),
-                                 gateway.mapping.port,
+                                 gateway.udp.mapping.address.to_string().c_str(),
+                                 gateway.udp.mapping.port,
                                  gateway.puzzle)
-                           : plexus::utils::format("PLEXUS 3.3 %s %s %s %llu",
-                                 endpoint::to_string(gateway.mapping).c_str(),
-                                 firewall::to_string(gateway.force).c_str(),
+                           : plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %llu",
+                                 endpoint::to_string(gateway.udp.mapping).c_str(),
+                                 firewall::to_string(gateway.udp.force).c_str(),
+                                 endpoint::to_string(gateway.tcp.mapping).c_str(),
+                                 firewall::to_string(gateway.tcp.force).c_str(),
                                  criteria::to_string(gateway.qos).c_str(),
                                  gateway.puzzle);
 
@@ -635,7 +637,7 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled request " << faraway.mapping << "|" << faraway.force << "|" << faraway.qos;
+        _inf_ << "pulled request " << faraway.udp.mapping << "|" << faraway.udp.force << "|" << faraway.tcp.mapping << "|" << faraway.tcp.force << "|" << faraway.qos;
         return faraway;
     }
 
@@ -644,7 +646,7 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled response " << faraway.mapping << "|" << faraway.force << "|" << faraway.qos;
+        _inf_ << "pulled response " << faraway.udp.mapping << "|" << faraway.udp.force << "|" << faraway.tcp.mapping << "|" << faraway.tcp.force << "|" << faraway.qos;
         return faraway;
     }
 
@@ -663,7 +665,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed request " << gateway.mapping << "|" << gateway.force << "|" << gateway.qos;
+        _inf_ << "pushed response " << gateway.udp.mapping << "|" << gateway.udp.force << "|" << gateway.tcp.mapping << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
@@ -681,7 +683,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed response " << gateway.mapping << "|" << gateway.force << "|" << gateway.qos;
+        _inf_ << "pushed response " << gateway.udp.mapping << "|" << gateway.udp.force << "|" << gateway.tcp.mapping << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     const identity& host() const noexcept(true) override
@@ -734,7 +736,7 @@ void forward_advent(boost::asio::io_context& io, const opendht::context& ctx, co
         try
         {
             opendht::repository repo(ctx);
-            auto op = opendht::forward::start(io, repo, host, peer, std::time(nullptr), opendht::advent_token);
+            auto op = opendht::forward::start(io, repo, host, peer, std::time(nullptr), opendht::advent_token, reference{});
             op->wait(yield);
 
             _dbg_ << "advent: " << peer << " -> " << host << ":" << ctx.app;

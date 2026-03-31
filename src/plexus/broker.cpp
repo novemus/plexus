@@ -18,11 +18,11 @@
 
 namespace plexus { namespace stun {
 
-class binder_impl : public plexus::stun_binder
+class broker_impl : public plexus::sync_broker
 {
     boost::asio::io_context& m_io;
-    boost::asio::ip::udp::endpoint m_stun;
-    boost::asio::ip::udp::endpoint m_bind;
+    plexus::endpoint m_stun;
+    plexus::endpoint m_bind;
     uint16_t m_punch;
 
     class handshake : public tubus::mutable_buffer
@@ -71,9 +71,27 @@ class binder_impl : public plexus::stun_binder
         }
     };
 
+    void punch_tcp_hole(boost::asio::yield_context yield, const plexus::endpoint& peer) noexcept(false)
+    {
+        _dbg_ << "punching tcp hole...";
+
+        auto tcp = plexus::network::create_tcp_socket(m_io, m_bind, peer);
+        tcp->set_option(boost::asio::ip::unicast::hops(m_punch));
+        try
+        {
+            tcp->connect(yield, 10);
+        }
+        catch(const boost::system::system_error& ex)
+        {
+            if (ex.code() != boost::asio::error::operation_aborted)
+                throw plexus::context_error(__FUNCTION__, ex.code());
+        }
+        tcp->shutdown();
+    }
+
 public:
 
-    binder_impl(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch)
+    broker_impl(boost::asio::io_context& io, const plexus::endpoint& stun, const plexus::endpoint& bind, uint16_t punch)
         : m_io(io)
         , m_stun(stun)
         , m_bind(bind)
@@ -83,8 +101,15 @@ public:
         _dbg_ << "stun client: " << bind;
     }
 
-    std::shared_ptr<network::udp_socket> reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
+    contract reach_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override
     {
+        auto term = make_contract(m_bind, host, peer, false);
+
+        if (term.qos.proto != protocol::udp && term.qos.role == relation::server && host.tcp.force.nat)
+        {
+            punch_tcp_hole(yield, peer.tcp.mapping);
+        }
+
         _dbg_ << "reaching peer...";
 
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
@@ -94,21 +119,21 @@ public:
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        auto pin = plexus::network::create_udp_transport(m_io, m_bind);
-        handshake out(0, mask);
-        handshake in(mask);
+        auto pin = plexus::network::create_udp_socket(m_io, m_bind);
+        handshake out(0, host.puzzle ^ peer.puzzle);
+        handshake in(host.puzzle ^ peer.puzzle);
 
         while (timer().total_milliseconds() < deadline)
         {
             try
             {
-                pin->send_to(out, peer, yield);
-                in.truncate(pin->receive_from(in, peer, yield));
+                pin->send_to(out, peer.udp.mapping, yield);
 
+                in.truncate(pin->receive_from(in, peer.udp.mapping, yield));
                 if (in.flag() == 1)
                 {
-                    _dbg_ << "handshake peer: " << peer;
-                    return pin;
+                    _dbg_ << "handshake peer: " << peer.udp.mapping;
+                    return term;
                 }
             }
             catch(const boost::system::system_error& ex)
@@ -123,8 +148,14 @@ public:
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    std::shared_ptr<network::udp_socket> await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
+    contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override
     {
+        auto term = make_contract(m_bind, host, peer, true);
+        if (term.qos.proto != protocol::udp && term.qos.role == relation::server && host.tcp.force.nat)
+        {
+            punch_tcp_hole(yield, peer.tcp.mapping);
+        }
+
         _dbg_ << "awaiting peer...";
 
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
@@ -134,29 +165,28 @@ public:
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        auto pin = plexus::network::create_udp_transport(m_io, m_bind);
+        auto pin = plexus::network::create_udp_socket(m_io, m_bind);
 
-        handshake out(1, mask);
-        handshake in(mask);
+        handshake out(1, host.puzzle ^ peer.puzzle);
+        handshake in(host.puzzle ^ peer.puzzle);
 
         boost::asio::ip::unicast::hops old;
         pin->get_option(old);
         pin->set_option(boost::asio::ip::unicast::hops(m_punch));
-        pin->send_to(out, peer, yield, 2000);
+        pin->send_to(out, peer.udp.mapping, yield);
         pin->set_option(old);
 
         while (timer().total_milliseconds() < deadline)
         {
             try
             {
-                in.truncate(pin->receive_from(in, peer, yield));
-
+                in.truncate(pin->receive_from(in, peer.udp.mapping, yield));
                 if (in.flag() == 0)
                 {
-                    pin->send_to(out, peer, yield);
+                    pin->send_to(out, peer.udp.mapping, yield);
 
-                    _dbg_ << "handshake peer: " << peer;
-                    return pin;
+                    _dbg_ << "handshake peer: " << peer.udp.mapping;
+                    return term;
                 }
             }
             catch(const boost::system::system_error& ex)
@@ -171,22 +201,24 @@ public:
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    traverse explore_network(boost::asio::yield_context yield) noexcept(false) override
+    traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
-        return stun->explore_network(yield);
+        return stun->make_traverse(yield, proto);
     }
 };
 
 }
 
-std::shared_ptr<plexus::stun_binder> create_stun_binder(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(false)
+std::shared_ptr<plexus::sync_broker> create_sync_broker(boost::asio::io_context& io, const plexus::endpoint& stun, const plexus::endpoint& bind, uint16_t punch) noexcept(false)
 {
-    boost::asio::ip::udp::socket socket(io, stun.protocol());
+    boost::asio::ip::udp::socket socket(io, stun.address.is_v6() ? boost::asio::ip::udp::v6() : boost::asio::ip::udp::v4());
     socket.set_option(boost::asio::socket_base::reuse_address(true));
     socket.bind(bind);
 
-    return std::make_shared<plexus::stun::binder_impl>(io, stun, socket.local_endpoint(), punch);
+    auto ep = socket.local_endpoint();
+
+    return std::make_shared<plexus::stun::broker_impl>(io, stun, plexus::endpoint{ ep.address(), ep.port() }, punch);
 }
 
 }

@@ -123,7 +123,7 @@ set(SOURCES "${CMAKE_CURRENT_BINARY_DIR}/export_header/plexus/export.h"
     src/plexus/email.cpp
     src/plexus/dht.cpp
     src/plexus/stun.cpp
-    src/plexus/binder.cpp
+    src/plexus/broker.cpp
     src/plexus/plexus.cpp
     )
 

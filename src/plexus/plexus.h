@@ -39,6 +39,24 @@ struct firewall
     linkage mapping : 2;
     linkage filtering : 2;
 
+    firewall() 
+        : nat(false)
+        , hairpin(false)
+        , random_port(false)
+        , variable_address(false)
+        , mapping(linkage::independent)
+        , filtering(linkage::independent)
+    { }
+
+    firewall(bool n, bool h, bool r, bool v, linkage m, linkage f) 
+        : nat(n)
+        , hairpin(h)
+        , random_port(r)
+        , variable_address(v)
+        , mapping(m)
+        , filtering(f)
+    { }
+
     LIBPLEXUS_EXPORT static std::string to_string(const firewall& val) noexcept(false);
     LIBPLEXUS_EXPORT static firewall from_string(const std::string& str) noexcept(false);
     LIBPLEXUS_EXPORT static uint8_t to_number(const firewall& val) noexcept(true);
@@ -47,9 +65,15 @@ struct firewall
 
 struct traverse
 {
-    firewall force;
-    endpoint hosting;
-    endpoint mapping;
+    struct hole 
+    {
+        firewall force;
+        endpoint hosting;
+        endpoint mapping;
+    };
+
+    hole udp;
+    hole tcp;
 };
 
 struct identity

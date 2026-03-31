@@ -2,8 +2,9 @@
 
 ## 3.3.0 (Mar 31, 2026)
 
-- Optional ability to negotiate client-server roles for the host and peer applications
-- Optional ability to negotiate UDP/TCP/SSL-based or multi protocol applications
+- Ability to punch NAT using STUN over TCP
+- Ability to negotiate client/server role for the application
+- Ability to negotiate UDP/TCP/SSL protocol for multi protocol application
 - More flexible negotiation to overcame the strict NAT
 - Link with libtubus 1.3.0
 - Link with libwormhole 1.3.0
