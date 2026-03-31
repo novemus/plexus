@@ -437,23 +437,23 @@ public:
         auto hosting = mapper->local_endpoint();
         auto mapping = response.mapped_endpoint();
 
-        traverse hole = {
-            firewall { false, true, false, false, firewall::independent, firewall::independent },
-            endpoint { hosting.address(), hosting.port() },
-            endpoint { mapping.address(), mapping.port() }
+        plexus::traverse hole = {
+            plexus::firewall { false, true, false, false, firewall::independent, firewall::independent },
+            plexus::endpoint { hosting.address(), hosting.port() },
+            plexus::endpoint { mapping.address(), mapping.port() }
         };
 
-        if (not identical(hosting, mapping))
+        if (!identical(hosting, mapping))
         {
             hole.force.nat = true;
-            
+
             if (hosting.port() != mapping.port())
             {
                 hole.force.random_port = true;
             }
-            
+
             _trc_ << "first mapping test...";
-            
+
             auto changed_stun = response.changed_endpoint();
             auto first_endpoint = exec_binding(mapper, yield, changed_stun, changed_stun).mapped_endpoint();
             if (first_endpoint == mapping)
@@ -466,7 +466,7 @@ public:
 
                 boost::asio::ip::udp::endpoint stun(changed_stun.address(), m_stun.port());
                 auto second_endpoint = exec_binding(mapper, yield, stun, stun).mapped_endpoint();
-                
+
                 if (second_endpoint == mapping)
                 {
                     hole.force.mapping = firewall::port_dependent;
@@ -526,7 +526,10 @@ public:
                 exec_binding(mapper, yield, mapping, mapping, message(0), 1400);
                 hole.force.hairpin = true;
             }
-            catch(const plexus::timeout_error&) { }
+            catch(const plexus::timeout_error&)
+            {
+                hole.force.hairpin = false;
+            }
         }
 
         _inf_ << "traverse: hosting=" << hole.hosting << " mapping=" << hole.mapping << " firewall=" << hole.force;

@@ -27,6 +27,14 @@ else()
     find_package(Boost 1.80 CONFIG REQUIRED COMPONENTS system program_options coroutine)
 endif()
 
+if (MSVC)
+    find_package(Boost 1.80 CONFIG REQUIRED COMPONENTS filesystem process)
+endif()
+
+if (NOT MSVC AND Boost_VERSION VERSION_GREATER_EQUAL 1.86)
+    find_package(Boost 1.86 CONFIG REQUIRED COMPONENTS process)
+endif()
+
 message("* Boost Version: ${Boost_VERSION}")
 message("* Boost Include Dirs: ${Boost_INCLUDE_DIRS}")
 message("* Boost Library Dirs: ${Boost_LIBRARY_DIRS}")
@@ -143,14 +151,14 @@ endif()
 target_sources(${LIBPLEXUS} PRIVATE ${SOURCES})
 target_sources(${BINPLEXUS} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> src/plexus/main.cpp)
 
-target_link_libraries(${LIBPLEXUS} PUBLIC tubus::libtubus PRIVATE wormhole::libwormhole Boost::coroutine OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
-target_link_libraries(${BINPLEXUS} PRIVATE tubus::libtubus wormhole::libwormhole Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
+target_link_libraries(${LIBPLEXUS} PUBLIC tubus::libtubus PRIVATE wormhole::libwormhole "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
+target_link_libraries(${BINPLEXUS} PRIVATE tubus::libtubus wormhole::libwormhole "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
 
 target_compile_features(${LIBPLEXUS} PRIVATE cxx_std_17)
 target_compile_features(${BINPLEXUS} PRIVATE cxx_std_17)
 
 target_include_directories(${BINPLEXUS} PRIVATE
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"S
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/export_header>"
         "${opendht_INCLUDEDIR}")
 
@@ -235,7 +243,7 @@ if(NOT PLEXUS_SKIP_TEST_RULES)
                                   tests/smime_tests.cpp
                                   tests/exec_tests.cpp
                                   tests/plexus_tests.cpp)
-    target_link_libraries(${PLEXUS_TEST} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> tubus::libtubus wormhole::libwormhole Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
+    target_link_libraries(${PLEXUS_TEST} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> tubus::libtubus wormhole::libwormhole "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
 
     target_include_directories(${PLEXUS_TEST} PRIVATE
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"

@@ -7,6 +7,7 @@
 #include <csignal>
 #include <stdexcept>
 
+#include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/version.hpp>
 
@@ -14,6 +15,11 @@
     #include <boost/process/v1/child.hpp>
     #ifdef WIN32
         #include <boost/process/v1/windows.hpp>
+        #include <boost/process/v1/env.hpp>
+        #include <boost/process/v1/args.hpp>
+        #include <boost/process/v1/start_dir.hpp>
+        #include <boost/process/v1/io.hpp>
+        #include <boost/process/v1/extend.hpp>
     #else
         #include <spawn.h>
         #include <boost/process/v1/extend.hpp>
@@ -23,6 +29,7 @@
     #include <boost/process.hpp>
     #ifdef WIN32
         #include <boost/process/windows.hpp>
+        creation_flags.hpp
     #else
         #include <spawn.h>
         #include <boost/process/extend.hpp>
@@ -101,7 +108,7 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
 
     auto finalize = [](bp::child& c, bool wait)
     {
-        if (not c.running())
+        if (!c.running())
         {
             c.join();
             throw std::runtime_error(utils::format("can't run process, exit code: %d", c.exit_code()));
@@ -121,18 +128,18 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
         }
     };
 
-    if (not log.empty())
+    if (!log.empty())
     {
         if (wait)
         {
             bp::child c(
-                exe, bp::args = utils::make_args(args), utils::make_env(env), bp::start_dir = utils::make_workdir(dir),
+                exe, bp::args = utils::make_args(args),
+                bp::env = utils::make_env(env),
+                bp::start_dir = utils::make_workdir(dir),
                 (bp::std_out & bp::std_err) > log,
-                bp::std_in < stdin,
+                bp::std_in < stdin
 #ifdef WIN32
-                bp::windows::hide,
-#else
-                bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
+                , bp::windows::hide
 #endif
             );
             finalize(c, true);
@@ -140,10 +147,13 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
         else
         {
             bp::child c(
-                exe, bp::args = utils::make_args(args), utils::make_env(env), bp::start_dir = utils::make_workdir(dir),
+                exe, bp::args = utils::make_args(args),
+                bp::env = utils::make_env(env),
+                bp::start_dir = utils::make_workdir(dir),
                 (bp::std_out & bp::std_err) > log,
                 bp::std_in < bp::null,
 #ifdef WIN32
+                bp::extend::on_setup([](auto& ctx) { ctx.creation_flags |= DETACHED_PROCESS; }),
                 bp::windows::hide
 #else
                 bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
@@ -155,14 +165,14 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
     else if (wait)
     {
         bp::child c(
-            exe, bp::args = utils::make_args(args), utils::make_env(env), bp::start_dir = utils::make_workdir(dir),
+            exe, bp::args = utils::make_args(args),
+            bp::env = utils::make_env(env),
+            bp::start_dir = utils::make_workdir(dir),
             bp::std_out > stdout,
             bp::std_err > stderr,
-            bp::std_in < stdin,
+            bp::std_in < stdin
 #ifdef WIN32
-                bp::windows::hide
-#else
-                bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
+            , bp::windows::hide
 #endif
         );
         finalize(c, true);
@@ -170,14 +180,17 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
     else
     {
         bp::child c(
-            exe, bp::args = utils::make_args(args), utils::make_env(env), bp::start_dir = utils::make_workdir(dir),
+            exe, bp::args = utils::make_args(args),
+            bp::env = utils::make_env(env),
+            bp::start_dir = utils::make_workdir(dir),
             bp::std_out > bp::null,
             bp::std_err > bp::null,
             bp::std_in < bp::null,
 #ifdef WIN32
-                bp::windows::hide
+            bp::extend::on_setup([](auto& ctx) { ctx.creation_flags |= DETACHED_PROCESS; }),
+            bp::windows::hide
 #else
-                bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
+            bp::extend::on_exec_setup([](auto & exec) { ::setsid(); })
 #endif
         );
         finalize(c, false);

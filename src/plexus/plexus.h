@@ -24,7 +24,7 @@ using criteria = wormhole::quality;
 
 struct firewall
 {
-    enum linkage
+    enum linkage : uint8_t
     {
         independent = 0,
         port_dependent = 1,
@@ -56,6 +56,9 @@ struct identity
 {
     std::string owner;
     std::string pin;
+
+    LIBPLEXUS_EXPORT static std::string to_string(const identity& ep) noexcept(false);
+    LIBPLEXUS_EXPORT static identity from_string(const std::string& ep) noexcept(false);
 };
 
 struct contract
@@ -90,8 +93,8 @@ using rendezvous = std::variant<emailer, dhtnode>;
 struct options
 {
     std::string app;     // application id
-    std::string repo;    // path to application repository
     criteria qos;        // application protocol and connection strategy
+    std::string repo;    // path to application repository
     endpoint stun;       // endpoint of public stun server
     endpoint bind;       // local endpoint to bind the application
     uint16_t hops;       // ttl of the udp-hole punching packet

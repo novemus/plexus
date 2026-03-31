@@ -60,8 +60,8 @@ namespace
             in >> emailer.smtp >> emailer.imap >> emailer.login >> emailer.password >> conf.stun >> conf.hops;
 
             conf.app = "plexus_email_app";
-            conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_email_app";
             conf.qos = plexus::criteria { plexus::protocol::any, plexus::relation::either };
+            conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_email_app";
             conf.mediator = emailer;
 
             host.owner = emailer.login;
@@ -90,8 +90,8 @@ namespace
             in >> dhtnode.bootstrap >> dhtnode.port >> dhtnode.network >> conf.stun >> conf.hops;
 
             conf.app = "plexus_dht_app";
-            conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_dht_app";
             conf.qos = plexus::criteria { plexus::protocol::any, plexus::relation::either };
+            conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_dht_app";
             conf.mediator = dhtnode;
 
             host.owner = "test@plexus";

@@ -145,7 +145,7 @@ int main(int argc, char** argv)
 
                 for (const auto& token : wildcards)
                 {
-                    if (not pattern.empty())
+                    if (!pattern.empty())
                         pattern += "|";
 
                     pattern += token;
@@ -201,8 +201,8 @@ int main(int argc, char** argv)
 
         plexus::options config = {
             vm["app-name"].as<std::string>(),
-            vm["app-repo"].as<std::string>(),
             vm["app-qos"].as<plexus::criteria>(),
+            vm["app-repo"].as<std::string>(),
             vm["stun-server"].as<stun_server_endpoint>(),
             vm["stun-client"].as<stun_client_endpoint>(),
             vm["punch-hops"].as<uint16_t>(),

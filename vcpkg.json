@@ -9,7 +9,14 @@
         "boost-bind",
         "boost-date-time",
         "boost-coroutine",
-        "fmt",
+        {
+            "name": "boost-process",
+            "platform": "windows"
+        },
+        {
+            "name": "boost-filesystem",
+            "platform": "windows"
+        },
         {
           "name": "pkgconf",
           "platform": "!android"
@@ -23,6 +30,7 @@
             "platform": "!windows",
             "version>=": "3.8.10"
         },
+        "fmt",
         "openssl",
         "msgpack",
         "nettle",

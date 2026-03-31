@@ -12,6 +12,7 @@
 #include <plexus/features.h>
 #include <plexus/utils.h>
 #include <wormhole/logger.h>
+#include <bitset>
 
 namespace plexus {
 
@@ -62,10 +63,24 @@ std::istream& operator>>(std::istream& in, firewall& val) noexcept(false)
     return in;
 }
 
+std::string identity::to_string(const identity& val) noexcept(false)
+{
+    return val.owner + "/" + val.pin;
+}
+
+identity identity::from_string(const std::string& str) noexcept(false)
+{
+    std::smatch match;
+    if (std::regex_match(str, match, std::regex("^([^/]*)/([^/]*)$")))
+        return identity {match[1].str(), match[2].str()};
+
+    throw boost::bad_lexical_cast();
+}
+
 std::ostream& operator<<(std::ostream& out, const identity& val) noexcept(false)
 {
     if (out.rdbuf())
-        return out << val.owner << "/" << val.pin;
+        return out << identity::to_string(val);
     return out;
 }
 
@@ -73,16 +88,8 @@ std::istream& operator>>(std::istream& in, identity& val) noexcept(false)
 {
     std::string str;
     in >> str;
-
-    std::smatch match;
-    if (std::regex_match(str, match, std::regex("^([^/]*)/([^/]*)$")))
-    {
-        val.owner = match[1].str();
-        val.pin = match[2].str();
-        return in;
-    }
-
-    throw boost::bad_lexical_cast();
+    val = identity::from_string(str);
+    return in;
 }
 
 contract make_contract(const traverse& hole, const criteria& qos, uint64_t puzzle, bool accept, const reference& peer) noexcept(false)
@@ -94,19 +101,19 @@ contract make_contract(const traverse& hole, const criteria& qos, uint64_t puzzl
     static constexpr uint8_t UDP_SERVER = 0x10;
     static constexpr uint8_t UDP_CLIENT = 0x20;
 
-    if ((not hole.force.hairpin || not peer.force.hairpin) && hole.mapping.address == peer.mapping.address)
+    if ((!hole.force.hairpin || !peer.force.hairpin) && hole.mapping.address == peer.mapping.address)
         throw std::runtime_error("hairpin is not supported");
 
     contract info;
 
     uint8_t host_variants = 0;
-    if (hole.force.mapping == firewall::independent && not hole.force.variable_address)
+    if (hole.force.mapping == firewall::independent && !hole.force.variable_address)
     {
         if (qos.role == relation::server || qos.role == relation::either)
         {
-            if (qos.proto == protocol::ssl || (qos.proto == protocol::any && not hole.force.nat))
+            if (qos.proto == protocol::ssl || (qos.proto == protocol::any && !hole.force.nat))
                 host_variants |= SSL_SERVER;
-            if (qos.proto == protocol::tcp || (qos.proto == protocol::any && not hole.force.nat))
+            if (qos.proto == protocol::tcp || (qos.proto == protocol::any && !hole.force.nat))
                 host_variants |= TCP_SERVER;
             if (qos.proto == protocol::udp || qos.proto == protocol::any)
                 host_variants |= UDP_SERVER;
@@ -126,13 +133,13 @@ contract make_contract(const traverse& hole, const criteria& qos, uint64_t puzzl
     }
 
     uint8_t peer_variants = 0;
-    if (peer.force.mapping == firewall::independent && not peer.force.variable_address)
+    if (peer.force.mapping == firewall::independent && !peer.force.variable_address)
     {
         if (peer.qos.role == relation::server || peer.qos.role == relation::either)
         {
-            if (peer.qos.proto == protocol::ssl || (peer.qos.proto == protocol::any && not peer.force.nat))
+            if (peer.qos.proto == protocol::ssl || (peer.qos.proto == protocol::any && !peer.force.nat))
                 peer_variants |= SSL_SERVER;
-            if (peer.qos.proto == protocol::tcp || (peer.qos.proto == protocol::any && not peer.force.nat))
+            if (peer.qos.proto == protocol::tcp || (peer.qos.proto == protocol::any && !peer.force.nat))
                 peer_variants |= TCP_SERVER;
             if (peer.qos.proto == protocol::udp || peer.qos.proto == protocol::any)
                 peer_variants |= UDP_SERVER;
