@@ -17,10 +17,11 @@
 #include <filesystem>
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
-#include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ip/udp.hpp>
 
 namespace plexus {
+
+using udp_endpoint = boost::asio::ip::udp::endpoint;
 
 struct context_error : public std::runtime_error
 { 
@@ -40,16 +41,21 @@ struct timeout_error : public context_error
     {} 
 };
 
+struct reference
+{
+    endpoint mapping;
+    firewall force;
+    criteria qos;
+    uint64_t puzzle = 0;
+};
+
+contract make_contract(const traverse& hole, const criteria& qos, uint64_t puzzle, bool accept, const reference& peer) noexcept(false);
+
 static constexpr const char* cert_file_name = "cert.crt";
 static constexpr const char* key_file_name = "private.key";
 static constexpr const char* ca_file_name = "ca.crt";
 
-void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", bool wait = false) noexcept(false);
-
-std::ostream& operator<<(std::ostream& stream, const reference& value);
-std::ostream& operator<<(std::ostream& stream, const identity& value);
-std::istream& operator>>(std::istream& in, reference& level);
-std::istream& operator>>(std::istream& in, identity& level);
+void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", const std::string& env = "", bool wait = false) noexcept(false);
 
 struct stun_client
 {
@@ -57,23 +63,23 @@ struct stun_client
     virtual traverse explore_network(boost::asio::yield_context yield) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind) noexcept(true);
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const udp_endpoint& stun, const udp_endpoint& bind) noexcept(true);
 
 struct stun_binder : public stun_client
 {
-    virtual std::shared_ptr<network::udp_socket> reach_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
-    virtual std::shared_ptr<network::udp_socket> await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual std::shared_ptr<network::udp_socket> reach_peer(boost::asio::yield_context yield, const udp_endpoint& peer, uint64_t mask) noexcept(false) = 0;
+    virtual std::shared_ptr<network::udp_socket> await_peer(boost::asio::yield_context yield, const udp_endpoint& peer, uint64_t mask) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_binder> create_stun_binder(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& stun, const boost::asio::ip::udp::endpoint& bind, uint16_t punch) noexcept(false);
+std::shared_ptr<stun_binder> create_stun_binder(boost::asio::io_context& io, const udp_endpoint& stun, const udp_endpoint& bind, uint16_t punch) noexcept(false);
 
 struct pipe
 {
     virtual ~pipe() {}
     virtual reference pull_request(boost::asio::yield_context yield) noexcept(false) = 0;
     virtual reference pull_response(boost::asio::yield_context yield) noexcept(false) = 0;
-    virtual void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) = 0;
-    virtual void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) = 0;
+    virtual void push_response(boost::asio::yield_context yield, const reference& host) noexcept(false) = 0;
+    virtual void push_request(boost::asio::yield_context yield, const reference& host) noexcept(false) = 0;
     virtual const identity& host() const noexcept(true) = 0;
     virtual const identity& peer() const noexcept(true) = 0;
 };

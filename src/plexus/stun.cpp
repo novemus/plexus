@@ -82,22 +82,6 @@
 
 namespace plexus { namespace stun {
 
-std::string to_string(const traverse::binding& value)
-{
-    switch (value)
-    {
-        case traverse::port_dependent:
-            return "port dependent";
-        case traverse::address_dependent:
-            return "address dependent";
-        case traverse::address_and_port_dependent:
-            return "address and port dependent";
-        default:
-            return "independent";
-    }
-    return "";
-}
-
 typedef std::array<uint8_t, 16> transaction_id;
 
 namespace msg
@@ -447,37 +431,34 @@ public:
     {
         _trc_ << "exploring network...";
 
-        traverse hole = { { 0 } };
-
         auto mapper = plexus::network::create_udp_transport(m_io, m_bind);
         auto response = exec_binding(mapper, yield, m_stun, m_stun);
 
-        hole.inner_endpoint = mapper->local_endpoint();
-        hole.outer_endpoint = response.mapped_endpoint();
+        auto hosting = mapper->local_endpoint();
+        auto mapping = response.mapped_endpoint();
 
-        auto changed_stun = response.changed_endpoint();
+        traverse hole = {
+            firewall { false, true, false, false, firewall::independent, firewall::independent },
+            endpoint { hosting.address(), hosting.port() },
+            endpoint { mapping.address(), mapping.port() }
+        };
 
-        if (identical(hole.inner_endpoint, hole.outer_endpoint))
+        if (not identical(hosting, mapping))
         {
-            hole.traits.mapping = traverse::independent;
-            hole.traits.filtering = traverse::independent;
-            hole.traits.hairpin = true;
-        }
-        else
-        {
-            hole.traits.nat = true;
-
-            if (hole.inner_endpoint.port() != hole.outer_endpoint.port())
+            hole.force.nat = true;
+            
+            if (hosting.port() != mapping.port())
             {
-                hole.traits.random_port = true;
+                hole.force.random_port = true;
             }
-
+            
             _trc_ << "first mapping test...";
-
+            
+            auto changed_stun = response.changed_endpoint();
             auto first_endpoint = exec_binding(mapper, yield, changed_stun, changed_stun).mapped_endpoint();
-            if (first_endpoint == hole.outer_endpoint)
+            if (first_endpoint == mapping)
             {
-                hole.traits.mapping = traverse::independent;
+                hole.force.mapping = firewall::independent;
             }
             else
             {
@@ -486,22 +467,22 @@ public:
                 boost::asio::ip::udp::endpoint stun(changed_stun.address(), m_stun.port());
                 auto second_endpoint = exec_binding(mapper, yield, stun, stun).mapped_endpoint();
                 
-                if (second_endpoint == hole.outer_endpoint)
+                if (second_endpoint == mapping)
                 {
-                    hole.traits.mapping = traverse::port_dependent;
+                    hole.force.mapping = firewall::port_dependent;
                 }
                 else if (second_endpoint == first_endpoint)
                 {
-                    hole.traits.mapping = traverse::address_dependent;
+                    hole.force.mapping = firewall::address_dependent;
                 }
                 else
                 {
-                    hole.traits.mapping = traverse::address_and_port_dependent;
+                    hole.force.mapping = firewall::address_and_port_dependent;
                 }
 
-                if (second_endpoint.address() != hole.outer_endpoint.address() || second_endpoint.address() != first_endpoint.address())
+                if (second_endpoint.address() != mapping.address() || second_endpoint.address() != first_endpoint.address())
                 {
-                    hole.traits.variable_address = true;
+                    hole.force.variable_address = true;
                 }
             }
 
@@ -511,7 +492,7 @@ public:
                 _trc_ << "first filtering test...";
 
                 exec_binding(filter, yield, m_stun, changed_stun, message(flag::change_address | flag::change_port), 1400);
-                hole.traits.filtering = traverse::independent;
+                hole.force.filtering = firewall::independent;
             }
             catch(const plexus::timeout_error&)
             {
@@ -520,7 +501,7 @@ public:
                     _trc_ << "second filtering test...";
 
                     exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(changed_stun.address(), m_stun.port()), message(flag::change_address), 1400);
-                    hole.traits.filtering = traverse::port_dependent;
+                    hole.force.filtering = firewall::port_dependent;
                 }
                 catch(const plexus::timeout_error&)
                 {
@@ -529,11 +510,11 @@ public:
                         _trc_ << "third filtering test...";
 
                         exec_binding(filter, yield, m_stun, boost::asio::ip::udp::endpoint(m_stun.address(), changed_stun.port()), message(flag::change_port), 1400);
-                        hole.traits.filtering = traverse::address_dependent;
+                        hole.force.filtering = firewall::address_dependent;
                     }
                     catch(const plexus::timeout_error&)
                     {
-                        hole.traits.filtering = traverse::address_and_port_dependent;
+                        hole.force.filtering = firewall::address_and_port_dependent;
                     }
                 }
             }
@@ -542,21 +523,13 @@ public:
             {
                 _trc_ << "hairpin test...";
 
-                exec_binding(mapper, yield, hole.outer_endpoint , hole.outer_endpoint , message(0), 1400);
-                hole.traits.hairpin = true;
+                exec_binding(mapper, yield, mapping, mapping, message(0), 1400);
+                hole.force.hairpin = true;
             }
             catch(const plexus::timeout_error&) { }
         }
 
-        _inf_ << "\ntraverse:"
-              << "\n\tnat: " << hole.traits.nat
-              << "\n\tmapping: " << to_string(hole.traits.mapping)
-              << "\n\tfiltering: " << to_string(hole.traits.filtering)
-              << "\n\trandom port: " << hole.traits.random_port 
-              << "\n\tvariable address: " << hole.traits.variable_address 
-              << "\n\thairpin: " << hole.traits.hairpin
-              << "\n\tinner endpoint: " << hole.inner_endpoint
-              << "\n\touter endpoint: " << hole.outer_endpoint;
+        _inf_ << "traverse: hosting=" << hole.hosting << " mapping=" << hole.mapping << " firewall=" << hole.force;
 
         return hole;
     }

@@ -474,14 +474,26 @@ public:
                 std::smatch match;
                 if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                 {
-                    ptr->data = {
-                        utils::parse_endpoint<boost::asio::ip::udp::endpoint>(match.str(1), match.str(2)),
-                        boost::lexical_cast<uint64_t>(match.str(3))
+                    ptr->data = reference {
+                        endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) },
+                        firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent },
+                        criteria { protocol::udp, relation::either },
+                        std::stoull(match.str(3))
                     };
-
                     boost::system::error_code ec;
                     ptr->timer.cancel(ec);
-
+                    return false;
+                }
+                else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
+                {
+                    ptr->data = reference {
+                        endpoint::from_string(match.str(1)),
+                        firewall::from_string(match.str(2)),
+                        criteria::from_string(match.str(3)),
+                        std::stoull(match.str(4))
+                    };
+                    boost::system::error_code ec;
+                    ptr->timer.cancel(ec);
                     return false;
                 }
             }
@@ -574,7 +586,16 @@ public:
 
         auto to = repo.load_cert(peer);
         auto from = repo.load_key(host);
-        auto message = plexus::utils::format("PLEXUS 3.0 %s %u %llu", gateway.endpoint.address().to_string().c_str(), gateway.endpoint.port(), gateway.puzzle);
+        auto message = gateway.qos.proto == protocol::udp && gateway.qos.role == relation::either
+                           ? plexus::utils::format("PLEXUS 3.0 %s %u %llu",
+                                 gateway.mapping.address.to_string().c_str(),
+                                 gateway.mapping.port,
+                                 gateway.puzzle)
+                           : plexus::utils::format("PLEXUS 3.3 %s %s %s %llu",
+                                 endpoint::to_string(gateway.mapping).c_str(),
+                                 firewall::to_string(gateway.force).c_str(),
+                                 criteria::to_string(gateway.qos).c_str(),
+                                 gateway.puzzle);
 
         op->hash = dht::InfoHash::get(to->getId().toString() + repo.app + subject);
         op->timer.expires_from_now(boost::posix_time::milliseconds(await_timeout));
@@ -613,7 +634,7 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled request " << faraway.endpoint;
+        _inf_ << "pulled request " << faraway.mapping << "|" << faraway.force << "|" << faraway.qos;
         return faraway;
     }
 
@@ -622,7 +643,7 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled response " << faraway.endpoint;
+        _inf_ << "pulled response " << faraway.mapping << "|" << faraway.force << "|" << faraway.qos;
         return faraway;
     }
 
@@ -641,7 +662,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed request " << gateway.endpoint;
+        _inf_ << "pushed request " << gateway.mapping << "|" << gateway.force << "|" << gateway.qos;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
@@ -659,7 +680,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed response " << gateway.endpoint;
+        _inf_ << "pushed response " << gateway.mapping << "|" << gateway.force << "|" << gateway.qos;
     }
 
     const identity& host() const noexcept(true) override

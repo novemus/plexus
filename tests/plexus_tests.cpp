@@ -13,7 +13,8 @@
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
 #include <plexus/utils.h>
-#include <plexus/plexus.h>
+#include <plexus/features.h>
+#include <wormhole/wormhole.h>
 
 namespace
 {
@@ -54,25 +55,18 @@ namespace
         if (std::filesystem::exists(path))
         {
             std::ifstream in(path);
+            plexus::emailer emailer;
 
-            std::string smtp_addr, smtp_port, imap_addr, imap_port, login, password, stun_addr, stun_port, punch_hops;
-
-            in >> smtp_addr >> smtp_port >> imap_addr >> imap_port >> login >> password >> stun_addr >> stun_port >> punch_hops;
+            in >> emailer.smtp >> emailer.imap >> emailer.login >> emailer.password >> conf.stun >> conf.hops;
 
             conf.app = "plexus_email_app";
             conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_email_app";
-            conf.stun = plexus::utils::parse_endpoint<plexus::udp::endpoint>(stun_addr, stun_port);
-            conf.hops = boost::lexical_cast<uint16_t>(punch_hops);
-            conf.mediator = plexus::emailer {
-                plexus::utils::parse_endpoint<plexus::tcp::endpoint>(smtp_addr, smtp_port),
-                plexus::utils::parse_endpoint<plexus::tcp::endpoint>(imap_addr, imap_port),
-                login,
-                password
-            };
+            conf.qos = plexus::criteria { plexus::protocol::any, plexus::relation::either };
+            conf.mediator = emailer;
 
-            host.owner = login;
+            host.owner = emailer.login;
             host.pin = "host";
-            peer.owner = login;
+            peer.owner = emailer.login;
             peer.pin = "peer";
 
             init_test_repo(conf, host, peer);
@@ -91,20 +85,14 @@ namespace
         if (std::filesystem::exists(path))
         {
             std::ifstream in(path);
+            plexus::dhtnode dhtnode;
 
-            std::string bootstrap, node_port, network, stun_addr, stun_port, punch_hops;
-
-            in >> bootstrap >> node_port >> network >> stun_addr >> stun_port >> punch_hops;
+            in >> dhtnode.bootstrap >> dhtnode.port >> dhtnode.network >> conf.stun >> conf.hops;
 
             conf.app = "plexus_dht_app";
             conf.repo = std::filesystem::temp_directory_path().generic_u8string() + "/plexus_dht_app";
-            conf.stun = plexus::utils::parse_endpoint<plexus::udp::endpoint>(stun_addr, stun_port);
-            conf.hops = boost::lexical_cast<uint16_t>(punch_hops);
-            conf.mediator = plexus::dhtnode {
-                bootstrap,
-                boost::lexical_cast<uint16_t>(node_port),
-                boost::lexical_cast<uint32_t>(network)
-            };
+            conf.qos = plexus::criteria { plexus::protocol::any, plexus::relation::either };
+            conf.mediator = dhtnode;
 
             host.owner = "test@plexus";
             host.pin = "host";
@@ -193,19 +181,18 @@ void make_rendezvous_test(const context& info)
         boost::asio::io_context io;
 
         plexus::spawn_accept(io, info.conf, info.host, info.peer, 
-            [&](const plexus::identity& host, const plexus::identity& peer, const plexus::udp::endpoint& bind, const plexus::reference& gateway, const plexus::reference& faraway)
+            [&](const plexus::identity& host, const plexus::identity& peer, const plexus::contract& term)
             {
                 BOOST_CHECK_EQUAL(info.host.owner, host.owner);
                 BOOST_CHECK_EQUAL(info.host.pin, host.pin);
                 BOOST_CHECK_EQUAL(info.peer.owner, peer.owner);
                 BOOST_CHECK_EQUAL(info.peer.pin, peer.pin);
-                BOOST_CHECK_NE(bind.port(), 0);
-                BOOST_CHECK_NE(gateway.endpoint.address().is_unspecified(), true);
-                BOOST_CHECK_NE(gateway.endpoint.port(), 0);
-                BOOST_CHECK_NE(gateway.puzzle, 0);
-                BOOST_CHECK_NE(faraway.endpoint.address().is_unspecified(), true);
-                BOOST_CHECK_NE(faraway.endpoint.port(), 0);
-                BOOST_CHECK_NE(faraway.puzzle, 0);
+                BOOST_CHECK_EQUAL(term.qos.proto, plexus::protocol::udp);
+                BOOST_CHECK_EQUAL(term.qos.role, plexus::relation::server);
+                BOOST_CHECK_NE(term.gateway, plexus::endpoint());
+                BOOST_CHECK_NE(term.mapping, plexus::endpoint());
+                BOOST_CHECK_NE(term.faraway, plexus::endpoint());
+                BOOST_CHECK_NE(term.secret, 0);
                 io.stop();
             },
             [&](const plexus::identity& host, const plexus::identity& peer, const std::string& error)
@@ -226,19 +213,18 @@ void make_rendezvous_test(const context& info)
         boost::asio::io_context io;
 
         plexus::spawn_invite(io, info.conf, info.peer, info.host, 
-            [&](const plexus::identity& host, const plexus::identity& peer, const plexus::udp::endpoint& bind, const plexus::reference& gateway, const plexus::reference& faraway)
+            [&](const plexus::identity& host, const plexus::identity& peer, const plexus::contract& term)
             {
                 BOOST_CHECK_EQUAL(info.host.owner, peer.owner);
                 BOOST_CHECK_EQUAL(info.host.pin, peer.pin);
                 BOOST_CHECK_EQUAL(info.peer.owner, host.owner);
                 BOOST_CHECK_EQUAL(info.peer.pin, host.pin);
-                BOOST_CHECK_NE(bind.port(), 0);
-                BOOST_CHECK_NE(gateway.endpoint.address().is_unspecified(), true);
-                BOOST_CHECK_NE(gateway.endpoint.port(), 0);
-                BOOST_CHECK_NE(gateway.puzzle, 0);
-                BOOST_CHECK_NE(faraway.endpoint.address().is_unspecified(), true);
-                BOOST_CHECK_NE(faraway.endpoint.port(), 0);
-                BOOST_CHECK_NE(faraway.puzzle, 0);
+                BOOST_CHECK_EQUAL(term.qos.proto, plexus::protocol::udp);
+                BOOST_CHECK_EQUAL(term.qos.role, plexus::relation::client);
+                BOOST_CHECK_NE(term.gateway, plexus::endpoint());
+                BOOST_CHECK_NE(term.mapping, plexus::endpoint());
+                BOOST_CHECK_NE(term.faraway, plexus::endpoint());
+                BOOST_CHECK_NE(term.secret, 0);
                 io.stop();
             },
             [&](const plexus::identity& host, const plexus::identity& peer, const std::string& error)
@@ -258,91 +244,351 @@ void make_rendezvous_test(const context& info)
     inv.wait();
 }
 
-void make_streaming_test(const context& info)
+void make_simple_contract_test(plexus::protocol proto)
 {
-    static const boost::system::error_code NONE_ERROR;
+    plexus::traverse hole {
+        plexus::firewall { true, true, true, false, plexus::firewall::independent, plexus::firewall::address_and_port_dependent },
+        plexus::endpoint { boost::asio::ip::make_address("192.168.0.1"), 3000 },
+        plexus::endpoint { boost::asio::ip::make_address("10.0.0.2"), 3000 }
+    };
 
-    std::string wb("hello plexus");
-    std::string rb(wb.size(), '\0');
+    plexus::criteria qos { proto, plexus::relation::either };
+    uint64_t puzzle = 1234567890;
 
-    auto acc = std::async(std::launch::async, [&]()
-    {
-        boost::asio::io_context io;
+    plexus::reference peer {
+        plexus::endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 },
+        plexus::firewall { true, true, true, false, plexus::firewall::independent, plexus::firewall::address_and_port_dependent },
+        plexus::criteria { proto, plexus::relation::either },
+        1234567890
+    };
 
-        plexus::spawn_accept(io, info.conf, info.host, info.peer,
-            [&](const plexus::identity& host, const plexus::identity& peer, tubus::socket&& socket)
-            {
-                auto stream = std::make_shared<tubus::socket>(std::move(socket));
+    auto info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.gateway, hole.hosting);
+    BOOST_CHECK_EQUAL(info.mapping, hole.mapping);
+    BOOST_CHECK_EQUAL(info.faraway, peer.mapping);
+    BOOST_CHECK_EQUAL(info.secret, 0);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
 
-                BOOST_CHECK_EQUAL(info.host.owner, host.owner);
-                BOOST_CHECK_EQUAL(info.host.pin, host.pin);
-                BOOST_CHECK_EQUAL(info.peer.owner, peer.owner);
-                BOOST_CHECK_EQUAL(info.peer.pin, peer.pin);
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
 
-                boost::asio::async_read(*stream, boost::asio::buffer(rb), [&, stream](const boost::system::error_code& error, size_t size)
-                {
-                    BOOST_CHECK_EQUAL(error, NONE_ERROR);
-                    BOOST_CHECK_EQUAL(wb, rb.substr(0, size));
-                    stream->async_shutdown([&, stream](const boost::system::error_code& error)
-                    {
-                        BOOST_CHECK_EQUAL(error, NONE_ERROR);
-                        io.stop();
-                    });
-                });
-            },
-            [&](const plexus::identity& host, const plexus::identity& peer, const std::string& error)
-            {
-                BOOST_CHECK_EQUAL(info.host.owner, host.owner);
-                BOOST_CHECK_EQUAL(info.host.pin, host.pin);
-                BOOST_CHECK_EQUAL(info.peer.owner, peer.owner);
-                BOOST_CHECK_EQUAL(info.peer.pin, peer.pin);
-                BOOST_VERIFY_MSG(false, error.c_str());
-                io.stop();
-            });
+    qos.role = plexus::relation::server;
+    peer.qos.role = plexus::relation::client;
 
-        io.run();
-    });
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
 
-    auto inv = std::async(std::launch::async, [&]()
-    {
-        boost::asio::io_context io;
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
 
-        plexus::spawn_invite(io, info.conf, info.peer, info.host,
-            [&](const plexus::identity& host, const plexus::identity& peer, tubus::socket&& socket)
-            {
-                auto stream = std::make_shared<tubus::socket>(std::move(socket));
+    qos.role = plexus::relation::client;
+    peer.qos.role = plexus::relation::server;
 
-                BOOST_CHECK_EQUAL(info.host.owner, peer.owner);
-                BOOST_CHECK_EQUAL(info.host.pin, peer.pin);
-                BOOST_CHECK_EQUAL(info.peer.owner, host.owner);
-                BOOST_CHECK_EQUAL(info.peer.pin, host.pin);
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
 
-                boost::asio::async_write(*stream, boost::asio::buffer(wb), [&, stream](const boost::system::error_code& error, size_t size) mutable
-                {
-                    BOOST_CHECK_EQUAL(error, NONE_ERROR);
-                    BOOST_CHECK_EQUAL(wb.size(), size);
-                    stream->async_shutdown([&, stream](const boost::system::error_code& error)
-                    {
-                        BOOST_CHECK_EQUAL(error, NONE_ERROR);
-                        io.stop();
-                    });
-                });
-            },
-            [&](const plexus::identity& host, const plexus::identity& peer, const std::string& error)
-            {
-                BOOST_CHECK_EQUAL(info.host.owner, peer.owner);
-                BOOST_CHECK_EQUAL(info.host.pin, peer.pin);
-                BOOST_CHECK_EQUAL(info.peer.owner, host.owner);
-                BOOST_CHECK_EQUAL(info.peer.pin, host.pin);
-                BOOST_VERIFY_MSG(false, error.c_str());
-                io.stop();
-            });
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
 
-        io.run();
-    });
+    peer.force.variable_address = true;
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
 
-    acc.wait();
-    inv.wait();
+    peer.force.variable_address = false;
+    qos.role = plexus::relation::client;
+    peer.qos.role = plexus::relation::client;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error);
+
+    qos.role = plexus::relation::server;
+    peer.qos.role = plexus::relation::server;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
+
+    qos.role = plexus::relation::either;
+    peer.qos.role = plexus::relation::either;
+    qos.proto = proto == plexus::protocol::any ? plexus::protocol::udp : proto;
+    peer.qos.proto = proto == plexus::protocol::any ? plexus::protocol::tcp : plexus::protocol(proto + 1);
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error);
+
+    qos.proto = proto;
+    peer.qos.proto = proto;
+    qos.role = plexus::relation::server;
+    peer.qos.role = plexus::relation::either;
+    hole.force.mapping = plexus::firewall::address_and_port_dependent;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
+
+    qos.role = plexus::relation::either;
+    peer.force.mapping = plexus::firewall::independent;
+    hole.force.mapping = plexus::firewall::independent;
+    peer.force.hairpin = false;
+    hole.force.hairpin = false;
+    hole.mapping.address = peer.mapping.address;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error);
+}
+
+void make_cone_contract_test(plexus::protocol proto)
+{
+    plexus::traverse hole {
+        plexus::firewall { true, true, true, true, plexus::firewall::address_and_port_dependent, plexus::firewall::address_and_port_dependent },
+        plexus::endpoint { boost::asio::ip::make_address("192.168.0.1"), 3000 },
+        plexus::endpoint { boost::asio::ip::make_address("10.0.0.2"), 3000 }
+    };
+
+    plexus::criteria qos { proto, plexus::relation::either };
+    uint64_t puzzle = 1234567890;
+
+    plexus::reference peer {
+        plexus::endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 },
+        plexus::firewall { true, true, true, false, plexus::firewall::independent, plexus::firewall::independent },
+        plexus::criteria { proto, plexus::relation::either },
+        1234567890
+    };
+
+    auto info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.gateway, hole.hosting);
+    BOOST_CHECK_EQUAL(info.mapping, hole.mapping);
+    BOOST_CHECK_EQUAL(info.faraway, peer.mapping);
+    BOOST_CHECK_EQUAL(info.secret, 0);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    qos.role = plexus::relation::client;
+    peer.qos.role = plexus::relation::server;
+
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    qos.role = plexus::relation::either;
+    peer.qos.role = plexus::relation::either;
+    hole.force.variable_address = false;
+    hole.force.filtering = plexus::firewall::independent;
+    hole.force.mapping = plexus::firewall::independent;
+    peer.force.filtering = plexus::firewall::address_and_port_dependent;
+    peer.force.mapping = plexus::firewall::address_and_port_dependent;
+
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
+
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
+
+    qos.role = plexus::relation::server;
+    peer.qos.role = plexus::relation::client;
+
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
+
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, proto);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
+
+    peer.force.hairpin = false;
+    hole.force.hairpin = false;
+    hole.mapping.address = peer.mapping.address;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error);
+
+    peer.force.hairpin = true;
+    hole.force.hairpin = true;
+    hole.mapping.address = boost::asio::ip::make_address("10.0.0.2");
+    hole.force.variable_address = true;
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
+
+    hole.force.variable_address = false;
+    hole.force.filtering = plexus::firewall::independent;
+    hole.force.mapping = plexus::firewall::address_and_port_dependent;
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
+
+    hole.force.filtering = plexus::firewall::address_and_port_dependent;
+    hole.force.mapping = plexus::firewall::independent;
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error);
+
+    hole.force.filtering = plexus::firewall::address_and_port_dependent;
+    hole.force.mapping = plexus::firewall::address_and_port_dependent;
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(simple_udp_contract)
+{
+    make_simple_contract_test(plexus::protocol::udp);
+}
+
+BOOST_AUTO_TEST_CASE(simple_tcp_contract)
+{
+    make_simple_contract_test(plexus::protocol::tcp);
+}
+
+BOOST_AUTO_TEST_CASE(simple_ssl_contract)
+{
+    make_simple_contract_test(plexus::protocol::ssl);
+}
+
+BOOST_AUTO_TEST_CASE(simple_any_contract)
+{
+    plexus::traverse hole {
+        plexus::firewall { true, true, true, false, plexus::firewall::independent, plexus::firewall::address_and_port_dependent },
+        plexus::endpoint { boost::asio::ip::make_address("192.168.0.1"), 3000 },
+        plexus::endpoint { boost::asio::ip::make_address("10.0.0.2"), 3000 }
+    };
+
+    plexus::criteria qos { plexus::protocol::any, plexus::relation::either };
+    uint64_t puzzle = 1234567890;
+
+    plexus::reference peer {
+        plexus::endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 },
+        plexus::firewall { true, true, true, false, plexus::firewall::independent, plexus::firewall::address_and_port_dependent },
+        plexus::criteria { plexus::protocol::any, plexus::relation::either },
+        1234567890
+    };
+
+    auto info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.gateway, hole.hosting);
+    BOOST_CHECK_EQUAL(info.mapping, hole.mapping);
+    BOOST_CHECK_EQUAL(info.faraway, peer.mapping);
+    BOOST_CHECK_EQUAL(info.secret, 0);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::udp);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
+
+    peer.qos.proto = plexus::protocol::tcp;
+
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::tcp);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    peer.qos.proto = plexus::protocol::ssl;
+
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::ssl);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    peer.qos.proto = plexus::protocol::any;
+    peer.force.nat = false;
+
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::ssl);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    qos.proto = plexus::protocol::udp;
+
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::udp);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
+
+    peer.force.nat = true;
+    peer.force.variable_address = true;
+    qos.proto = plexus::protocol::any;
+    hole.force.variable_address = true;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error);
+
+    peer.force.variable_address = false;
+    hole.force.variable_address = false;
+    peer.force.mapping = plexus::firewall::address_and_port_dependent;
+    hole.force.mapping = plexus::firewall::address_and_port_dependent;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(cone_udp_contract)
+{
+    make_cone_contract_test(plexus::protocol::udp);
+}
+
+BOOST_AUTO_TEST_CASE(cone_tcp_contract)
+{
+    make_cone_contract_test(plexus::protocol::tcp);
+}
+
+BOOST_AUTO_TEST_CASE(cone_ssl_contract)
+{
+    make_cone_contract_test(plexus::protocol::ssl);
+}
+
+BOOST_AUTO_TEST_CASE(cone_any_contract)
+{
+    plexus::traverse hole {
+        plexus::firewall { true, true, true, true, plexus::firewall::address_and_port_dependent, plexus::firewall::address_and_port_dependent },
+        plexus::endpoint { boost::asio::ip::make_address("192.168.0.1"), 3000 },
+        plexus::endpoint { boost::asio::ip::make_address("10.0.0.2"), 3000 }
+    };
+
+    plexus::criteria qos { plexus::protocol::any, plexus::relation::either };
+    uint64_t puzzle = 1234567890;
+
+    plexus::reference peer {
+        plexus::endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 },
+        plexus::firewall { false, true, false, false, plexus::firewall::independent, plexus::firewall::independent },
+        plexus::criteria { plexus::protocol::any, plexus::relation::either },
+        1234567890
+    };
+
+    auto info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.gateway, hole.hosting);
+    BOOST_CHECK_EQUAL(info.mapping, hole.mapping);
+    BOOST_CHECK_EQUAL(info.faraway, peer.mapping);
+    BOOST_CHECK_EQUAL(info.secret, 0);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::ssl);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    qos.proto = plexus::protocol::tcp;
+
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::tcp);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    qos.proto = plexus::protocol::udp;
+
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::udp);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    qos.proto = plexus::protocol::ssl;
+
+    info = plexus::make_contract(hole, qos, puzzle, false, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::ssl);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    qos.proto = plexus::protocol::any;
+    peer.force.nat = true;
+
+    info = plexus::make_contract(hole, qos, puzzle, true, peer);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::udp);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+
+    qos.proto = plexus::protocol::tcp;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error); 
+
+    qos.proto = plexus::protocol::any;
+    peer.force.nat = false;
+    peer.force.filtering = plexus::firewall::address_and_port_dependent;
+
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, true, peer), std::runtime_error);
+    BOOST_REQUIRE_THROW(plexus::make_contract(hole, qos, puzzle, false, peer), std::runtime_error); 
 }
 
 BOOST_AUTO_TEST_CASE(plexus_email_rendezvous, *boost::unit_test::precondition(is_emailer_context_defined))
@@ -367,16 +613,4 @@ BOOST_AUTO_TEST_CASE(plexus_dht_advent, *boost::unit_test::precondition(is_dhtno
 {
     BOOST_TEST_MESSAGE("testing plexus dht advent...");
     make_advent_test(with_dhtnode.conf.mediator, with_dhtnode.conf.mediator, with_dhtnode.conf.app, with_dhtnode.conf.repo, with_dhtnode.host, with_dhtnode.peer);
-}
-
-BOOST_AUTO_TEST_CASE(plexus_streaming_with_emailer, *boost::unit_test::precondition(is_emailer_context_defined))
-{
-    BOOST_TEST_MESSAGE("testing plexus streaming with email rendezvous...");
-    make_streaming_test(with_emailer);
-}
-
-BOOST_AUTO_TEST_CASE(plexus_streaming_with_dhtnode, *boost::unit_test::precondition(is_dhtnode_context_defined))
-{
-    BOOST_TEST_MESSAGE("testing plexus streaming with dht rendezvous...");
-    make_streaming_test(with_dhtnode);
 }

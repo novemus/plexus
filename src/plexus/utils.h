@@ -20,8 +20,6 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/asio.hpp>
-#include <boost/asio/ip/udp.hpp>
-#include <boost/asio/ip/udp.hpp>
 
 namespace plexus { namespace utils {
 
@@ -62,14 +60,14 @@ template<class var_t> var_t getenv(const std::string& name, const var_t& def)
     return def;
 }
 
-template<class endpoint>
-endpoint parse_endpoint(const std::string& url, const std::string& service)
+template<class proto>
+boost::asio::ip::basic_endpoint<proto> parse_endpoint(const std::string& url, const std::string& service)
 {
     if (url.empty() && service.empty())
-        return endpoint();
+        return boost::asio::ip::basic_endpoint<proto>();
 
     boost::asio::io_context io;
-    typename endpoint::protocol_type::resolver resolver(io);
+    typename proto::resolver resolver(io);
 
     std::smatch match;
     if (std::regex_search(url, match, std::regex("^(\\w+://)?\\[([a-zA-Z0-9:]+)\\]:(\\d+).*")))

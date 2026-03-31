@@ -18,9 +18,9 @@ BOOST_AUTO_TEST_CASE(exec)
 {
     std::filesystem::remove("out.txt");
 #ifdef _WIN32
-    BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo line", std::filesystem::current_path().string(), "out.txt", true));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("C:\\Windows\\System32\\cmd.exe", "/c echo %KEY%", std::filesystem::current_path().string(), "out.txt", "KEY=VALUE", true));
 #else
-    BOOST_REQUIRE_NO_THROW(plexus::exec("/bin/sh", "-c \"echo line\"", std::filesystem::current_path().string(), "out.txt", true));
+    BOOST_REQUIRE_NO_THROW(plexus::exec("/bin/sh", "-c \"echo $KEY\"", std::filesystem::current_path().string(), "out.txt", "KEY=VALUE", true));
 #endif
 
     BOOST_REQUIRE(std::filesystem::exists(std::filesystem::path("out.txt")));
@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_CASE(exec)
     std::ifstream file("out.txt");
     std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    BOOST_REQUIRE_EQUAL(text, "line\n");
+    BOOST_REQUIRE_EQUAL(text, "VALUE\n");
 
     file.close();
     BOOST_REQUIRE(std::filesystem::remove("out.txt"));

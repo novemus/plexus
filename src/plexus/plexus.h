@@ -11,18 +11,20 @@
 #pragma once
 
 #include <variant>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ip/udp.hpp>
+#include <boost/asio.hpp>
 #include <plexus/export.h>
-#include <tubus/socket.h>
+#include <wormhole/wormhole.h>
 
 namespace plexus {
 
-using namespace boost::asio::ip;
+using protocol = wormhole::protocol;
+using relation = wormhole::relation;
+using endpoint = wormhole::endpoint;
+using criteria = wormhole::quality;
 
-struct traverse
+struct firewall
 {
-    enum binding
+    enum linkage
     {
         independent = 0,
         port_dependent = 1,
@@ -30,19 +32,24 @@ struct traverse
         address_and_port_dependent = 3
     };
 
-    struct
-    {
-        bool nat : 1;
-        bool hairpin : 1;
-        bool random_port : 1;
-        bool variable_address : 1;
-        binding mapping : 2;
-        binding filtering : 2;
-    }
-    traits;
+    bool nat : 1;
+    bool hairpin : 1;
+    bool random_port : 1;
+    bool variable_address : 1;
+    linkage mapping : 2;
+    linkage filtering : 2;
 
-    udp::endpoint inner_endpoint;
-    udp::endpoint outer_endpoint;
+    LIBPLEXUS_EXPORT static std::string to_string(const firewall& val) noexcept(false);
+    LIBPLEXUS_EXPORT static firewall from_string(const std::string& str) noexcept(false);
+    LIBPLEXUS_EXPORT static uint8_t to_number(const firewall& val) noexcept(true);
+    LIBPLEXUS_EXPORT static firewall from_number(uint8_t num) noexcept(true);
+};
+
+struct traverse
+{
+    firewall force;
+    endpoint hosting;
+    endpoint mapping;
 };
 
 struct identity
@@ -51,22 +58,19 @@ struct identity
     std::string pin;
 };
 
-struct cryptoid
+struct contract
 {
-    std::string certfile;
-    std::string keyfile;
-};
-
-struct reference
-{
-    udp::endpoint endpoint;
-    uint64_t puzzle = 0;
+    endpoint gateway;
+    endpoint mapping;
+    endpoint faraway;
+    uint64_t secret = 0;
+    criteria qos;
 };
 
 struct emailer
 {
-    tcp::endpoint smtp;
-    tcp::endpoint imap;
+    endpoint smtp;
+    endpoint imap;
     std::string login;
     std::string password;
     std::string cert; 
@@ -77,31 +81,26 @@ struct emailer
 struct dhtnode
 {
     std::string bootstrap; // bootstrap URL
-    uint16_t port = 4222; // node port
-    uint32_t network = 0; // network id
+    uint16_t port = 4222;  // node port
+    uint32_t network = 0;  // network id
 };
 
 using rendezvous = std::variant<emailer, dhtnode>;
 
 struct options
 {
-    std::string app; // application id
-    std::string repo; // path to application repository
-    udp::endpoint stun; // endpoint of public stun server
-    udp::endpoint bind; // local endpoint to bind the application
-    uint16_t hops; // ttl of the udp-hole punching packet
-    rendezvous mediator; // signaling service to trigger peer connections
+    std::string app;     // application id
+    std::string repo;    // path to application repository
+    criteria qos;        // application protocol and connection strategy
+    endpoint stun;       // endpoint of public stun server
+    endpoint bind;       // local endpoint to bind the application
+    uint16_t hops;       // ttl of the udp-hole punching packet
+    rendezvous mediator; // rendezvous service
 };
 
 using connector = std::function<void(const identity& /* host */,
                                      const identity& /* peer */,
-                                     const udp::endpoint& /* local */,
-                                     const reference& /* gateway */,
-                                     const reference& /* faraway */)>;
-
-using collector = std::function<void(const identity& /* host */,
-                                     const identity& /* peer */,
-                                     tubus::socket&& /* socket */)>;
+                                     const contract& /* info */)>;
 
 using observer = std::function<void(const identity& /* host */,
                                     const identity& /* peer */)>;
@@ -111,7 +110,7 @@ using fallback = std::function<void(const identity& /* host */,
                                     const std::string& /* error */)>;
 
 LIBPLEXUS_EXPORT
-void explore_network(boost::asio::io_context& io, const udp::endpoint& bind, const udp::endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
+void explore_network(boost::asio::io_context& io, const endpoint& bind, const endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
 LIBPLEXUS_EXPORT
 void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT
@@ -120,9 +119,10 @@ LIBPLEXUS_EXPORT
 void spawn_accept(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
 LIBPLEXUS_EXPORT
 void spawn_invite(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
-LIBPLEXUS_EXPORT
-void spawn_accept(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure = nullptr) noexcept(true);
-LIBPLEXUS_EXPORT
-void spawn_invite(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const collector& collect, const fallback& failure = nullptr) noexcept(true);
+
+LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const identity& val) noexcept(false);
+LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, identity& val) noexcept(false);
+LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const firewall& val) noexcept(false);
+LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, firewall& val) noexcept(false);
 
 }
