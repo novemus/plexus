@@ -21,9 +21,10 @@ namespace plexus { namespace stun {
 class broker_impl : public plexus::sync_broker
 {
     boost::asio::io_context& m_io;
-    plexus::endpoint m_stun;
-    plexus::endpoint m_udp;
-    plexus::endpoint m_tcp;
+    plexus::endpoint m_udp_stun;
+    plexus::endpoint m_tcp_stun;
+    plexus::endpoint m_udp_bind;
+    plexus::endpoint m_tcp_bind;
     uint16_t m_punch;
 
     class handshake : public tubus::mutable_buffer
@@ -76,7 +77,7 @@ class broker_impl : public plexus::sync_broker
     {
         _dbg_ << "punching tcp hole...";
 
-        auto tcp = plexus::network::create_tcp_socket(m_io, m_tcp, peer);
+        auto tcp = plexus::network::create_tcp_socket(m_io, m_tcp_bind, peer);
         tcp->set_option(boost::asio::ip::unicast::hops(m_punch));
         try
         {
@@ -99,7 +100,7 @@ class broker_impl : public plexus::sync_broker
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        auto pin = plexus::network::create_udp_socket(m_io, m_udp);
+        auto pin = plexus::network::create_udp_socket(m_io, m_udp_bind);
 
         handshake out(0, nonce);
         handshake in(nonce);
@@ -144,7 +145,7 @@ class broker_impl : public plexus::sync_broker
 
         int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
 
-        auto pin = plexus::network::create_udp_socket(m_io, m_udp);
+        auto pin = plexus::network::create_udp_socket(m_io, m_udp_bind);
 
         boost::asio::ip::unicast::hops old;
         pin->get_option(old);
@@ -188,7 +189,7 @@ class broker_impl : public plexus::sync_broker
 
     contract handshake_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer, bool accept) noexcept(false)
     {
-        auto term = make_contract(m_udp, m_tcp, host, peer, accept);
+        auto term = make_contract(m_udp_bind, m_tcp_bind, host, peer, accept);
 
         if (term.qos.proto != protocol::udp)
         {
@@ -215,36 +216,16 @@ class broker_impl : public plexus::sync_broker
 
 public:
 
-    broker_impl(boost::asio::io_context& io, const plexus::endpoint& stun, const plexus::endpoint& udp, const plexus::endpoint& tcp, uint16_t punch)
+    broker_impl(boost::asio::io_context& io, const endpoint& udp_stun, const endpoint& tcp_stun, const endpoint& udp_bind, const endpoint& tcp_bind, uint16_t punch)
         : m_io(io)
-        , m_stun(stun)
-        , m_udp(udp)
-        , m_tcp(tcp)
+        , m_udp_stun(udp_stun)
+        , m_tcp_stun(tcp_stun)
+        , m_udp_bind(utils::locate<boost::asio::ip::udp>(udp_bind))
+        , m_tcp_bind(utils::locate<boost::asio::ip::tcp>(tcp_bind))
         , m_punch(punch)
     {
-        if (m_udp.port == 0)
-        {
-            boost::asio::ip::udp::socket socket(io, stun.address.is_v6() ? boost::asio::ip::udp::v6() : boost::asio::ip::udp::v4());
-            socket.set_option(boost::asio::socket_base::reuse_address(true));
-            socket.bind(udp);
-
-            auto ep = socket.local_endpoint();
-            m_udp.address = ep.address();
-            m_udp.port = ep.port();
-        }
-
-        if (m_tcp.port == 0)
-        {
-            boost::asio::ip::tcp::socket socket(io, stun.address.is_v6() ? boost::asio::ip::tcp::v6() : boost::asio::ip::tcp::v4());
-            socket.set_option(boost::asio::socket_base::reuse_address(true));
-            socket.bind(tcp);
-
-            auto ep = socket.local_endpoint();
-            m_tcp.address = ep.address();
-            m_tcp.port = ep.port();
-        }
-
-        _dbg_ << "stun=" << m_stun << " bind=" << m_udp << "/" << m_tcp;
+        _dbg_ << "udp_stun=" << m_udp_stun << " udp_bind=" << m_udp_bind;
+        _dbg_ << "tcp_stun=" << m_tcp_stun << " tcp_bind=" << m_tcp_bind;
     }
 
     contract touch_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override
@@ -259,16 +240,16 @@ public:
 
     traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) override
     {
-        auto stun = plexus::create_stun_client(m_io, m_stun, m_udp, m_tcp);
+        auto stun = plexus::create_stun_client(m_io, m_udp_stun, m_tcp_stun, m_udp_bind, m_tcp_bind);
         return stun->make_traverse(yield, proto);
     }
 };
 
 }
 
-std::shared_ptr<plexus::sync_broker> create_sync_broker(boost::asio::io_context& io, const plexus::endpoint& stun, const plexus::endpoint& udp, const plexus::endpoint& tcp, uint16_t punch) noexcept(false)
+std::shared_ptr<plexus::sync_broker> create_sync_broker(boost::asio::io_context& io, const endpoint& udp_stun, const endpoint& tcp_stun, const endpoint& udp_bind, const endpoint& tcp_bind, uint16_t punch) noexcept(false)
 {
-    return std::make_shared<plexus::stun::broker_impl>(io, stun, udp, tcp, punch);
+    return std::make_shared<plexus::stun::broker_impl>(io, udp_stun, tcp_stun, udp_bind, tcp_bind, punch);
 }
 
 }

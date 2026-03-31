@@ -66,7 +66,8 @@ int main(int argc, char** argv)
         ("peer-id", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email/pin>")
         ("udp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "udp endpoint to bind the application")
         ("tcp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "tcp endpoint to bind the application")
-        ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of the public stun server")
+        ("udp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the udp stun server")
+        ("tcp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the tcp stun server")
         ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "url of the bootstrap DHT service")
         ("dht-port", boost::program_options::value<uint16_t>()->default_value(0), "local port to bind the DHT node")
         ("dht-network", boost::program_options::value<uint32_t>()->default_value(0), "DHT network id")
@@ -100,9 +101,24 @@ int main(int argc, char** argv)
         auto count = vm.count("email-smtps") + vm.count("email-imaps") + vm.count("email-login") + vm.count("email-password");
         if(count > 0 && count != 4)
         {
-            std::cout << "to use email service for a rendezvous, specify at least the 'email-smtps', 'email-imaps', 'email-login' and 'email-password' arguments" << std::endl;
+            std::cout << "to use email service as a rendezvous, specify at least the 'email-smtps', 'email-imaps', 'email-login' and 'email-password' arguments" << std::endl;
             return -1;
         }
+
+        auto udp_stun = vm["udp-stun"].as<stun_client_endpoint>();
+        auto tcp_stun = vm["tcp-stun"].as<stun_client_endpoint>();
+
+        if (udp_stun == stun_client_endpoint() && tcp_stun == stun_client_endpoint())
+        {
+            std::cout << "you need specify stun server" << std::endl;
+            return -1;
+        }
+
+        if (udp_stun == stun_client_endpoint())
+            vm.at("udp-stun").value() = tcp_stun;
+
+        if (tcp_stun == stun_client_endpoint())
+            vm.at("tcp-stun").value() = udp_stun;
 
         if(vm.count("config"))
             boost::program_options::store(boost::program_options::parse_config_file<char>(vm["config"].as<std::string>().c_str(), desc), vm);
@@ -205,7 +221,8 @@ int main(int argc, char** argv)
             vm["app-repo"].as<std::string>(),
             vm["udp-bind"].as<stun_client_endpoint>(),
             vm["tcp-bind"].as<stun_client_endpoint>(),
-            vm["stun-server"].as<stun_server_endpoint>(),
+            vm["udp-stun"].as<stun_server_endpoint>(),
+            vm["tcp-stun"].as<stun_server_endpoint>(),
             vm["punch-hops"].as<uint16_t>(),
             vm["app-qos"].as<plexus::criteria>(),
             vm.count("email-smtps")

@@ -720,11 +720,11 @@ void forward_advent(boost::asio::io_context& io, const email::context& conf, con
 
             handler(host, peer);
 
-            _dbg_ << "advent: " << peer << " -> " << host << ":" << conf.app;
+            _dbg_ << "advent: " << host << ":" << conf.app << " -> " << peer;
         }
         catch(const std::exception& ex)
         {
-            _err_ << "advent: " << peer << " -> " << host << ":" << conf.app << " error: " << ex.what();
+            _err_ << "advent: " << host << ":" << conf.app << " -> " << peer << " error: " << ex.what();
             failure(host, peer, ex.what());
         }
     }, boost::asio::detached);
@@ -744,7 +744,7 @@ void receive_advent(boost::asio::io_context& io, const email::context& conf, con
 
                 boost::asio::post(io, std::bind(handler, puller.host(), puller.peer()));
 
-                _dbg_ << "advent: " << puller.host() << " -> " << puller.peer() << ":" << conf.app;
+                _dbg_ << "advent: " << puller.peer() << ":" << conf.app << " -> " << puller.host();
 
                 puller.host(host);
                 puller.peer(peer);
@@ -753,7 +753,7 @@ void receive_advent(boost::asio::io_context& io, const email::context& conf, con
         }
         catch(const std::exception& ex)
         {
-            _err_ << "advent: " << host << " -> " << peer << ":" << conf.app << " error: " << ex.what();
+            _err_ << "advent: " << peer << ":" << conf.app << " -> " << host << " error: " << ex.what();
             failure(host, peer, ex.what());
         }
     }, boost::asio::detached);

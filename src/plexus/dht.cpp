@@ -739,12 +739,12 @@ void forward_advent(boost::asio::io_context& io, const opendht::context& ctx, co
             auto op = opendht::forward::start(io, repo, host, peer, std::time(nullptr), opendht::advent_token, reference{});
             op->wait(yield);
 
-            _dbg_ << "advent: " << peer << " -> " << host << ":" << ctx.app;
+            _dbg_ << "advent: " << host << ":" << ctx.app << " -> "  << peer;
             handler(host, peer);
         }
         catch(const std::exception& ex)
         {
-            _err_ << "advent: " << peer << " -> " << host << ":" << ctx.app << " error: " << ex.what();
+            _err_ << "advent: " << host << ":" << ctx.app << " -> "  << peer << " error: " << ex.what();
             failure(host, peer, ex.what());
         }
     }, boost::asio::detached);
@@ -771,12 +771,12 @@ void receive_advent(boost::asio::io_context& io, const opendht::context& ctx, co
                     auto op = opendht::acquire::start(io, repo, host, peer, id, opendht::advent_token);
                     op->wait(yield);
 
-                    _dbg_ << "advent: " << host << " -> " << peer << ":" << repo.app;
+                    _dbg_ << "advent: " << peer << ":" << repo.app << " -> " << host;
                     handler(host, peer);
                 }
                 catch (const std::exception& ex) 
                 {
-                    _err_ << "advent: " << host << " -> " << peer << ":" << repo.app << " error: " << ex.what();
+                    _err_ << "advent: " << peer << ":" << repo.app << " -> " << host << " error: " << ex.what();
                     failure(host, peer, ex.what());
                 }
             }, boost::asio::detached);

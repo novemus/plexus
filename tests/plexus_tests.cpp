@@ -28,7 +28,8 @@ namespace tests
         plexus::identity m_peer;
         plexus::emailer m_emailer;
         plexus::dhtnode m_dhtnode;
-        plexus::endpoint m_stun;
+        plexus::endpoint m_udp_stun;
+        plexus::endpoint m_tcp_stun;
         uint16_t m_hops;
 
     public:
@@ -47,14 +48,15 @@ namespace tests
                 plexus::utils::getenv<plexus::endpoint>("SMTP_SERVER", plexus::endpoint{}),
                 plexus::utils::getenv<plexus::endpoint>("IMAP_SERVER", plexus::endpoint{}),
                 plexus::utils::getenv<std::string>("EMAIL_LOGIN", ""),
-                plexus::utils::getenv<std::string>("IMAIL_PASSWORD", ""),
+                plexus::utils::getenv<std::string>("EMAIL_PASSWORD", ""),
                 "", "", ""
             };
 
             m_dhtnode = plexus::dhtnode { plexus::utils::getenv<std::string>("DHT_BOOTSTRAP", ""), 0, 0 };
 
             m_repo = std::filesystem::temp_directory_path().generic_u8string() + "/" + m_app;
-            m_stun = plexus::utils::getenv<plexus::endpoint>("STUN_SERVER", plexus::endpoint{});
+            m_udp_stun = plexus::utils::getenv<plexus::endpoint>("UDP_STUN_SERVER", plexus::endpoint{});
+            m_tcp_stun = plexus::utils::getenv<plexus::endpoint>("TCP_STUN_SERVER", plexus::endpoint{});
             m_hops = plexus::utils::getenv<uint16_t>("PUNCH_HOPS", 5);
 
             auto host_dir = m_repo + "/" + m_host.owner + "/" + m_host.pin;
@@ -82,7 +84,8 @@ namespace tests
                 m_repo,
                 plexus::endpoint {},
                 plexus::endpoint {},
-                m_stun,
+                m_udp_stun,
+                m_tcp_stun,
                 m_hops,
                 plexus::criteria { proto, role },
                 email 
@@ -94,10 +97,11 @@ namespace tests
         void make_stun_test() const
         {
             boost::asio::io_context io;
-            plexus::explore_network(io, plexus::endpoint{}, plexus::endpoint{}, m_stun,
+            plexus::explore_network(io, plexus::endpoint{}, plexus::endpoint{}, m_udp_stun, m_tcp_stun,
                 [&](const plexus::traverse& pass)
                 {
-                    BOOST_TEST_MESSAGE("stun test is ok");
+                    BOOST_CHECK_NE(pass.udp.outer, plexus::endpoint{});
+                    BOOST_CHECK_NE(pass.tcp.outer, plexus::endpoint{});
                 },
                 [&](const std::string& error)
                 {
@@ -211,7 +215,7 @@ namespace tests
             {
                 boost::asio::io_context io;
 
-                plexus::forward_advent(io, email ? plexus::rendezvous { m_emailer } : plexus::rendezvous { m_dhtnode }, m_app, m_repo, m_host, m_peer,
+                plexus::forward_advent(io, email ? plexus::rendezvous { m_emailer } : plexus::rendezvous { m_dhtnode }, m_app, m_repo, m_peer, m_host,
                     [&](const plexus::identity& h, const plexus::identity& p)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, p.owner);
@@ -337,27 +341,18 @@ namespace tests
     {
         return std::getenv("EMAIL_LOGIN") != nullptr && std::getenv("EMAIL_PASSWORD") != nullptr
             && std::getenv("SMTP_SERVER") != nullptr && std::getenv("IMAP_SERVER") != nullptr 
-            && std::getenv("STUN_SERVER") != nullptr;
+            && std::getenv("UDP_STUN_SERVER") != nullptr && std::getenv("TCP_STUN_SERVER") != nullptr;
     }
 
     boost::test_tools::assertion_result is_dhtnode_context_defined(boost::unit_test::test_unit_id)
     {
         return std::getenv("EMAIL_LOGIN") != nullptr && std::getenv("EMAIL_PASSWORD") != nullptr
-            && std::getenv("DHT_BOOTSTRAP") != nullptr && std::getenv("STUN_SERVER") != nullptr;
+            && std::getenv("DHT_BOOTSTRAP") != nullptr && std::getenv("UDP_STUN_SERVER") != nullptr 
+            && std::getenv("TCP_STUN_SERVER") != nullptr;
     }
 }
 
 // These tests are for only debugging, run them manually in the suitable context.
-// Current version was tested with the firewall described below.
-//
-//      nat:                true
-//      hairpin:            true
-//      random_port:        true
-//      variable_address:   false
-//      mapping:            independent
-//      variable_address:   adress_and_port_dependent
-//
-// Theese features meet to both UDP and TCP traverse. STUN server must support both protocols.
 
 BOOST_FIXTURE_TEST_SUITE(plexus, tests::context)
 
@@ -365,18 +360,6 @@ BOOST_AUTO_TEST_CASE(stun_test, *boost::unit_test::precondition(tests::is_dhtnod
 {
     BOOST_TEST_MESSAGE("testing plexus stun client...");
     make_stun_test();
-}
-
-BOOST_AUTO_TEST_CASE(email_rendezvous, *boost::unit_test::precondition(tests::is_emailer_context_defined))
-{
-    BOOST_TEST_MESSAGE("testing plexus email rendezvous...");
-    make_rendezvous_test(true);
-}
-
-BOOST_AUTO_TEST_CASE(dht_rendezvous, *boost::unit_test::precondition(tests::is_dhtnode_context_defined))
-{
-    BOOST_TEST_MESSAGE("testing plexus dht rendezvous...");
-    make_rendezvous_test(false);
 }
 
 BOOST_AUTO_TEST_CASE(email_advent, *boost::unit_test::precondition(tests::is_emailer_context_defined))
@@ -389,6 +372,18 @@ BOOST_AUTO_TEST_CASE(dht_advent, *boost::unit_test::precondition(tests::is_dhtno
 {
     BOOST_TEST_MESSAGE("testing plexus dht advent...");
     make_advent_test(false);
+}
+
+BOOST_AUTO_TEST_CASE(email_rendezvous, *boost::unit_test::precondition(tests::is_emailer_context_defined))
+{
+    BOOST_TEST_MESSAGE("testing plexus email rendezvous...");
+    make_rendezvous_test(true);
+}
+
+BOOST_AUTO_TEST_CASE(dht_rendezvous, *boost::unit_test::precondition(tests::is_dhtnode_context_defined))
+{
+    BOOST_TEST_MESSAGE("testing plexus dht rendezvous...");
+    make_rendezvous_test(false);
 }
 
 BOOST_AUTO_TEST_CASE(udp_application, *boost::unit_test::precondition(tests::is_dhtnode_context_defined))

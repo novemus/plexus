@@ -261,39 +261,20 @@ public:
 class client_impl : public stun_client
 {
     boost::asio::io_context& m_io;
-    plexus::endpoint m_stun;
-    plexus::endpoint m_udp;
-    plexus::endpoint m_tcp;
+    plexus::endpoint m_udp_stun;
+    plexus::endpoint m_tcp_stun;
+    plexus::endpoint m_udp_bind;
+    plexus::endpoint m_tcp_bind;
 
 public:
 
-    client_impl(boost::asio::io_context& io, const plexus::endpoint& stun, const plexus::endpoint& udp, const plexus::endpoint& tcp) 
+    client_impl(boost::asio::io_context& io, const endpoint& udp_stun, const endpoint& tcp_stun, const endpoint& udp_bind, const endpoint& tcp_bind) 
         : m_io(io)
-        , m_udp(udp)
-        , m_tcp(tcp)
-        , m_stun(stun)
+        , m_udp_stun(udp_stun)
+        , m_tcp_stun(tcp_stun)
+        , m_udp_bind(utils::locate<boost::asio::ip::udp>(udp_bind))
+        , m_tcp_bind(utils::locate<boost::asio::ip::tcp>(tcp_bind))
     {
-        if (m_udp.port == 0)
-        {
-            boost::asio::ip::udp::socket socket(io, stun.address.is_v6() ? boost::asio::ip::udp::v6() : boost::asio::ip::udp::v4());
-            socket.set_option(boost::asio::socket_base::reuse_address(true));
-            socket.bind(udp);
-
-            auto ep = socket.local_endpoint();
-            m_udp.address = ep.address();
-            m_udp.port = ep.port();
-        }
-
-        if (m_tcp.port == 0)
-        {
-            boost::asio::ip::tcp::socket socket(io, stun.address.is_v6() ? boost::asio::ip::tcp::v6() : boost::asio::ip::tcp::v4());
-            socket.set_option(boost::asio::socket_base::reuse_address(true));
-            socket.bind(tcp);
-
-            auto ep = socket.local_endpoint();
-            m_tcp.address = ep.address();
-            m_tcp.port = ep.port();
-        }
     }
 
     message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<plexus::network::udp_socket> sock, const plexus::endpoint& to, const plexus::endpoint& from, const message& req = message(0), int64_t deadline = 4600)
@@ -510,11 +491,11 @@ public:
     {
         _trc_ << "making traverse for udp...";
 
-        auto mapper = plexus::network::create_udp_socket(m_io, m_udp);
-        auto binding = exec_udp_binding(yield, mapper, m_stun, m_stun);
+        auto mapper = plexus::network::create_udp_socket(m_io, m_udp_bind);
+        auto binding = exec_udp_binding(yield, mapper, m_udp_stun, m_udp_stun);
 
         pass.udp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
-        pass.udp.inner = m_udp;
+        pass.udp.inner = m_udp_bind;
         pass.udp.outer = binding.mapped_endpoint();
 
         if (!identical(pass.udp.inner, pass.udp.outer))
@@ -527,8 +508,8 @@ public:
             }
 
             auto changed_full = binding.changed_endpoint();
-            auto changed_addr = plexus::endpoint{ changed_full.address, m_stun.port };
-            auto changed_port = plexus::endpoint{ m_stun.address, changed_full.port };
+            auto changed_addr = plexus::endpoint{ changed_full.address, m_udp_stun.port };
+            auto changed_port = plexus::endpoint{ m_udp_stun.address, changed_full.port };
 
             _trc_ << "first mapping test...";
 
@@ -566,7 +547,7 @@ public:
             {
                 _trc_ << "first filtering test...";
 
-                exec_udp_binding(yield, filter, m_stun, changed_full, message(flag::change_address | flag::change_port), 1400);
+                exec_udp_binding(yield, filter, m_udp_stun, changed_full, message(flag::change_address | flag::change_port), 1400);
                 pass.udp.force.filtering = firewall::independent;
             }
             catch(const plexus::timeout_error&)
@@ -575,7 +556,7 @@ public:
                 {
                     _trc_ << "second filtering test...";
 
-                    exec_udp_binding(yield, filter, m_stun, changed_addr, message(flag::change_address), 1400);
+                    exec_udp_binding(yield, filter, m_udp_stun, changed_addr, message(flag::change_address), 1400);
                     pass.udp.force.filtering = firewall::port_dependent;
                 }
                 catch(const plexus::timeout_error&)
@@ -584,7 +565,7 @@ public:
                     {
                         _trc_ << "third filtering test...";
 
-                        exec_udp_binding(yield, filter, m_stun, changed_port, message(flag::change_port), 1400);
+                        exec_udp_binding(yield, filter, m_udp_stun, changed_port, message(flag::change_port), 1400);
                         pass.udp.force.filtering = firewall::address_dependent;
                     }
                     catch(const plexus::timeout_error&)
@@ -613,10 +594,10 @@ public:
     {
         _trc_ << "making traverse for tcp...";
 
-        auto binding = exec_tcp_binding(yield, m_tcp, m_stun);
+        auto binding = exec_tcp_binding(yield, m_tcp_bind, m_tcp_stun);
 
         pass.tcp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
-        pass.tcp.inner = m_tcp;
+        pass.tcp.inner = m_tcp_bind;
         pass.tcp.outer = binding.mapped_endpoint();
 
         if (!identical(pass.tcp.inner, pass.tcp.outer))
@@ -630,12 +611,12 @@ public:
             }
 
             auto changed_full = binding.changed_endpoint();
-            auto changed_addr = plexus::endpoint{ changed_full.address, m_stun.port };
-            auto changed_port = plexus::endpoint{ m_stun.address, changed_full.port };
+            auto changed_addr = plexus::endpoint{ changed_full.address, m_tcp_stun.port };
+            auto changed_port = plexus::endpoint{ m_tcp_stun.address, changed_full.port };
 
             _trc_ << "first mapping test...";
 
-            auto first_endpoint = exec_tcp_binding(yield, m_tcp, changed_full).mapped_endpoint();
+            auto first_endpoint = exec_tcp_binding(yield, m_tcp_bind, changed_full).mapped_endpoint();
             if (first_endpoint == pass.tcp.outer)
             {
                 pass.tcp.force.mapping = firewall::independent;
@@ -644,7 +625,7 @@ public:
             {
                 _trc_ << "second mapping test...";
 
-                auto second_endpoint = exec_tcp_binding(yield, m_tcp, changed_addr).mapped_endpoint();
+                auto second_endpoint = exec_tcp_binding(yield, m_tcp_bind, changed_addr).mapped_endpoint();
                 if (second_endpoint == pass.tcp.outer)
                 {
                     pass.tcp.force.mapping = firewall::port_dependent;
@@ -670,7 +651,7 @@ public:
             {
                 _trc_ << "hairpin test...";
 
-                auto self = plexus::network::create_tcp_socket(m_io, m_tcp, pass.tcp.outer);
+                auto self = plexus::network::create_tcp_socket(m_io, m_tcp_bind, pass.tcp.outer);
                 self->connect(yield, 1400);
                 self->shutdown();
 
@@ -715,9 +696,9 @@ public:
 
 }
 
-std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_context& io, const plexus::endpoint& stun, const plexus::endpoint& udp, const plexus::endpoint& tcp) noexcept(true)
+std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& udp_stun, const endpoint& tcp_stun, const endpoint& udp_bind, const endpoint& tcp_bind) noexcept(true)
 {
-    return std::make_shared<plexus::stun::client_impl>(io, stun, udp, tcp);
+    return std::make_shared<plexus::stun::client_impl>(io, udp_stun, tcp_stun, udp_bind, tcp_bind);
 }
 
 }

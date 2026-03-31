@@ -11,6 +11,7 @@
 #pragma once
 
 #include <wormhole/logger.h>
+#include <plexus/plexus.h>
 #include <cstdlib>
 #include <string>
 #include <iostream>
@@ -86,6 +87,22 @@ boost::asio::ip::basic_endpoint<proto> parse_endpoint(const std::string& url, co
         return *resolver.resolve(match[2].str(), match[1].str()).begin();
 
     return *resolver.resolve(url, service).begin();
+}
+
+template<class proto>
+plexus::endpoint locate(const plexus::endpoint& ep)
+{
+    if (ep.port == 0)
+    {
+        boost::asio::io_context io;
+        typename proto::socket socket(io, ep.address.is_v6() ? proto::v6() : proto::v4());
+        socket.set_option(boost::asio::socket_base::reuse_address(true));
+        socket.bind(ep);
+
+        auto ep = socket.local_endpoint();
+        return plexus::endpoint { ep.address(), ep.port() };
+    }
+    return ep;
 }
 
 }

@@ -118,9 +118,10 @@ struct options
 {
     std::string app;     // application id
     std::string repo;    // path to the application repository
-    endpoint udp;        // udp endpoint to bind the application
-    endpoint tcp;        // tcp endpoint to bind the application
-    endpoint stun;       // endpoint of public stun server
+    endpoint udp_bind;   // udp endpoint to bind the application
+    endpoint tcp_bind;   // tcp endpoint to bind the application
+    endpoint udp_stun;   // endpoint of the udp stun server
+    endpoint tcp_stun;   // endpoint of the tcp stun server
     uint16_t hops;       // ttl of the udp-hole punching packet
     criteria qos;        // application protocol and connection strategy
     rendezvous mediator; // rendezvous service
@@ -138,7 +139,7 @@ using fallback = std::function<void(const identity& /* host */,
                                     const std::string& /* error */)>;
 
 LIBPLEXUS_EXPORT
-void explore_network(boost::asio::io_context& io, const endpoint& udp, const endpoint& tcp, const endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
+void explore_network(boost::asio::io_context& io, const endpoint& udp_bind, const endpoint& tcp_bind, const endpoint& udp_stun, const endpoint& tcp_stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
 LIBPLEXUS_EXPORT
 void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT

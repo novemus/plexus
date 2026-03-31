@@ -67,7 +67,7 @@ struct stun_client
     virtual traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& stun_server, const endpoint& udp_bind, const endpoint& tcp_bind) noexcept(true);
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& udp_stun, const endpoint& tcp_stun, const endpoint& udp_bind, const endpoint& tcp_bind) noexcept(true);
 
 struct sync_broker : public stun_client
 {
@@ -75,7 +75,7 @@ struct sync_broker : public stun_client
     virtual contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
 };
 
-std::shared_ptr<sync_broker> create_sync_broker(boost::asio::io_context& io, const endpoint& stun_server, const endpoint& udp_bind, const endpoint& tcp_bind, uint16_t punch_hops) noexcept(false);
+std::shared_ptr<sync_broker> create_sync_broker(boost::asio::io_context& io, const endpoint& udp_stun, const endpoint& tcp_stun, const endpoint& udp_bind, const endpoint& tcp_bind, uint16_t punch_hops) noexcept(false);
 
 struct pipe
 {
