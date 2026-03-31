@@ -92,7 +92,7 @@ std::istream& operator>>(std::istream& in, identity& val) noexcept(false)
     return in;
 }
 
-contract make_contract(const endpoint& bind, const reference& host, const reference& peer, bool accept) noexcept(false)
+contract make_contract(const endpoint& udp_gate, const endpoint& tcp_gate, const reference& host_pass, const reference& peer_pass, bool accept) noexcept(false)
 {
     static constexpr uint8_t SSL_SERVER = 0x01;
     static constexpr uint8_t SSL_CLIENT = 0x02;
@@ -103,12 +103,10 @@ contract make_contract(const endpoint& bind, const reference& host, const refere
     static constexpr uint8_t STABLE_UDP_HOLE = 0x40;
     static constexpr uint8_t STABLE_TCP_HOLE = 0x80;
 
-    bool tcp_available = !host.tcp.mapping.address.is_unspecified() && host.tcp.mapping.port != 0 
-                      && !peer.tcp.mapping.address.is_unspecified() && peer.tcp.mapping.port != 0
-                      && (host.tcp.mapping.address != peer.tcp.mapping.address || (host.tcp.force.hairpin && peer.tcp.force.hairpin));
-    bool udp_available = !host.udp.mapping.address.is_unspecified() && host.udp.mapping.port != 0 
-                      && !peer.udp.mapping.address.is_unspecified() && peer.udp.mapping.port != 0
-                      && (host.udp.mapping.address != peer.udp.mapping.address || (host.udp.force.hairpin && peer.udp.force.hairpin));
+    bool tcp_available = host_pass.tcp.mapping != endpoint() && peer_pass.tcp.mapping != endpoint()
+                      && (host_pass.tcp.mapping.address != peer_pass.tcp.mapping.address || (host_pass.tcp.force.hairpin && peer_pass.tcp.force.hairpin));
+    bool udp_available = host_pass.udp.mapping != endpoint() && peer_pass.udp.mapping != endpoint()
+                      && (host_pass.udp.mapping.address != peer_pass.udp.mapping.address || (host_pass.udp.force.hairpin && peer_pass.udp.force.hairpin));
 
     if (!tcp_available && !udp_available)
         throw std::runtime_error("bad network conditions");
@@ -120,45 +118,45 @@ contract make_contract(const endpoint& bind, const reference& host, const refere
 
     if (tcp_available)
     {
-        if (host.tcp.force.mapping == firewall::independent && !host.tcp.force.variable_address)
+        if (host_pass.tcp.force.mapping == firewall::independent && !host_pass.tcp.force.variable_address)
         {
             host_variants |= STABLE_TCP_HOLE;
-            if (host.qos.role == relation::server || host.qos.role == relation::either)
+            if (host_pass.qos.role == relation::server || host_pass.qos.role == relation::either)
             {
-                if (host.qos.proto == protocol::ssl || (host.qos.proto == protocol::any && !host.tcp.force.nat))
+                if (host_pass.qos.proto == protocol::ssl || (host_pass.qos.proto == protocol::any && !host_pass.tcp.force.nat))
                     host_variants |= SSL_SERVER;
-                if (host.qos.proto == protocol::tcp || (host.qos.proto == protocol::any && !host.tcp.force.nat))
+                if (host_pass.qos.proto == protocol::tcp || (host_pass.qos.proto == protocol::any && !host_pass.tcp.force.nat))
                     host_variants |= TCP_SERVER;
             }
         }
-        if (host.tcp.force.mapping == firewall::independent || peer.tcp.force.filtering == firewall::independent)
+        if (host_pass.tcp.force.mapping == firewall::independent || peer_pass.tcp.force.filtering == firewall::independent)
         {
-            if (host.qos.role == relation::client || host.qos.role == relation::either)
+            if (host_pass.qos.role == relation::client || host_pass.qos.role == relation::either)
             {
-                if (host.qos.proto == protocol::ssl || host.qos.proto == protocol::any)
+                if (host_pass.qos.proto == protocol::ssl || host_pass.qos.proto == protocol::any)
                     host_variants |= SSL_CLIENT;
-                if (host.qos.proto == protocol::tcp || host.qos.proto == protocol::any)
+                if (host_pass.qos.proto == protocol::tcp || host_pass.qos.proto == protocol::any)
                     host_variants |= TCP_CLIENT;
             }
         }
-        if (peer.tcp.force.mapping == firewall::independent && !peer.tcp.force.variable_address)
+        if (peer_pass.tcp.force.mapping == firewall::independent && !peer_pass.tcp.force.variable_address)
         {
             peer_variants |= STABLE_TCP_HOLE;
-            if (peer.qos.role == relation::server || peer.qos.role == relation::either)
+            if (peer_pass.qos.role == relation::server || peer_pass.qos.role == relation::either)
             {
-                if (peer.qos.proto == protocol::ssl || (peer.qos.proto == protocol::any && !peer.tcp.force.nat))
+                if (peer_pass.qos.proto == protocol::ssl || (peer_pass.qos.proto == protocol::any && !peer_pass.tcp.force.nat))
                     peer_variants |= SSL_SERVER;
-                if (peer.qos.proto == protocol::tcp || (peer.qos.proto == protocol::any && !peer.tcp.force.nat))
+                if (peer_pass.qos.proto == protocol::tcp || (peer_pass.qos.proto == protocol::any && !peer_pass.tcp.force.nat))
                     peer_variants |= TCP_SERVER;
             }
         }
-        if (peer.tcp.force.mapping == firewall::independent || host.tcp.force.filtering == firewall::independent)
+        if (peer_pass.tcp.force.mapping == firewall::independent || host_pass.tcp.force.filtering == firewall::independent)
         {
-            if (peer.qos.role == relation::client || peer.qos.role == relation::either)
+            if (peer_pass.qos.role == relation::client || peer_pass.qos.role == relation::either)
             {
-                if (peer.qos.proto == protocol::ssl || peer.qos.proto == protocol::any)
+                if (peer_pass.qos.proto == protocol::ssl || peer_pass.qos.proto == protocol::any)
                     peer_variants |= SSL_CLIENT;
-                if (peer.qos.proto == protocol::tcp || peer.qos.proto == protocol::any)
+                if (peer_pass.qos.proto == protocol::tcp || peer_pass.qos.proto == protocol::any)
                     peer_variants |= TCP_CLIENT;
             }
         }
@@ -166,37 +164,37 @@ contract make_contract(const endpoint& bind, const reference& host, const refere
 
     if (udp_available)
     {
-        if (host.udp.force.mapping == firewall::independent && !host.udp.force.variable_address)
+        if (host_pass.udp.force.mapping == firewall::independent && !host_pass.udp.force.variable_address)
         {
             host_variants |= STABLE_UDP_HOLE;
-            if (host.qos.role == relation::server || host.qos.role == relation::either)
+            if (host_pass.qos.role == relation::server || host_pass.qos.role == relation::either)
             {
-                if (host.qos.proto == protocol::udp || host.qos.proto == protocol::any)
+                if (host_pass.qos.proto == protocol::udp || host_pass.qos.proto == protocol::any)
                     host_variants |= UDP_SERVER;
             }
         }
-        if (host.udp.force.mapping == firewall::independent || peer.udp.force.filtering == firewall::independent)
+        if (host_pass.udp.force.mapping == firewall::independent || peer_pass.udp.force.filtering == firewall::independent)
         {
-            if (host.qos.role == relation::client || host.qos.role == relation::either)
+            if (host_pass.qos.role == relation::client || host_pass.qos.role == relation::either)
             {
-                if (host.qos.proto == protocol::udp || host.qos.proto == protocol::any)
+                if (host_pass.qos.proto == protocol::udp || host_pass.qos.proto == protocol::any)
                     host_variants |= UDP_CLIENT;
             }
         }
-        if (peer.udp.force.mapping == firewall::independent && !peer.udp.force.variable_address)
+        if (peer_pass.udp.force.mapping == firewall::independent && !peer_pass.udp.force.variable_address)
         {
             peer_variants |= STABLE_UDP_HOLE;
-            if (peer.qos.role == relation::server || peer.qos.role == relation::either)
+            if (peer_pass.qos.role == relation::server || peer_pass.qos.role == relation::either)
             {
-                if (peer.qos.proto == protocol::udp || peer.qos.proto == protocol::any)
+                if (peer_pass.qos.proto == protocol::udp || peer_pass.qos.proto == protocol::any)
                     peer_variants |= UDP_SERVER;
             }
         }
-        if (peer.udp.force.mapping == firewall::independent || host.udp.force.filtering == firewall::independent)
+        if (peer_pass.udp.force.mapping == firewall::independent || host_pass.udp.force.filtering == firewall::independent)
         {
-            if (peer.qos.role == relation::client || peer.qos.role == relation::either)
+            if (peer_pass.qos.role == relation::client || peer_pass.qos.role == relation::either)
             {
-                if (peer.qos.proto == protocol::udp || peer.qos.proto == protocol::any)
+                if (peer_pass.qos.proto == protocol::udp || peer_pass.qos.proto == protocol::any)
                     peer_variants |= UDP_CLIENT;
             }
         }
@@ -226,30 +224,30 @@ contract make_contract(const endpoint& bind, const reference& host, const refere
     else
         throw std::runtime_error("unsuitable conditions");
 
-    info.mapping = info.qos.proto == protocol::udp ? host.udp.mapping : host.tcp.mapping;
-    info.faraway = info.qos.proto == protocol::udp ? peer.udp.mapping : peer.tcp.mapping;
-    info.gateway = bind;
-    info.secret = host.puzzle ^ peer.puzzle;
+    info.mapping = info.qos.proto == protocol::udp ? host_pass.udp.mapping : host_pass.tcp.mapping;
+    info.faraway = info.qos.proto == protocol::udp ? peer_pass.udp.mapping : peer_pass.tcp.mapping;
+    info.gateway = info.qos.proto == protocol::udp ? udp_gate : tcp_gate;
+    info.secret = host_pass.puzzle ^ peer_pass.puzzle;
 
     return info;
 }
 
-void explore_network(boost::asio::io_context& io, const endpoint& bind, const endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true)
+void explore_network(boost::asio::io_context& io, const endpoint& udp, const endpoint& tcp, const endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true)
 {
-    boost::asio::spawn(io, [&io, bind, stun, handler, failure](boost::asio::yield_context yield)
+    boost::asio::spawn(io, [&io, udp, tcp, stun, handler, failure](boost::asio::yield_context yield)
     {
-        _inf_ << "exploring network by stun " << stun << " from " << bind;
+        _inf_ << "exploring network by stun " << stun;
 
         try
         {
-            auto client = plexus::create_stun_client(io, stun, bind);
+            auto client = plexus::create_stun_client(io, stun, udp, tcp);
             auto pass = client->make_traverse(yield, protocol::any);
 
             handler(pass);
         }
         catch (const std::exception& e)
         {
-            _err_ << "exploring network by stun " << stun << " from " << bind << " error: " << e.what();
+            _err_ << "exploring network by stun " << stun << " error: " << e.what();
 
             if (failure)
                 failure(e.what());
@@ -268,7 +266,7 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
 
         try
         {
-            auto broker = plexus::create_sync_broker(io, config.stun, config.bind, config.hops);
+            auto broker = plexus::create_sync_broker(io, config.stun, config.udp, config.tcp, config.hops);
             auto pass = broker->make_traverse(yield, config.qos.proto);
 
             reference faraway = pipe->pull_request(yield);
@@ -302,7 +300,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
 
         try
         {
-            auto broker = plexus::create_sync_broker(io, config.stun, config.bind, config.hops);
+            auto broker = plexus::create_sync_broker(io, config.stun, config.udp, config.tcp, config.hops);
             auto pass = broker->make_traverse(yield, config.qos.proto);
 
             plexus::reference gateway = { { pass.udp.mapping, pass.udp.force }, { pass.tcp.mapping, pass.tcp.force }, config.qos, plexus::utils::random<uint64_t>() };

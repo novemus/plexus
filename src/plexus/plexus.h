@@ -117,11 +117,12 @@ using rendezvous = std::variant<emailer, dhtnode>;
 struct options
 {
     std::string app;     // application id
-    criteria qos;        // application protocol and connection strategy
-    std::string repo;    // path to application repository
+    std::string repo;    // path to the application repository
+    endpoint udp;        // udp endpoint to bind the application
+    endpoint tcp;        // tcp endpoint to bind the application
     endpoint stun;       // endpoint of public stun server
-    endpoint bind;       // local endpoint to bind the application
     uint16_t hops;       // ttl of the udp-hole punching packet
+    criteria qos;        // application protocol and connection strategy
     rendezvous mediator; // rendezvous service
 };
 
@@ -137,7 +138,7 @@ using fallback = std::function<void(const identity& /* host */,
                                     const std::string& /* error */)>;
 
 LIBPLEXUS_EXPORT
-void explore_network(boost::asio::io_context& io, const endpoint& bind, const endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
+void explore_network(boost::asio::io_context& io, const endpoint& udp, const endpoint& tcp, const endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
 LIBPLEXUS_EXPORT
 void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT

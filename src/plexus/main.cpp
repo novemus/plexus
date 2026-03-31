@@ -64,8 +64,9 @@ int main(int argc, char** argv)
         ("app-qos", boost::program_options::value<plexus::criteria>()->default_value(plexus::criteria()), "application criteria: udp:client|udp:server|tcp:client|tcp:server|ssl:client|ssl:server")
         ("host-id", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the host: <email/pin>")
         ("peer-id", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email/pin>")
+        ("udp-gate", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "udp endpoint to bind the application")
+        ("tcp-gate", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "tcp endpoint to bind the application")
         ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of the public stun server")
-        ("stun-client", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "endpoint to bind the stun client and the application being launched")
         ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "url of the bootstrap DHT service")
         ("dht-port", boost::program_options::value<uint16_t>()->default_value(0), "local port to bind the DHT node")
         ("dht-network", boost::program_options::value<uint32_t>()->default_value(0), "DHT network id")
@@ -201,11 +202,12 @@ int main(int argc, char** argv)
 
         plexus::options config = {
             vm["app-name"].as<std::string>(),
-            vm["app-qos"].as<plexus::criteria>(),
             vm["app-repo"].as<std::string>(),
+            vm["udp-gate"].as<stun_client_endpoint>(),
+            vm["tcp-gate"].as<stun_client_endpoint>(),
             vm["stun-server"].as<stun_server_endpoint>(),
-            vm["stun-client"].as<stun_client_endpoint>(),
             vm["punch-hops"].as<uint16_t>(),
+            vm["app-qos"].as<plexus::criteria>(),
             vm.count("email-smtps")
                 ? plexus::rendezvous {
                     plexus::emailer {

@@ -39,6 +39,8 @@ struct timeout_error : public context_error
     {} 
 };
 
+void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", const std::string& env = "", bool wait = false) noexcept(false);
+
 struct reference
 {
     struct map 
@@ -53,13 +55,11 @@ struct reference
     uint64_t puzzle = 0;
 };
 
-contract make_contract(const endpoint& bind, const reference& host, const reference& peer, bool accept) noexcept(false);
+contract make_contract(const endpoint& udp_gate, const endpoint& tcp_gate, const reference& host_pass, const reference& peer_pass, bool accept) noexcept(false);
 
 static constexpr const char* cert_file_name = "cert.crt";
 static constexpr const char* key_file_name = "private.key";
 static constexpr const char* ca_file_name = "ca.crt";
-
-void exec(const std::string& prog, const std::string& args = "", const std::string& dir = "", const std::string& log = "", const std::string& env = "", bool wait = false) noexcept(false);
 
 struct stun_client
 {
@@ -67,7 +67,7 @@ struct stun_client
     virtual traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& stun, const endpoint& bind) noexcept(true);
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& stun_server, const endpoint& udp_gate, const endpoint& tcp_gate) noexcept(true);
 
 struct sync_broker : public stun_client
 {
@@ -75,15 +75,15 @@ struct sync_broker : public stun_client
     virtual contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
 };
 
-std::shared_ptr<sync_broker> create_sync_broker(boost::asio::io_context& io, const endpoint& stun, const endpoint& bind, uint16_t punch) noexcept(false);
+std::shared_ptr<sync_broker> create_sync_broker(boost::asio::io_context& io, const endpoint& stun_server, const endpoint& udp_gate, const endpoint& tcp_gate, uint16_t punch_hops) noexcept(false);
 
 struct pipe
 {
     virtual ~pipe() {}
     virtual reference pull_request(boost::asio::yield_context yield) noexcept(false) = 0;
     virtual reference pull_response(boost::asio::yield_context yield) noexcept(false) = 0;
-    virtual void push_response(boost::asio::yield_context yield, const reference& host) noexcept(false) = 0;
-    virtual void push_request(boost::asio::yield_context yield, const reference& host) noexcept(false) = 0;
+    virtual void push_response(boost::asio::yield_context yield, const reference& host_pass) noexcept(false) = 0;
+    virtual void push_request(boost::asio::yield_context yield, const reference& host_pass) noexcept(false) = 0;
     virtual const identity& host() const noexcept(true) = 0;
     virtual const identity& peer() const noexcept(true) = 0;
 };
