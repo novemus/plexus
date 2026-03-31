@@ -68,8 +68,8 @@ struct traverse
     struct hole 
     {
         firewall force;
-        endpoint hosting;
-        endpoint mapping;
+        endpoint inner;
+        endpoint outer;
     };
 
     hole udp;
@@ -87,9 +87,9 @@ struct identity
 
 struct contract
 {
-    endpoint gateway;
-    endpoint mapping;
-    endpoint faraway;
+    endpoint inner;
+    endpoint outer;
+    endpoint alien;
     uint64_t secret = 0;
     criteria qos;
 };

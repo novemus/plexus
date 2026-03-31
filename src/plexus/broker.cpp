@@ -90,6 +90,129 @@ class broker_impl : public plexus::sync_broker
         tcp->shutdown();
     }
 
+    void touch_peer(boost::asio::yield_context yield, const plexus::endpoint& peer, uint64_t nonce, plexus::relation role) noexcept(false)
+    {
+        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return boost::posix_time::microsec_clock::universal_time() - start;
+        };
+
+        int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
+
+        auto pin = plexus::network::create_udp_socket(m_io, m_udp);
+
+        handshake out(0, nonce);
+        handshake in(nonce);
+
+        while (timer().total_milliseconds() < deadline)
+        {
+            try
+            {
+                pin->send_to(out, peer, yield);
+
+                if (out.flag() == 1)
+                {
+                    _dbg_ << "handshake peer: " << peer;
+                    return;
+                }
+
+                in.truncate(pin->receive_from(in, peer, yield));
+
+                if (in.flag() == 1)
+                {
+                    out = handshake(1, nonce);
+                }
+            }
+            catch(const boost::system::system_error& ex)
+            {
+                if (ex.code() != boost::asio::error::operation_aborted)
+                    throw plexus::context_error(__FUNCTION__, ex.code());
+
+                _trc_ << ex.what();
+            }
+        }
+
+        throw plexus::timeout_error(__FUNCTION__);
+    }
+
+    void await_peer(boost::asio::yield_context yield, const plexus::endpoint& peer, uint64_t nonce, plexus::relation role) noexcept(false)
+    {
+        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
+        {
+            return boost::posix_time::microsec_clock::universal_time() - start;
+        };
+
+        int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
+
+        auto pin = plexus::network::create_udp_socket(m_io, m_udp);
+
+        boost::asio::ip::unicast::hops old;
+        pin->get_option(old);
+        pin->set_option(boost::asio::ip::unicast::hops(m_punch));
+        pin->send_to(handshake(0, nonce), peer, yield);
+        pin->set_option(old);
+
+        handshake out(1, nonce);
+        handshake in(nonce);
+
+        while (timer().total_milliseconds() < deadline)
+        {
+            try
+            {
+                in.truncate(pin->receive_from(in, peer, yield));
+
+                if (in.flag() == 0)
+                {
+                    pin->send_to(out, peer, yield);
+                }
+
+                if (in.flag() == 1 || role == relation::server)
+                {
+                    pin->send_to(out, peer, yield);
+
+                    _dbg_ << "handshake peer: " << peer;
+                    return;
+                }
+            }
+            catch(const boost::system::system_error& ex)
+            {
+                if (ex.code() != boost::asio::error::operation_aborted)
+                    throw plexus::context_error(__FUNCTION__, ex.code());
+
+                _trc_ << ex.what();
+            }
+        }
+
+        throw plexus::timeout_error(__FUNCTION__);
+    }
+
+    contract handshake_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer, bool accept) noexcept(false)
+    {
+        auto term = make_contract(m_udp, m_tcp, host, peer, accept);
+
+        if (term.qos.proto != protocol::udp)
+        {
+            if (term.qos.role == relation::server && host.tcp.force.nat)
+                punch_tcp_hole(yield, peer.tcp.outer);
+
+            bool not_awaitable = host.udp.outer == endpoint{} || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
+                              || peer.udp.outer == endpoint{} || peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address
+                              || (host.udp.outer.address == peer.udp.outer.address && (!host.udp.force.hairpin || !peer.udp.force.hairpin));
+
+            if (not_awaitable)
+            {
+                _wrn_ << "can't handshake peer without suitable udp traverse";
+                return term;
+            }
+        }
+
+        accept
+            ? await_peer(yield, peer.udp.outer, term.secret, term.qos.role)
+            : touch_peer(yield, peer.udp.outer, term.secret, term.qos.role);
+
+        return term;
+    }
+
 public:
 
     broker_impl(boost::asio::io_context& io, const plexus::endpoint& stun, const plexus::endpoint& udp, const plexus::endpoint& tcp, uint16_t punch)
@@ -121,131 +244,17 @@ public:
             m_tcp.port = ep.port();
         }
 
-        _dbg_ << "stun server: " << m_stun;
-        _dbg_ << "stun client: " << m_udp << "/" << m_tcp;
+        _dbg_ << "stun=" << m_stun << " bind=" << m_udp << "/" << m_tcp;
     }
 
-    contract reach_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override
+    contract touch_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override
     {
-        auto term = make_contract(m_udp, m_tcp, host, peer, false);
-
-        if (term.qos.proto != protocol::udp)
-        {
-            if (term.qos.role == relation::server && host.tcp.force.nat)
-                punch_tcp_hole(yield, peer.tcp.mapping);
-
-            bool not_reachable = host.udp.mapping == endpoint() || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
-                              || peer.udp.mapping == endpoint() || peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address
-                              || (host.udp.mapping.address == peer.udp.mapping.address && (!host.udp.force.hairpin || !peer.udp.force.hairpin));
-
-            if (not_reachable)
-            {
-                _wrn_ << "can't reach peer without suitable udp traverse";
-                return term;
-            }
-        }
-
-        _dbg_ << "reaching peer...";
-
-        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
-        {
-            return boost::posix_time::microsec_clock::universal_time() - start;
-        };
-
-        int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
-
-        auto pin = plexus::network::create_udp_socket(m_io, m_udp);
-        handshake out(0, host.puzzle ^ peer.puzzle);
-        handshake in(host.puzzle ^ peer.puzzle);
-
-        while (timer().total_milliseconds() < deadline)
-        {
-            try
-            {
-                pin->send_to(out, peer.udp.mapping, yield);
-
-                in.truncate(pin->receive_from(in, peer.udp.mapping, yield));
-                if (in.flag() == 1)
-                {
-                    _dbg_ << "handshake peer: " << peer.udp.mapping;
-                    return term;
-                }
-            }
-            catch(const boost::system::system_error& ex)
-            {
-                if (ex.code() != boost::asio::error::operation_aborted)
-                    throw plexus::context_error(__FUNCTION__, ex.code());
-
-                _trc_ << ex.what();
-            }
-        }
-
-        throw plexus::timeout_error(__FUNCTION__);
+        return handshake_peer(yield, host, peer, false);
     }
 
     contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override
     {
-        auto term = make_contract(m_udp, m_tcp, host, peer, true);
-
-        if (term.qos.proto != protocol::udp)
-        {
-            if (term.qos.role == relation::server && host.tcp.force.nat)
-                punch_tcp_hole(yield, peer.tcp.mapping);
-
-            bool not_awaitable = host.udp.mapping == endpoint() || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
-                              || peer.udp.mapping == endpoint() || peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address
-                              || (host.udp.mapping.address == peer.udp.mapping.address && (!host.udp.force.hairpin || !peer.udp.force.hairpin));
-
-            if (not_awaitable)
-            {
-                _wrn_ << "can't await peer without suitable udp traverse";
-                return term;
-            }
-        }
-
-        _dbg_ << "awaiting peer...";
-
-        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
-        {
-            return boost::posix_time::microsec_clock::universal_time() - start;
-        };
-
-        int64_t deadline = plexus::utils::getenv<int64_t>("PLEXUS_HANDSHAKE_TIMEOUT", 60000);
-
-        auto pin = plexus::network::create_udp_socket(m_io, m_udp);
-
-        handshake out(1, host.puzzle ^ peer.puzzle);
-        handshake in(host.puzzle ^ peer.puzzle);
-
-        boost::asio::ip::unicast::hops old;
-        pin->get_option(old);
-        pin->set_option(boost::asio::ip::unicast::hops(m_punch));
-        pin->send_to(out, peer.udp.mapping, yield);
-        pin->set_option(old);
-
-        while (timer().total_milliseconds() < deadline)
-        {
-            try
-            {
-                in.truncate(pin->receive_from(in, peer.udp.mapping, yield));
-                if (in.flag() == 0)
-                {
-                    pin->send_to(out, peer.udp.mapping, yield);
-
-                    _dbg_ << "handshake peer: " << peer.udp.mapping;
-                    return term;
-                }
-            }
-            catch(const boost::system::system_error& ex)
-            {
-                if (ex.code() != boost::asio::error::operation_aborted)
-                    throw plexus::context_error(__FUNCTION__, ex.code());
-
-                _trc_ << ex.what();
-            }
-        }
-
-        throw plexus::timeout_error(__FUNCTION__);
+        return handshake_peer(yield, host, peer, true);
     }
 
     traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) override

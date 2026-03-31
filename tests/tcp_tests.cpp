@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(tcp_echo_exchange)
     {
         auto client = plexus::network::create_tcp_socket(io, TCP_CLIENT, TCP_FAKE_SERVER);
         BOOST_REQUIRE_THROW(client->connect(yield, 2000), boost::system::system_error);
-        BOOST_REQUIRE_NO_THROW(client->shutdown());
+        BOOST_REQUIRE_NO_THROW(client->close());
 
         client = plexus::network::create_tcp_socket(io, TCP_CLIENT, TCP_SERVER);
         BOOST_REQUIRE_NO_THROW(client->connect(yield));

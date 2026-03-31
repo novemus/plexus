@@ -474,7 +474,7 @@ public:
                 std::smatch match;
                 if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                 {
-                    ptr->data.udp.mapping = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
+                    ptr->data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
                     ptr->data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
                     ptr->data.qos = criteria { protocol::udp, relation::either };
                     ptr->data.puzzle = std::stoull(match.str(3));
@@ -485,9 +485,9 @@ public:
                 }
                 else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
                 {
-                    ptr->data.udp.mapping = endpoint::from_string(match.str(1));
+                    ptr->data.udp.outer = endpoint::from_string(match.str(1));
                     ptr->data.udp.force = firewall::from_string(match.str(2));
-                    ptr->data.tcp.mapping = endpoint::from_string(match.str(3));
+                    ptr->data.tcp.outer = endpoint::from_string(match.str(3));
                     ptr->data.tcp.force = firewall::from_string(match.str(4));
                     ptr->data.qos = criteria::from_string(match.str(5));
                     ptr->data.puzzle = std::stoull(match.str(6));
@@ -589,13 +589,13 @@ public:
         auto from = repo.load_key(host);
         auto message = gateway.qos.proto == protocol::udp && gateway.qos.role == relation::either
                            ? plexus::utils::format("PLEXUS 3.0 %s %u %llu",
-                                 gateway.udp.mapping.address.to_string().c_str(),
-                                 gateway.udp.mapping.port,
+                                 gateway.udp.outer.address.to_string().c_str(),
+                                 gateway.udp.outer.port,
                                  gateway.puzzle)
                            : plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %llu",
-                                 endpoint::to_string(gateway.udp.mapping).c_str(),
+                                 endpoint::to_string(gateway.udp.outer).c_str(),
                                  firewall::to_string(gateway.udp.force).c_str(),
-                                 endpoint::to_string(gateway.tcp.mapping).c_str(),
+                                 endpoint::to_string(gateway.tcp.outer).c_str(),
                                  firewall::to_string(gateway.tcp.force).c_str(),
                                  criteria::to_string(gateway.qos).c_str(),
                                  gateway.puzzle);
@@ -637,7 +637,7 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled request " << faraway.udp.mapping << "|" << faraway.udp.force << "|" << faraway.tcp.mapping << "|" << faraway.tcp.force << "|" << faraway.qos;
+        _inf_ << "pulled request " << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.qos;
         return faraway;
     }
 
@@ -646,7 +646,7 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled response " << faraway.udp.mapping << "|" << faraway.udp.force << "|" << faraway.tcp.mapping << "|" << faraway.tcp.force << "|" << faraway.qos;
+        _inf_ << "pulled response " << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.qos;
         return faraway;
     }
 
@@ -665,7 +665,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed response " << gateway.udp.mapping << "|" << gateway.udp.force << "|" << gateway.tcp.mapping << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed response " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
@@ -683,7 +683,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed response " << gateway.udp.mapping << "|" << gateway.udp.force << "|" << gateway.tcp.mapping << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed response " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     const identity& host() const noexcept(true) override

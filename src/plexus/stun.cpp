@@ -506,24 +506,24 @@ public:
         return local;
     }
 
-    void make_udp_traverse(boost::asio::yield_context yield, traverse& info) noexcept(false)
+    void make_udp_traverse(boost::asio::yield_context yield, traverse& pass) noexcept(false)
     {
         _trc_ << "making traverse for udp...";
 
         auto mapper = plexus::network::create_udp_socket(m_io, m_udp);
         auto binding = exec_udp_binding(yield, mapper, m_stun, m_stun);
 
-        info.udp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
-        info.udp.hosting = m_udp;
-        info.udp.mapping = binding.mapped_endpoint();
+        pass.udp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
+        pass.udp.inner = m_udp;
+        pass.udp.outer = binding.mapped_endpoint();
 
-        if (!identical(info.udp.hosting, info.udp.mapping))
+        if (!identical(pass.udp.inner, pass.udp.outer))
         {
-            info.udp.force.nat = true;
+            pass.udp.force.nat = true;
 
-            if (info.udp.hosting.port != info.udp.mapping.port)
+            if (pass.udp.inner.port != pass.udp.outer.port)
             {
-                info.udp.force.random_port = true;
+                pass.udp.force.random_port = true;
             }
 
             auto changed_full = binding.changed_endpoint();
@@ -533,31 +533,31 @@ public:
             _trc_ << "first mapping test...";
 
             auto first_endpoint = exec_udp_binding(yield, mapper, changed_full, changed_full).mapped_endpoint();
-            if (first_endpoint == info.udp.mapping)
+            if (first_endpoint == pass.udp.outer)
             {
-                info.udp.force.mapping = firewall::independent;
+                pass.udp.force.mapping = firewall::independent;
             }
             else
             {
                 _trc_ << "second mapping test...";
 
                 auto second_endpoint = exec_udp_binding(yield, mapper, changed_addr, changed_addr).mapped_endpoint();
-                if (second_endpoint == info.udp.mapping)
+                if (second_endpoint == pass.udp.outer)
                 {
-                    info.udp.force.mapping = firewall::port_dependent;
+                    pass.udp.force.mapping = firewall::port_dependent;
                 }
                 else if (second_endpoint == first_endpoint)
                 {
-                    info.udp.force.mapping = firewall::address_dependent;
+                    pass.udp.force.mapping = firewall::address_dependent;
                 }
                 else
                 {
-                    info.udp.force.mapping = firewall::address_and_port_dependent;
+                    pass.udp.force.mapping = firewall::address_and_port_dependent;
                 }
 
-                if (second_endpoint.address != info.udp.mapping.address || second_endpoint.address != first_endpoint.address)
+                if (second_endpoint.address != pass.udp.outer.address || second_endpoint.address != first_endpoint.address)
                 {
-                    info.udp.force.variable_address = true;
+                    pass.udp.force.variable_address = true;
                 }
             }
 
@@ -567,7 +567,7 @@ public:
                 _trc_ << "first filtering test...";
 
                 exec_udp_binding(yield, filter, m_stun, changed_full, message(flag::change_address | flag::change_port), 1400);
-                info.udp.force.filtering = firewall::independent;
+                pass.udp.force.filtering = firewall::independent;
             }
             catch(const plexus::timeout_error&)
             {
@@ -576,7 +576,7 @@ public:
                     _trc_ << "second filtering test...";
 
                     exec_udp_binding(yield, filter, m_stun, changed_addr, message(flag::change_address), 1400);
-                    info.udp.force.filtering = firewall::port_dependent;
+                    pass.udp.force.filtering = firewall::port_dependent;
                 }
                 catch(const plexus::timeout_error&)
                 {
@@ -585,48 +585,48 @@ public:
                         _trc_ << "third filtering test...";
 
                         exec_udp_binding(yield, filter, m_stun, changed_port, message(flag::change_port), 1400);
-                        info.udp.force.filtering = firewall::address_dependent;
+                        pass.udp.force.filtering = firewall::address_dependent;
                     }
                     catch(const plexus::timeout_error&)
                     {
-                        info.udp.force.filtering = firewall::address_and_port_dependent;
+                        pass.udp.force.filtering = firewall::address_and_port_dependent;
                     }
                 }
             }
 
-            info.udp.force.hairpin = false;
+            pass.udp.force.hairpin = false;
 
             try
             {
                 _trc_ << "hairpin test...";
 
-                exec_udp_binding(yield, mapper, info.udp.mapping, info.udp.mapping, message(0), 1400);
-                info.udp.force.hairpin = true;
+                exec_udp_binding(yield, mapper, pass.udp.outer, pass.udp.outer, message(0), 1400);
+                pass.udp.force.hairpin = true;
             }
             catch(const plexus::timeout_error&) {}
         }
 
-        _inf_ << "udp traverse: hosting=" << info.udp.hosting << " mapping=" << info.udp.mapping << " firewall=" << info.udp.force;
+        _inf_ << "udp traverse: inner=" << pass.udp.inner << " outer=" << pass.udp.outer << " force=" << pass.udp.force;
     }
 
-    void make_tcp_traverse(boost::asio::yield_context yield, traverse& info) noexcept(false)
+    void make_tcp_traverse(boost::asio::yield_context yield, traverse& pass) noexcept(false)
     {
         _trc_ << "making traverse for tcp...";
 
         auto binding = exec_tcp_binding(yield, m_tcp, m_stun);
 
-        info.tcp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
-        info.tcp.hosting = m_tcp;
-        info.tcp.mapping = binding.mapped_endpoint();
+        pass.tcp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
+        pass.tcp.inner = m_tcp;
+        pass.tcp.outer = binding.mapped_endpoint();
 
-        if (!identical(info.tcp.hosting, info.tcp.mapping))
+        if (!identical(pass.tcp.inner, pass.tcp.outer))
         {
-            info.tcp.force.nat = true;
-            info.tcp.force.filtering = firewall::address_and_port_dependent;
+            pass.tcp.force.nat = true;
+            pass.tcp.force.filtering = firewall::address_and_port_dependent;
 
-            if (info.tcp.hosting.port != info.tcp.mapping.port)
+            if (pass.tcp.inner.port != pass.tcp.outer.port)
             {
-                info.tcp.force.random_port = true;
+                pass.tcp.force.random_port = true;
             }
 
             auto changed_full = binding.changed_endpoint();
@@ -636,61 +636,61 @@ public:
             _trc_ << "first mapping test...";
 
             auto first_endpoint = exec_tcp_binding(yield, m_tcp, changed_full).mapped_endpoint();
-            if (first_endpoint == info.tcp.mapping)
+            if (first_endpoint == pass.tcp.outer)
             {
-                info.tcp.force.mapping = firewall::independent;
+                pass.tcp.force.mapping = firewall::independent;
             }
             else
             {
                 _trc_ << "second mapping test...";
 
                 auto second_endpoint = exec_tcp_binding(yield, m_tcp, changed_addr).mapped_endpoint();
-                if (second_endpoint == info.tcp.mapping)
+                if (second_endpoint == pass.tcp.outer)
                 {
-                    info.tcp.force.mapping = firewall::port_dependent;
+                    pass.tcp.force.mapping = firewall::port_dependent;
                 }
                 else if (second_endpoint == first_endpoint)
                 {
-                    info.tcp.force.mapping = firewall::address_dependent;
+                    pass.tcp.force.mapping = firewall::address_dependent;
                 }
                 else
                 {
-                    info.tcp.force.mapping = firewall::address_and_port_dependent;
+                    pass.tcp.force.mapping = firewall::address_and_port_dependent;
                 }
 
-                if (second_endpoint.address != info.tcp.mapping.address || second_endpoint.address != first_endpoint.address)
+                if (second_endpoint.address != pass.tcp.outer.address || second_endpoint.address != first_endpoint.address)
                 {
-                    info.tcp.force.variable_address = true;
+                    pass.tcp.force.variable_address = true;
                 }
             }
 
-            info.tcp.force.hairpin = false;
+            pass.tcp.force.hairpin = false;
 
             try
             {
                 _trc_ << "hairpin test...";
 
-                auto self = plexus::network::create_tcp_socket(m_io, m_tcp, info.tcp.mapping);
+                auto self = plexus::network::create_tcp_socket(m_io, m_tcp, pass.tcp.outer);
                 self->connect(yield, 1400);
                 self->shutdown();
 
-                info.tcp.force.hairpin = true;
+                pass.tcp.force.hairpin = true;
             }
             catch(const std::exception&) { }
         }
 
-        _inf_ << "tcp traverse: hosting=" << info.tcp.hosting << " mapping=" << info.tcp.mapping << " firewall=" << info.tcp.force;
+        _inf_ << "tcp traverse: inner=" << pass.tcp.inner << " outer=" << pass.tcp.outer << " force=" << pass.tcp.force;
     }
 
 public:
 
     traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) override
     {
-        traverse info;
+        traverse pass;
 
         try
         {
-            make_udp_traverse(yield, info);
+            make_udp_traverse(yield, pass);
         }
         catch(const std::exception& ex)
         {
@@ -701,7 +701,7 @@ public:
         {
             try
             {
-                make_tcp_traverse(yield, info);
+                make_tcp_traverse(yield, pass);
             }
             catch(const std::exception& ex)
             {
@@ -709,7 +709,7 @@ public:
             }
         }
 
-        return info;
+        return pass;
     }
 };
 

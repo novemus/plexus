@@ -64,8 +64,8 @@ int main(int argc, char** argv)
         ("app-qos", boost::program_options::value<plexus::criteria>()->default_value(plexus::criteria()), "application criteria: udp:client|udp:server|tcp:client|tcp:server|ssl:client|ssl:server")
         ("host-id", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the host: <email/pin>")
         ("peer-id", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email/pin>")
-        ("udp-gate", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "udp endpoint to bind the application")
-        ("tcp-gate", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "tcp endpoint to bind the application")
+        ("udp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "udp endpoint to bind the application")
+        ("tcp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "tcp endpoint to bind the application")
         ("stun-server", boost::program_options::value<stun_server_endpoint>()->required(), "endpoint of the public stun server")
         ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "url of the bootstrap DHT service")
         ("dht-port", boost::program_options::value<uint16_t>()->default_value(0), "local port to bind the DHT node")
@@ -79,7 +79,7 @@ int main(int argc, char** argv)
         ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to the email Certification Authority")
         ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for the NAT punching packet")
         ("exec-cmd", boost::program_options::value<std::string>()->required(), "command executed after the host is ready to communicate with the peer")
-        ("exec-args", boost::program_options::value<std::string>()->default_value("%gateway% %mapping% %faraway% %quality%"), "list of arguments for the command, allowed wildcards: %gateway%, %mapping%, %faraway%, %quality%, %hostid%, %peerid%")
+        ("exec-args", boost::program_options::value<std::string>()->default_value("%inner% %outer% %alien% %qos%"), "list of arguments for the command, allowed wildcards: %inner%, %outer%, %alien%, %qos%, %hostid%, %peerid%")
         ("exec-env", boost::program_options::value<std::string>()->default_value(""), "KEY=VALUE list of extra environment for the command, allowed wildcards: %secret%, %hostcert%, %hostkey%, %peercert%")
         ("exec-pwd", boost::program_options::value<std::string>()->default_value(""), "working directory for the command, allowed wildcards: %hostid%, %peerid%")
         ("exec-log", boost::program_options::value<std::string>()->default_value(""), "command log file, allowed wildcards: %hostid%, %peerid%")
@@ -124,10 +124,10 @@ int main(int argc, char** argv)
         {
             static constexpr const char* HOSTID = "%hostid%";
             static constexpr const char* PEERID = "%peerid%";
-            static constexpr const char* GATEWAY = "%gateway%";
-            static constexpr const char* MAPPING = "%mapping%";
-            static constexpr const char* FARAWAY = "%faraway%";
-            static constexpr const char* QUALITY = "%quality%";
+            static constexpr const char* INNER = "%inner%";
+            static constexpr const char* OUTER = "%outer%";
+            static constexpr const char* ALIEN = "%alien%";
+            static constexpr const char* QOS = "%qos%";
             static constexpr const char* SECRET = "%secret%";
             static constexpr const char* HOSTCERT = "%hostcert%";
             static constexpr const char* HOSTKEY = "%hostkey%";
@@ -155,13 +155,13 @@ int main(int argc, char** argv)
                         replacements[token] = host.owner + "/" + host.pin;
                     else if (token == PEERID)
                         replacements[token] = peer.owner + "/" + peer.pin;
-                    else if (token == GATEWAY)
-                        replacements[token] = plexus::endpoint::to_string(info.gateway);
-                    else if (token == MAPPING)
-                        replacements[token] = plexus::endpoint::to_string(info.mapping);
-                    else if (token == FARAWAY)
-                        replacements[token] = plexus::endpoint::to_string(info.faraway);
-                    else if (token == QUALITY)
+                    else if (token == INNER)
+                        replacements[token] = plexus::endpoint::to_string(info.inner);
+                    else if (token == OUTER)
+                        replacements[token] = plexus::endpoint::to_string(info.outer);
+                    else if (token == ALIEN)
+                        replacements[token] = plexus::endpoint::to_string(info.alien);
+                    else if (token == QOS)
                         replacements[token] = plexus::criteria::to_string(info.qos);
                     else if (token == SECRET)
                         replacements[token] = std::to_string(info.secret);
@@ -193,7 +193,7 @@ int main(int argc, char** argv)
 
             plexus::exec(
                 vm["exec-cmd"].as<std::string>(),
-                replace(vm["exec-args"].as<std::string>(), { HOSTID, PEERID, GATEWAY, MAPPING, FARAWAY, QUALITY }),
+                replace(vm["exec-args"].as<std::string>(), { HOSTID, PEERID, INNER, OUTER, ALIEN, QOS }),
                 replace(vm["exec-pwd"].as<std::string>(), { HOSTID, PEERID }),
                 replace(vm["exec-log"].as<std::string>(), { HOSTID, PEERID }),
                 replace(vm["exec-env"].as<std::string>(), { SECRET, HOSTCERT, HOSTKEY, PEERCERT })
@@ -203,8 +203,8 @@ int main(int argc, char** argv)
         plexus::options config = {
             vm["app-name"].as<std::string>(),
             vm["app-repo"].as<std::string>(),
-            vm["udp-gate"].as<stun_client_endpoint>(),
-            vm["tcp-gate"].as<stun_client_endpoint>(),
+            vm["udp-bind"].as<stun_client_endpoint>(),
+            vm["tcp-bind"].as<stun_client_endpoint>(),
             vm["stun-server"].as<stun_server_endpoint>(),
             vm["punch-hops"].as<uint16_t>(),
             vm["app-qos"].as<plexus::criteria>(),

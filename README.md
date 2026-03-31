@@ -41,13 +41,13 @@ Some *NAT*s may drop mapping when receiving an incoming packet that does not mee
 
 As soon as both `plexus` instanses make the *passage* to each other the command specified by `--exec-cmd` will be started. You can pass your arguments to the executable by `--exec-args` argument with the following wildcards:
 
-`%gateway%` - local endpoint specified by the `--stun-client` argument
+`%inner%` - local endpoint specified by the `--stun-client` argument
 
-`%mapping%` - public endpoint issued by the NAT
+`%outer%` - public endpoint issued by the NAT
 
-`%faraway%` - public endpoint of the peer received by the rendezvous
+`%alien%` - public endpoint of the peer received by the rendezvous
 
-`%quality%` - application criteria agreed upon by the rendezvous
+`%qos%` - application criteria agreed upon by the rendezvous
 
 `%hostid%` - the host identifier specified by the `--host-id` argument
 

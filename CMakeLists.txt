@@ -242,6 +242,7 @@ if(NOT PLEXUS_SKIP_TEST_RULES)
                                   tests/tcp_tests.cpp
                                   tests/smime_tests.cpp
                                   tests/exec_tests.cpp
+                                  tests/contract_tests.cpp
                                   tests/plexus_tests.cpp)
     target_link_libraries(${PLEXUS_TEST} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> tubus::libtubus wormhole::libwormhole "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
 

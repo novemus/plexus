@@ -45,7 +45,7 @@ struct reference
 {
     struct map 
     {
-        endpoint mapping;
+        endpoint outer;
         firewall force;
     };
 
@@ -55,7 +55,7 @@ struct reference
     uint64_t puzzle = 0;
 };
 
-contract make_contract(const endpoint& udp_gate, const endpoint& tcp_gate, const reference& host_pass, const reference& peer_pass, bool accept) noexcept(false);
+contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const reference& host_pass, const reference& peer_pass, bool accept) noexcept(false);
 
 static constexpr const char* cert_file_name = "cert.crt";
 static constexpr const char* key_file_name = "private.key";
@@ -67,15 +67,15 @@ struct stun_client
     virtual traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& stun_server, const endpoint& udp_gate, const endpoint& tcp_gate) noexcept(true);
+std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& stun_server, const endpoint& udp_bind, const endpoint& tcp_bind) noexcept(true);
 
 struct sync_broker : public stun_client
 {
-    virtual contract reach_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
+    virtual contract touch_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
     virtual contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
 };
 
-std::shared_ptr<sync_broker> create_sync_broker(boost::asio::io_context& io, const endpoint& stun_server, const endpoint& udp_gate, const endpoint& tcp_gate, uint16_t punch_hops) noexcept(false);
+std::shared_ptr<sync_broker> create_sync_broker(boost::asio::io_context& io, const endpoint& stun_server, const endpoint& udp_bind, const endpoint& tcp_bind, uint16_t punch_hops) noexcept(false);
 
 struct pipe
 {

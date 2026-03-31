@@ -199,12 +199,12 @@ class smtp
     std::string make_message(const reference& data)
     {
         if (data.qos.proto == protocol::udp && data.qos.role == relation::either)
-            return plexus::utils::format("PLEXUS 3.0 %s %u %llu", data.udp.mapping.address.to_string().c_str(), data.udp.mapping.port, data.puzzle);
+            return plexus::utils::format("PLEXUS 3.0 %s %u %llu", data.udp.outer.address.to_string().c_str(), data.udp.outer.port, data.puzzle);
 
         return plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %llu",
-            endpoint::to_string(data.udp.mapping).c_str(),
+            endpoint::to_string(data.udp.outer).c_str(),
             firewall::to_string(data.udp.force).c_str(),
-            endpoint::to_string(data.tcp.mapping).c_str(),
+            endpoint::to_string(data.tcp.outer).c_str(),
             firewall::to_string(data.tcp.force).c_str(),
             criteria::to_string(data.qos).c_str(),
             data.puzzle
@@ -421,7 +421,7 @@ class imap
                         if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                         {
                             reference data;
-                            data.udp.mapping = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
+                            data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
                             data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
                             data.qos = criteria { protocol::udp, relation::either };
                             data.puzzle = std::stoull(match.str(3));
@@ -434,9 +434,9 @@ class imap
                         {
                             reference data;
 
-                            data.udp.mapping = endpoint::from_string(match.str(1));
+                            data.udp.outer = endpoint::from_string(match.str(1));
                             data.udp.force = firewall::from_string(match.str(2));
-                            data.tcp.mapping = endpoint::from_string(match.str(3));
+                            data.tcp.outer = endpoint::from_string(match.str(3));
                             data.tcp.force = firewall::from_string(match.str(4));
                             data.qos = criteria::from_string(match.str(5));
                             data.puzzle = std::stoull(match.str(6));
@@ -631,27 +631,27 @@ public:
     reference pull_request(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, invite_token);
-        _inf_ << "pulled request: " << faraway.udp.mapping << "|" << faraway.udp.force << "|" << faraway.tcp.mapping << "|" << faraway.tcp.force << "|" << faraway.qos;
+        _inf_ << "pulled request: " << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.qos;
         return faraway;
     }
 
     reference pull_response(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, accept_token);
-        _inf_ << "pulled response: " << faraway.udp.mapping << "|" << faraway.udp.force << "|" << faraway.tcp.mapping << "|" << faraway.tcp.force << "|" << faraway.qos;
+        _inf_ << "pulled response: " << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.qos;
         return faraway;
     }
 
     void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         m_pusher.push(yield, invite_token, gateway);
-        _inf_ << "pushed request: " << gateway.udp.mapping << "|" << gateway.udp.force << "|" << gateway.tcp.mapping << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed request: " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         m_pusher.push(yield, accept_token, gateway);
-        _inf_ << "pushed response: " << gateway.udp.mapping << "|" << gateway.udp.force << "|" << gateway.tcp.mapping << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed response: " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     const identity& host() const noexcept(true) override
