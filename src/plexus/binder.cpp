@@ -103,18 +103,12 @@ public:
             try
             {
                 pin->send_to(out, peer, yield);
-
-                if (out.flag() == 1)
-                {
-                    _dbg_ << "handshake peer: " << peer;
-                    return pin;
-                }
-
                 in.truncate(pin->receive_from(in, peer, yield));
 
                 if (in.flag() == 1)
                 {
-                    out = handshake(1, mask);
+                    _dbg_ << "handshake peer: " << peer;
+                    return pin;
                 }
             }
             catch(const boost::system::system_error& ex)
@@ -132,7 +126,7 @@ public:
     std::shared_ptr<network::udp_socket> await_peer(boost::asio::yield_context yield, const boost::asio::ip::udp::endpoint& peer, uint64_t mask) noexcept(false) override
     {
         _dbg_ << "awaiting peer...";
-        
+
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
@@ -142,14 +136,14 @@ public:
 
         auto pin = plexus::network::create_udp_transport(m_io, m_bind);
 
+        handshake out(1, mask);
+        handshake in(mask);
+
         boost::asio::ip::unicast::hops old;
         pin->get_option(old);
         pin->set_option(boost::asio::ip::unicast::hops(m_punch));
-        pin->send_to(handshake(0, mask), peer, yield, 2000);
+        pin->send_to(out, peer, yield, 2000);
         pin->set_option(old);
-
-        handshake out(1, mask);
-        handshake in(mask);
 
         while (timer().total_milliseconds() < deadline)
         {
@@ -160,9 +154,7 @@ public:
                 if (in.flag() == 0)
                 {
                     pin->send_to(out, peer, yield);
-                }
-                else
-                {
+
                     _dbg_ << "handshake peer: " << peer;
                     return pin;
                 }
