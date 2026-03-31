@@ -5,12 +5,12 @@ if [[ $# -lt 6 ]]; then
     exit 1
 fi
 
-loc_ip=$1
-loc_port=$2
-map_ip=$3
-map_port=$4
-rem_ip=$5
-rem_port=$6
+loc_ip=`echo $1 | cut -d ":" -f 1`
+loc_port=`echo $1 | cut -d ":" -f 2`
+map_ip=`echo $2 | cut -d ":" -f 1`
+map_port=`echo $2 | cut -d ":" -f 2`
+rem_ip=`echo $3 | cut -d ":" -f 1`
+rem_port=`echo $3 | cut -d ":" -f 2`
 ifconfig=
 
 lhs=${map_ip}${map_port}
