@@ -192,7 +192,7 @@ int main(int argc, char** argv)
 
             plexus::exec(
                 vm["exec-cmd"].as<std::string>(),
-                replace(vm["exec-args"].as<std::string>(), { HOSTID, PEERID, GATEWAY, FARAWAY, QUALITY }),
+                replace(vm["exec-args"].as<std::string>(), { HOSTID, PEERID, GATEWAY, MAPPING, FARAWAY, QUALITY }),
                 replace(vm["exec-pwd"].as<std::string>(), { HOSTID, PEERID }),
                 replace(vm["exec-log"].as<std::string>(), { HOSTID, PEERID }),
                 replace(vm["exec-env"].as<std::string>(), { SECRET, HOSTCERT, HOSTKEY, PEERCERT })

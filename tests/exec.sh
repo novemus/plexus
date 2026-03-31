@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [[ $# -lt 6 ]]; then
+if [[ $# -lt 3 ]]; then
     echo "not enough arguments"
     exit 1
 fi

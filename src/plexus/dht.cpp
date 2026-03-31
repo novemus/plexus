@@ -566,7 +566,8 @@ public:
     {
         boost::system::error_code ec;
         timer.cancel(ec);
-        node->cancelPut(hash, value->id);
+        if (value)
+            node->cancelPut(hash, value->id);
     }
 
     void wait(boost::asio::yield_context yield) noexcept(false) override
