@@ -41,7 +41,7 @@ public:
     {
         try
         {
-            m_ssl = network::create_ssl_socket(io, boost::asio::ip::tcp::endpoint(), remote, true, cert, key, ca);
+            m_ssl = network::create_ssl_socket(io, boost::asio::ip::tcp::endpoint(), remote, cert, key, ca);
         }
         catch (const boost::system::system_error& ex)
         {

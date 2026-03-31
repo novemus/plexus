@@ -96,7 +96,7 @@ public:
         , m_acceptor(m_io, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
         , m_ssl(boost::asio::ssl::context::sslv23)
     {
-        m_ssl.set_options(boost::asio::ssl::context::default_workarounds| boost::asio::ssl::context::sslv23_server);
+        m_ssl.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::sslv23_server);
         m_ssl.use_certificate_file(cert, boost::asio::ssl::context::pem);
         m_ssl.use_private_key_file(key, boost::asio::ssl::context::pem);
         if (!ca.empty())
@@ -182,7 +182,7 @@ BOOST_AUTO_TEST_CASE(check_certs)
     
     boost::asio::spawn(io, [&](boost::asio::yield_context yield)
     {
-        auto client = plexus::network::create_ssl_socket(io, SSL_CLIENT, SSL_SERVER, true, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+        auto client = plexus::network::create_ssl_socket(io, SSL_CLIENT, SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
         BOOST_REQUIRE_NO_THROW(client->connect(yield));
         BOOST_REQUIRE_NO_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield));
 
@@ -220,7 +220,7 @@ BOOST_AUTO_TEST_CASE(wrong_certs)
         auto failed = plexus::network::create_ssl_socket(io, SSL_CLIENT, WRONG_SSL_SERVER);
         BOOST_REQUIRE_THROW(failed->connect(yield, 2000), boost::system::system_error);
 
-        auto client = plexus::network::create_ssl_socket(io, SSL_CLIENT, SSL_SERVER, true, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
+        auto client = plexus::network::create_ssl_socket(io, SSL_CLIENT, SSL_SERVER, "./certs/client.crt", "./certs/client.key", "./certs/ca.crt");
         BOOST_REQUIRE_NO_THROW(client->connect(yield));
         BOOST_REQUIRE_NO_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield));
 
@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(wrong_certs)
 
         BOOST_REQUIRE_NO_THROW(client->shutdown());
 
-        client = plexus::network::create_ssl_socket(io, SSL_CLIENT, SSL_SERVER, true, "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
+        client = plexus::network::create_ssl_socket(io, SSL_CLIENT, SSL_SERVER, "./certs/alien/client.crt", "./certs/alien/client.key", "./certs/alien/ca.crt");
         BOOST_REQUIRE_NO_THROW(client->connect(yield));
         BOOST_REQUIRE_THROW(client->handshake(boost::asio::ssl::stream_base::client, yield), boost::system::system_error);
 

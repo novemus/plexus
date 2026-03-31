@@ -29,10 +29,9 @@ template<typename socket_impl, int64_t timeout_ms> struct asio_socket : public s
 
     template<typename protocol_type, typename ...arguments>
     asio_socket(const protocol_type& protocol, boost::asio::io_context& io, arguments&... args)
-        : socket_impl(io, args...), m_io(io), m_acceptor(io)
+        : socket_impl(io, args...), m_io(io)
     {
         socket_impl::lowest_layer().open(protocol);
-        socket_impl::lowest_layer().set_option(boost::asio::socket_base::reuse_address(true));
     }
 
     template<typename ...arguments>
@@ -58,45 +57,6 @@ template<typename socket_impl, int64_t timeout_ms> struct asio_socket : public s
             socket_impl::lowest_layer().async_connect(m_remote, yield);
             return 0;
         }, timeout);
-    }
-
-    void accept(boost::asio::yield_context yield, int64_t timeout = timeout_ms) noexcept(false)
-    {
-        auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
-        {
-            return boost::posix_time::microsec_clock::universal_time() - start;
-        };
-
-        if (!m_acceptor.is_open())
-            listen();
-
-        while (timer().total_milliseconds() < timeout)
-        {
-            if (socket_impl::lowest_layer().is_open())
-                socket_impl::lowest_layer().close();
-
-            execute([&]() {
-                m_acceptor.async_accept(*this, yield);
-                return 0;
-            }, timeout - timer().total_milliseconds());
-
-            if (is_matched(socket_impl::lowest_layer().remote_endpoint(), m_remote))
-            {
-                m_acceptor.close();
-                return;
-            }
-        }
-
-        m_acceptor.close();
-        throw boost::system::error_code(boost::asio::error::operation_aborted);
-    }
-
-    void listen() noexcept(false)
-    {
-        m_acceptor.open(m_local.protocol());
-        m_acceptor.set_option(boost::asio::socket_base::reuse_address(true));
-        m_acceptor.bind(m_local);
-        m_acceptor.listen();
     }
 
     void shutdown(boost::asio::socket_base::shutdown_type type = boost::asio::socket_base::shutdown_both) noexcept(false)
@@ -206,8 +166,6 @@ private:
                 {
                     if (socket_impl::lowest_layer().is_open())
                         socket_impl::lowest_layer().cancel();
-                    if (m_acceptor.is_open())
-                        m_acceptor.cancel();
                 }
                 catch (const std::exception &ex)
                 {
@@ -224,7 +182,6 @@ private:
     }
 
     boost::asio::io_context& m_io;
-    boost::asio::ip::tcp::acceptor m_acceptor;
     endpoint_type m_local; 
     endpoint_type m_remote; 
 };

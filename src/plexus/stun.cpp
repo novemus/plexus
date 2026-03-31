@@ -425,12 +425,11 @@ public:
             if (sock->read(boost::asio::buffer((uint8_t*)res.data() + msg::header_size, res.length()), yield, timeout()) != res.length())
                 throw plexus::context_error(__FUNCTION__, "can't read frame data");
 
+            sock->shutdown();
             res.truncate(msg::header_size + res.length());
 
             if (req.transaction() != res.transaction())
                 throw plexus::context_error(__FUNCTION__, "wrong transaction id");
-
-            sock->shutdown();
 
             switch (res.type())
             {

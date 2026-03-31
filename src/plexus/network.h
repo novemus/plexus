@@ -26,7 +26,7 @@ using tcp_socket = asio_socket<boost::asio::ip::tcp::socket, default_tcp_timeout
 using ssl_socket = asio_socket<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>, default_tcp_timeout_ms>;
 using udp_socket = asio_socket<boost::asio::ip::udp::socket, default_udp_timeout_ms>;
 
-std::shared_ptr<ssl_socket> create_ssl_socket(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& local, const boost::asio::ip::tcp::endpoint& remote, bool client = true, const std::string& cert = "", const std::string& key = "", const std::string& ca = "");
+std::shared_ptr<ssl_socket> create_ssl_socket(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& local, const boost::asio::ip::tcp::endpoint& remote, const std::string& cert = "", const std::string& key = "", const std::string& ca = "");
 std::shared_ptr<tcp_socket> create_tcp_socket(boost::asio::io_context& io, const boost::asio::ip::tcp::endpoint& local, const boost::asio::ip::tcp::endpoint& remote);
 std::shared_ptr<udp_socket> create_udp_socket(boost::asio::io_context& io, const boost::asio::ip::udp::endpoint& local = boost::asio::ip::udp::endpoint());
 

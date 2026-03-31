@@ -118,8 +118,7 @@ set(SOURCES "${CMAKE_CURRENT_BINARY_DIR}/export_header/plexus/export.h"
     src/plexus/utils.cpp
     src/plexus/exec.cpp
     src/plexus/smime.cpp
-    src/plexus/udp.cpp
-    src/plexus/tcp.cpp
+    src/plexus/network.cpp
     src/plexus/email.cpp
     src/plexus/dht.cpp
     src/plexus/stun.cpp
