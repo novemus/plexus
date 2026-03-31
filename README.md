@@ -27,15 +27,15 @@ To run the example below you need to install the *openvpn*. The *exec.sh* script
 
 Command for the accepting side:
 ```console
-$ plexus --app-name=appname --app-repo=/path/to/apprepo --accept --dht-bootstrap=bootstrap.jami.net --host-id=host@mailer.com/hostid --peer-id=peer@mailer.com/peerid --stun-server=stun.someserver.com[:xxxx] --exec-cmd=~/plexus/tests/exec.sh [--app-qos=udp:auto]
+$ plexus --app-name=appname --app-repo=/path/to/apprepo --accept --dht-bootstrap=bootstrap.jami.net --host-id=host@mailer.com/hostid --peer-id=peer@mailer.com/peerid --udp-stun=stun.someserver.com[:xxxx] --exec-cmd=~/plexus/tests/exec.sh [--app-qos=udp:either]
 ```
 
 Command for the inviting side:
 ```console
-$ plexus --app-name=appname --app-repo=/path/to/apprepo --dht-bootstrap=bootstrap.jami.net --host-id=host@mailer.com/hostid --peer-id=peer@mailer.com/peerid --stun-server=stun.someserver.com[:xxxx] --exec-cmd=~/plexus/tests/exec.sh [--app-qos=udp:auto]
+$ plexus --app-name=appname --app-repo=/path/to/apprepo --dht-bootstrap=bootstrap.jami.net --host-id=host@mailer.com/hostid --peer-id=peer@mailer.com/peerid --udp-stun=stun.someserver.com[:xxxx] --exec-cmd=~/plexus/tests/exec.sh [--app-qos=udp:either]
 ```
 
-The `--app-name` key determines the target application. The `--host-id` argument points to the local application identity and the `--peer-id` points to the remote one. The `--app-repo` key is used to specify the application repository. The `--accept` key tells the app to cyclically accept invitations from the remotes. It must only be set for one side. If you want to accept many peers you should just omit the `--peer-id` argument. In this case, every peer is contained in the repository will be accepted. To set a special application criteria you can use the `--app-qos` key with any of the following values: *udp:client|udp:server|tcp:client|tcp:server|ssl:client|ssl:server*. The special value *any:auto* allows to negotiate the most suitable transport protocol and connection starategy, so it only makes sense for special applications or scenarios.
+The `--app-name` key determines the target application. The `--host-id` argument points to the local application identity and the `--peer-id` points to the remote one. The `--app-repo` key is used to specify the application repository. The `--accept` key tells the app to cyclically accept invitations from the remotes. It must only be set for one side. If you want to accept many peers you should just omit the `--peer-id` argument. In this case, every peer is contained in the repository will be accepted. To set a special application criteria you can use the `--app-qos` key with any of the following values: *udp:client|udp:server|tcp:client|tcp:server|ssl:client|ssl:server*. The special value *any:either* allows to negotiate the most suitable transport protocol and connection starategy, so it only makes sense for special applications or scenarios.
 
 Some *NAT*s may drop mapping when receiving an incoming packet that does not meet the filtering policy. This package may be a punching package sent by `plexus` towards the peer. In this case, it is impossible to punch the *passage* between the machines. To avoid such situations, `plexus` sets a small *ttl* to the punching packet, by default 7. In general, this is enough for the packet to go beyond the host NAT to punch it, but not to reach the peer NAT and not to drop its peer mapping. If necessary, you can set a more appropriate *ttl* using the `--punch-hops` argument, determining the suitable value by some routing utility.
 

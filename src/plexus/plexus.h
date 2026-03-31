@@ -122,7 +122,7 @@ struct options
     endpoint tcp_bind;   // tcp endpoint to bind the application
     endpoint udp_stun;   // endpoint of the udp stun server
     endpoint tcp_stun;   // endpoint of the tcp stun server
-    uint16_t hops;       // ttl of the udp-hole punching packet
+    uint16_t hops;       // ttl of the hole punching packet
     criteria qos;        // application protocol and connection strategy
     rendezvous mediator; // rendezvous service
 };
