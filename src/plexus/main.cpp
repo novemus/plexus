@@ -98,6 +98,9 @@ int main(int argc, char** argv)
             return -1;
         }
 
+        if(vm.count("config"))
+            boost::program_options::store(boost::program_options::parse_config_file<char>(vm["config"].as<std::string>().c_str(), desc), vm);
+
         auto count = vm.count("email-smtps") + vm.count("email-imaps") + vm.count("email-login") + vm.count("email-password");
         if(count > 0 && count != 4)
         {
@@ -105,23 +108,20 @@ int main(int argc, char** argv)
             return -1;
         }
 
-        auto udp_stun = vm["udp-stun"].as<stun_client_endpoint>();
-        auto tcp_stun = vm["tcp-stun"].as<stun_client_endpoint>();
+        auto udp_stun = vm["udp-stun"].as<stun_server_endpoint>();
+        auto tcp_stun = vm["tcp-stun"].as<stun_server_endpoint>();
 
-        if (udp_stun == stun_client_endpoint() && tcp_stun == stun_client_endpoint())
+        if (udp_stun == stun_server_endpoint() && tcp_stun == stun_server_endpoint())
         {
             std::cout << "you need specify stun server" << std::endl;
             return -1;
         }
 
-        if (udp_stun == stun_client_endpoint())
+        if (udp_stun == stun_server_endpoint())
             vm.at("udp-stun").value() = tcp_stun;
 
-        if (tcp_stun == stun_client_endpoint())
+        if (tcp_stun == stun_server_endpoint())
             vm.at("tcp-stun").value() = udp_stun;
-
-        if(vm.count("config"))
-            boost::program_options::store(boost::program_options::parse_config_file<char>(vm["config"].as<std::string>().c_str(), desc), vm);
 
         boost::program_options::notify(vm);
     }
