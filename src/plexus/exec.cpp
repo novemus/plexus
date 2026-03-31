@@ -70,7 +70,7 @@ namespace plexus { namespace utils
 
 void exec(const std::string& exe, const std::string& args, const std::string& dir, const std::string& log, const std::string& env, bool wait) 
 {
-    _dbg_ << "execute: exe=" << exe << " args=" << args << " pwd=" << dir << " log=" << log << " env=" << env << " wait=" << wait;
+    _dbg_ << "execute: exe=" << exe << " args=" << args << " pwd=" << dir << " log=" << log << " wait=" << wait;
 
 #ifndef WIN32
     static std::once_flag s_flag;
