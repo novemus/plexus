@@ -66,8 +66,8 @@ int main(int argc, char** argv)
         ("peer-id", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email/pin>")
         ("udp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "udp endpoint to bind the application")
         ("tcp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "tcp endpoint to bind the application")
-        ("udp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the udp stun server")
-        ("tcp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the tcp stun server")
+        ("udp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the udp STUN server")
+        ("tcp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the tcp STUN server")
         ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "url of the bootstrap DHT service")
         ("dht-port", boost::program_options::value<uint16_t>()->default_value(0), "local port to bind the DHT node")
         ("dht-network", boost::program_options::value<uint32_t>()->default_value(0), "DHT network id")
@@ -113,7 +113,7 @@ int main(int argc, char** argv)
 
         if (udp_stun == stun_server_endpoint() && tcp_stun == stun_server_endpoint())
         {
-            std::cout << "you need specify stun server" << std::endl;
+            std::cout << "STUN server is not specified" << std::endl;
             return -1;
         }
 

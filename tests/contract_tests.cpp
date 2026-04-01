@@ -77,7 +77,7 @@ namespace tests
 
         info = plexus::make_contract(bind, bind, host, peer, false);
         BOOST_CHECK_EQUAL(info.qos.proto, proto);
-        BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
+        BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::mutual);
 
         pmap.force.variable_address = true;
         BOOST_REQUIRE_THROW(plexus::make_contract(bind, bind, host, peer, true), std::runtime_error);

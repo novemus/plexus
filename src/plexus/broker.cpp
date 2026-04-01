@@ -86,13 +86,13 @@ class broker_impl : public plexus::sync_broker
         try
         {
             tcp->connect(yield, 10);
+            tcp->shutdown();
         }
         catch(const boost::system::system_error& ex)
         {
             if (ex.code() != boost::asio::error::operation_aborted)
                 throw plexus::context_error(__FUNCTION__, ex.code());
         }
-        tcp->shutdown();
     }
 
     void touch_peer(boost::asio::yield_context yield, const plexus::endpoint& peer, uint64_t nonce, plexus::relation role) noexcept(false)
@@ -214,6 +214,14 @@ class broker_impl : public plexus::sync_broker
         accept
             ? await_peer(yield, peer.udp.outer, term.secret, term.qos.role)
             : touch_peer(yield, peer.udp.outer, term.secret, term.qos.role);
+
+        if (term.qos.role == relation::client)
+        {
+            boost::asio::deadline_timer timer(m_io);
+            timer.expires_from_now(boost::posix_time::milliseconds(plexus::utils::getenv<int64_t>("PLEXUS_PRECONNECT_TIMEOUT", 1000)));
+            boost::system::error_code ec;
+            timer.async_wait(yield[ec]);
+        }
 
         return term;
     }
