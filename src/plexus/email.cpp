@@ -286,7 +286,8 @@ class imap
     response_parser_t select_parser;
     response_parser_t search_parser;
     response_parser_t end_parser;
-    response_parser_t fetch_parser;
+    response_parser_t header_parser;
+    response_parser_t body_parser;
 
     void make_parsers()
     {
@@ -387,65 +388,100 @@ class imap
             return false;
         };
 
-        fetch_parser = [this](const std::string& response) -> bool {
+        header_parser = [this](const std::string& response) -> bool {
             if (success_checker(response))
             {
-                static const std::regex pattern("From: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\nTo: ([^\\r\\n]+) <([^\\r\\n]+)>");
+                static const std::regex from(utils::format("From: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n"));
+                static const std::regex to(utils::format("To: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n"));
 
-                std::smatch match;
-                if (std::regex_search(response, match, pattern))
+                std::smatch fm, tm, sm;
+                if (std::regex_search(response, sm, std::regex(utils::format("Subject: %s %s\\r\\n", m_config.app.c_str(), m_subject.c_str()))) && std::regex_search(response, fm, from) && std::regex_search(response, tm, to))
                 {
-                    identity peer = { match.str(2), match.str(1) };
-                    identity host = { match.str(4), match.str(3) };
+                    identity peer = { fm.str(2), fm.str(1) };
+                    identity host = { tm.str(2), tm.str(1) };
 
-                    if (m_config.are_defined(m_host, m_peer) || m_config.are_allowed(host, peer))
+                    auto match = [](const identity& info, const identity& test)
                     {
-                        static const std::regex pattern("BODY\\[TEXT\\] \\{(\\d+)\\}\\r\\n");
+                        return (info.owner.empty() || info.owner == test.owner) && (info.pin.empty() || info.pin == test.pin);
+                    };
 
-                        auto iter = std::sregex_iterator(response.begin(), response.end(), pattern);
-                        if (iter == std::sregex_iterator())
-                            return true;
-
-                        std::string message = response.substr(iter->position() + iter->length(), boost::lexical_cast<size_t>(iter->str(1)));
-
-                        if (m_config.are_encryptable(host, peer))
-                        {
-                            message = plexus::utils::smime_verify(
-                                plexus::utils::smime_decrypt(message, m_config.get_cert(host), m_config.get_key(host)),
-                                m_config.get_cert(peer),
-                                m_config.get_ca(peer)
-                                );
-                        }
-
-                        std::smatch match;
-                        if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
-                        {
-                            reference data;
-                            data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
-                            data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
-                            data.qos = criteria { protocol::udp, relation::either };
-                            data.puzzle = std::stoull(match.str(3));
-
-                            m_data = data;
-                            m_host = host;
-                            m_peer = peer;
-                        }
-                        else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
-                        {
-                            reference data;
-
-                            data.udp.outer = endpoint::from_string(match.str(1));
-                            data.udp.force = firewall::from_string(match.str(2));
-                            data.tcp.outer = endpoint::from_string(match.str(3));
-                            data.tcp.force = firewall::from_string(match.str(4));
-                            data.qos = criteria::from_string(match.str(5));
-                            data.puzzle = std::stoull(match.str(6));
-
-                            m_data = data;
-                            m_host = host;
-                            m_peer = peer;
-                        }
+                    if (match(m_filter.host, host) && match(m_filter.peer, peer) && m_config.are_allowed(host, peer))
+                    {
+                        m_couple.host = host;
+                        m_couple.peer = peer;
                     }
+                    else
+                    {
+                        m_couple = {};
+                        m_letter = {};
+                    }
+                }
+                else
+                {
+                    m_couple = {};
+                    m_letter = {};
+                }
+                return true;
+            }
+            return false;
+        };
+
+        body_parser = [this](const std::string& response) -> bool {
+            if (success_checker(response))
+            {
+                if (m_config.are_allowed(m_couple.host, m_couple.peer))
+                {
+                    static const std::regex pattern("BODY\\[TEXT\\] \\{(\\d+)\\}\\r\\n");
+
+                    auto iter = std::sregex_iterator(response.begin(), response.end(), pattern);
+                    if (iter == std::sregex_iterator())
+                        return true;
+
+                    std::string message = response.substr(iter->position() + iter->length(), boost::lexical_cast<size_t>(iter->str(1)));
+
+                    if (m_config.are_encryptable(m_couple.host, m_couple.peer))
+                    {
+                        message = plexus::utils::smime_verify(
+                            plexus::utils::smime_decrypt(message, m_config.get_cert(m_couple.host), m_config.get_key(m_couple.host)),
+                            m_config.get_cert(m_couple.peer),
+                            m_config.get_ca(m_couple.host)
+                            );
+                    }
+
+                    std::smatch match;
+                    if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
+                    {
+                        reference data;
+                        data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
+                        data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
+                        data.qos = criteria { protocol::udp, relation::either };
+                        data.puzzle = std::stoull(match.str(3));
+
+                        m_letter = data;
+                    }
+                    else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
+                    {
+                        reference data;
+
+                        data.udp.outer = endpoint::from_string(match.str(1));
+                        data.udp.force = firewall::from_string(match.str(2));
+                        data.tcp.outer = endpoint::from_string(match.str(3));
+                        data.tcp.force = firewall::from_string(match.str(4));
+                        data.qos = criteria::from_string(match.str(5));
+                        data.puzzle = std::stoull(match.str(6));
+
+                        m_letter = data;
+                    }
+                    else
+                    {
+                        m_couple = {};
+                        m_letter = {};
+                    }
+                }
+                else
+                {
+                    m_couple = {};
+                    m_letter = {};
                 }
                 return true;
             }
@@ -453,29 +489,12 @@ class imap
         };
     }
 
-    std::string make_filter(const std::string& subject)
-    {
-        std::string filter = utils::format("SUBJECT %s SUBJECT %s", m_config.app.c_str(), subject.c_str());
-
-        if (!m_peer.pin.empty())
-            filter += utils::format(" FROM %s", m_peer.pin.c_str());
-        if (!m_peer.owner.empty())
-            filter += utils::format(" FROM %s", m_peer.owner.c_str());
-        if (!m_host.pin.empty())
-            filter += utils::format(" TO %s", m_host.pin.c_str());
-        if (!m_host.owner.empty())
-            filter += utils::format(" TO %s", m_host.owner.c_str());
-
-        return filter;
-    }
-
 public:
 
     imap(boost::asio::io_context& io, const context& conf, const identity& host, const identity& peer)
         : m_io(io)
         , m_config(conf)
-        , m_host(host)
-        , m_peer(peer)
+        , m_filter({ host, peer })
     {
         _dbg_ << "imap server: " << m_config.imap;
 
@@ -488,9 +507,9 @@ public:
         , m_idle(other.m_idle)
         , m_validity(other.m_validity)
         , m_position(other.m_position)
-        , m_host(other.m_host)
-        , m_peer(other.m_peer)
-        , m_data(other.m_data)
+        , m_filter(other.m_filter)
+        , m_couple(other.m_couple)
+        , m_letter(other.m_letter)
     {
         make_parsers();
     }
@@ -507,15 +526,17 @@ public:
 
         uint8_t seq = 0;
         session->connect(yield, connect_checker);
-        session->request(yield, utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.password.c_str()), login_parser);
-        session->request(yield, utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
-        session->request(yield, utils::format("%u FETCH * UID\r\n", ++seq), end_parser);
-        session->request(yield, utils::format("%u LOGOUT\r\n", ++seq), success_checker);
+        session->request(yield, utils::format("A%03d LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.password.c_str()), login_parser);
+        session->request(yield, utils::format("A%03d SELECT INBOX\r\n", ++seq), select_parser);
+        session->request(yield, utils::format("A%03d FETCH * UID\r\n", ++seq), end_parser);
+        session->request(yield, utils::format("A%03d LOGOUT\r\n", ++seq), success_checker);
     }
 
     void wait(boost::asio::yield_context yield, const std::string& subject, bool infinite = true) noexcept(false)
     {
-        m_data = {};
+        m_subject = subject;
+        m_couple = {};
+        m_letter = {};
 
         auto elapsed = [infinite, start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -534,16 +555,16 @@ public:
 
         uint8_t seq = 0;
         session->connect(yield, connect_checker);
-        session->request(yield, utils::format("%u LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.password.c_str()), login_parser);
-        session->request(yield, utils::format("%u SELECT INBOX\r\n", ++seq), select_parser);
+        session->request(yield, utils::format("A%03d LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.password.c_str()), login_parser);
+        session->request(yield, utils::format("A%03d SELECT INBOX\r\n", ++seq), select_parser);
 
         if (validity != m_validity)
-             session->request(yield, utils::format("%u FETCH * UID\r\n", ++seq), end_parser);
+             session->request(yield, utils::format("A%03d FETCH * UID\r\n", ++seq), end_parser);
 
         do
         {
             uint64_t end = m_position;
-            session->request(yield, utils::format("%u UID SEARCH %s\r\n", ++seq, make_filter(subject).c_str()), search_parser);
+            session->request(yield, utils::format("A%03d UID SEARCH UID %d:*\r\n", ++seq, m_position + 1), search_parser);
 
             if (m_position == end)
             {
@@ -552,57 +573,65 @@ public:
 
                 if (m_idle)
                 {
-                    session->request(yield, utils::format("%u IDLE\r\n", ++seq), idle_parser, infinite ? max_polling_timeout : min_polling_timeout);
+                    session->request(yield, utils::format("A%03d IDLE\r\n", ++seq), idle_parser, infinite ? max_polling_timeout : min_polling_timeout);
                     session->request(yield, "DONE\r\n", success_checker);
                 }
                 else
                 {
                     session->snooze(yield, infinite ? max_polling_timeout : min_polling_timeout);
                 }
-                session->request(yield, utils::format("%u NOOP\r\n", ++seq), success_checker);
+                session->request(yield, utils::format("A%03d NOOP\r\n", ++seq), success_checker);
             }
             else
             {
                 session->request(yield,
-                    utils::format("%u UID FETCH %d (BODY.PEEK[TEXT] BODY[HEADER.FIELDS (FROM TO)])\r\n", ++seq, m_position),
-                    fetch_parser
+                    utils::format("A%03d UID FETCH %d (BODY[HEADER.FIELDS (SUBJECT FROM TO)])\r\n", ++seq, m_position),
+                    header_parser
                 );
+
+                if (m_config.are_defined(m_couple.host, m_couple.peer))
+                {
+                    session->request(yield,
+                        utils::format("A%03d UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++seq, m_position),
+                        body_parser
+                    );
+                }
             }
         }
-        while (!m_data.has_value());
+        while (!m_letter.has_value());
 
-        session->request(yield, utils::format("%u UID STORE %d +flags \\DELETED\r\n", ++seq, m_position), success_checker);
-        session->request(yield, utils::format("%u LOGOUT\r\n", ++seq), success_checker);
+        session->request(yield, utils::format("A%03d UID STORE %d +flags \\DELETED\r\n", ++seq, m_position), success_checker);
+        session->request(yield, utils::format("A%03d LOGOUT\r\n", ++seq), success_checker);
     }
 
     const reference& pull(boost::asio::yield_context yield, const std::string& subject)
     {
-        if (!m_data.has_value())
+        if (!m_letter.has_value())
             wait(yield, subject, false);
 
-        return m_data.value();
+        return m_letter.value();
     }
 
     const identity& host() const noexcept(true)
     {
-        return m_host;
+        return m_couple.host;
     }
 
     const identity& peer() const noexcept(true)
     {
-        return m_peer;
+        return m_couple.peer;
     }
 
     void host(const identity& info) noexcept(true)
     {
-        m_host = info;
-        m_data = {};
+        m_filter.host = info;
+        m_letter = {};
     }
 
     void peer(const identity& info) noexcept(true)
     {
-        m_peer = info;
-        m_data = {};
+        m_filter.peer = info;
+        m_letter = {};
     }
 
 private:
@@ -612,9 +641,16 @@ private:
     bool m_idle = false;
     uint64_t m_validity = 0;
     uint64_t m_position = 0;
-    identity m_host;
-    identity m_peer;
-    std::optional<reference> m_data;
+    std::string m_subject;
+    struct {
+        identity host;
+        identity peer;
+    } m_filter;
+    struct {
+        identity host;
+        identity peer;
+    } m_couple;
+    std::optional<reference> m_letter;
 };
 
 class pipe_impl : public pipe
@@ -661,7 +697,7 @@ public:
 
     const identity& peer() const noexcept(true) override
     {
-        return m_puller.peer();
+        return m_pusher.peer();
     }
 };
 
@@ -686,9 +722,6 @@ void spawn_accept(boost::asio::io_context& io, const email::context& conf, const
             {
                 handler(yield, pipe);
             }, boost::asio::detached);
-
-            puller.host(host);
-            puller.peer(peer);
         }
         while (true);
     }, boost::asio::detached);
@@ -745,9 +778,6 @@ void receive_advent(boost::asio::io_context& io, const email::context& conf, con
                 boost::asio::post(io, std::bind(handler, puller.host(), puller.peer()));
 
                 _dbg_ << "advent: " << puller.peer() << ":" << conf.app << " -> " << puller.host();
-
-                puller.host(host);
-                puller.peer(peer);
             }
             while (true);
         }

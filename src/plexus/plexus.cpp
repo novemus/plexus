@@ -316,7 +316,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
             _err_ << "inviting: " << e.what();
 
             if (failure)
-                failure(pipe->host(), pipe->peer(), e.what());
+                failure(host, peer, e.what());
         }
     };
 
