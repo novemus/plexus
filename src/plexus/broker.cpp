@@ -22,12 +22,12 @@ class broker_impl : public plexus::sync_broker
 {
     boost::asio::io_context& m_io;
     struct {
-        plexus::endpoint udp;
-        plexus::endpoint tcp;
+        endpoint udp;
+        endpoint tcp;
     } m_stun;
     struct {
-        plexus::endpoint udp;
-        plexus::endpoint tcp;
+        endpoint udp;
+        endpoint tcp;
     } m_bind;
     uint16_t m_punch;
 
@@ -77,7 +77,7 @@ class broker_impl : public plexus::sync_broker
         }
     };
 
-    void punch_tcp_hole(boost::asio::yield_context yield, const plexus::endpoint& peer) noexcept(false)
+    void punch_tcp_hole(boost::asio::yield_context yield, const endpoint& peer) noexcept(false)
     {
         _dbg_ << "punching tcp hole...";
 
@@ -95,7 +95,7 @@ class broker_impl : public plexus::sync_broker
         }
     }
 
-    void touch_peer(boost::asio::yield_context yield, const plexus::endpoint& peer, uint64_t nonce, plexus::relation role) noexcept(false)
+    void touch_peer(boost::asio::yield_context yield, const endpoint& peer, uint64_t nonce, schema role) noexcept(false)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -140,7 +140,7 @@ class broker_impl : public plexus::sync_broker
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    void await_peer(boost::asio::yield_context yield, const plexus::endpoint& peer, uint64_t nonce, plexus::relation role) noexcept(false)
+    void await_peer(boost::asio::yield_context yield, const endpoint& peer, uint64_t nonce, schema role) noexcept(false)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -171,7 +171,7 @@ class broker_impl : public plexus::sync_broker
                     pin->send_to(out, peer, yield);
                 }
 
-                if (in.flag() == 1 || role == relation::server)
+                if (in.flag() == 1 || role == schema::server)
                 {
                     pin->send_to(out, peer, yield);
 
@@ -197,7 +197,7 @@ class broker_impl : public plexus::sync_broker
 
         if (term.qos.proto != protocol::udp)
         {
-            if (term.qos.role == relation::server && host.tcp.force.nat)
+            if (term.qos.role == schema::server && host.tcp.force.nat)
                 punch_tcp_hole(yield, peer.tcp.outer);
 
             bool not_awaitable = host.udp.outer == endpoint{} || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
@@ -215,7 +215,7 @@ class broker_impl : public plexus::sync_broker
             ? await_peer(yield, peer.udp.outer, term.secret, term.qos.role)
             : touch_peer(yield, peer.udp.outer, term.secret, term.qos.role);
 
-        if (term.qos.role == relation::client)
+        if (term.qos.role == schema::client)
         {
             boost::asio::deadline_timer timer(m_io);
             timer.expires_from_now(boost::posix_time::milliseconds(plexus::utils::getenv<int64_t>("PLEXUS_PRECONNECT_TIMEOUT", 1000)));

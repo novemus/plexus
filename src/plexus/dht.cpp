@@ -476,7 +476,7 @@ public:
                 {
                     ptr->data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
                     ptr->data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
-                    ptr->data.qos = criteria { protocol::udp, relation::either };
+                    ptr->data.qos = criteria { protocol::udp, schema::either };
                     ptr->data.puzzle = std::stoull(match.str(3));
 
                     boost::system::error_code ec;
@@ -587,7 +587,7 @@ public:
 
         auto to = repo.load_cert(peer);
         auto from = repo.load_key(host);
-        auto message = gateway.qos.proto == protocol::udp && gateway.qos.role == relation::either
+        auto message = gateway.qos.proto == protocol::udp && gateway.qos.role == schema::either
                            ? plexus::utils::format("PLEXUS 3.0 %s %u %llu",
                                  gateway.udp.outer.address.to_string().c_str(),
                                  gateway.udp.outer.port,

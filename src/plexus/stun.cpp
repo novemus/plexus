@@ -167,7 +167,7 @@ class message : public tubus::mutable_buffer
                 if (length != 8u)
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
-                return plexus::endpoint {
+                return endpoint {
                     boost::asio::ip::make_address(utils::format("%d.%d.%d.%d", ptr[8], ptr[9], ptr[10], ptr[11])),
                     read_short(ptr, 6)
                 };
@@ -177,7 +177,7 @@ class message : public tubus::mutable_buffer
                 if (length != 20u)
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
-                plexus::endpoint {
+                endpoint {
                     boost::asio::ip::make_address(utils::format("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
                     read_short(ptr, 6)
                 };
@@ -187,7 +187,7 @@ class message : public tubus::mutable_buffer
         if (type() == msg::binding_response)
             throw plexus::context_error(__FUNCTION__, utils::format("attribute %d not found", kind));
 
-        return plexus::endpoint {};
+        return endpoint {};
     }
 
 public:
@@ -262,17 +262,17 @@ class client_impl : public stun_client
 {
     boost::asio::io_context& m_io;
     struct {
-        plexus::endpoint udp;
-        plexus::endpoint tcp;
+        endpoint udp;
+        endpoint tcp;
     } m_stun;
     struct {
-        plexus::endpoint udp;
-        plexus::endpoint tcp;
+        endpoint udp;
+        endpoint tcp;
     } m_bind;
 
     struct cache
     {
-        static bool get(plexus::protocol proto, const plexus::endpoint& stun, plexus::traverse::hole& hole)
+        static bool get(protocol proto, const endpoint& stun, traverse::hole& hole)
         {
             std::unique_lock<std::mutex> lock(mutex());
             const cache& val = value(proto, stun);
@@ -289,7 +289,7 @@ class client_impl : public stun_client
             return false;
         }
 
-        static bool set(plexus::protocol proto, const plexus::endpoint& stun, const plexus::traverse::hole& hole)
+        static bool set(protocol proto, const endpoint& stun, const traverse::hole& hole)
         {
             std::unique_lock<std::mutex> lock(mutex());
             cache& val = value(proto, stun);
@@ -318,14 +318,14 @@ class client_impl : public stun_client
             return s_mutex;
         }
 
-        static cache& value(plexus::protocol proto, const plexus::endpoint& stun)
+        static cache& value(protocol proto, const endpoint& stun)
         {
             static std::unordered_map<boost::asio::ip::udp::endpoint, cache> s_udp;
             static std::unordered_map<boost::asio::ip::tcp::endpoint, cache> s_tcp;
-            return proto == plexus::protocol::udp ? s_udp[stun] : s_tcp[stun];
+            return proto == protocol::udp ? s_udp[stun] : s_tcp[stun];
         }
 
-        plexus::traverse::hole hole;
+        traverse::hole hole;
         std::chrono::time_point<std::chrono::steady_clock> time;
     };
 
@@ -340,7 +340,7 @@ public:
         m_bind.tcp = utils::locate<boost::asio::ip::tcp>(tcp_bind);
     }
 
-    message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<plexus::network::udp_socket> sock, const plexus::endpoint& to, const plexus::endpoint& from, const message& req = message(0), int64_t deadline = 4600)
+    message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<network::udp_socket> sock, const endpoint& to, const endpoint& from, const message& req = message(0), int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -400,7 +400,7 @@ public:
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    message exec_tcp_binding(boost::asio::yield_context yield, const plexus::endpoint& bind, const plexus::endpoint& stun, const message& req = message(0), int64_t deadline = 10000)
+    message exec_tcp_binding(boost::asio::yield_context yield, const endpoint& bind, const endpoint& stun, const message& req = message(0), int64_t deadline = 10000)
     {
         auto timeout = [deadline, start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -456,7 +456,7 @@ public:
         }
     }
 
-    static bool identical(const plexus::endpoint& lhs, const plexus::endpoint& rhs)
+    static bool identical(const endpoint& lhs, const endpoint& rhs)
     {
         if(lhs.port != rhs.port)
             return false;
@@ -553,14 +553,14 @@ public:
     {
         _trc_ << "making traverse for udp...";
 
-        auto mapper = plexus::network::create_udp_socket(m_io, m_bind.udp);
+        auto mapper = network::create_udp_socket(m_io, m_bind.udp);
         auto binding = exec_udp_binding(yield, mapper, m_stun.udp, m_stun.udp);
 
-        pass.udp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
+        pass.udp.force = firewall { false, true, false, false, firewall::independent, firewall::independent };
         pass.udp.inner = m_bind.udp;
         pass.udp.outer = binding.mapped_endpoint();
 
-        if (!cache::get(plexus::protocol::udp, m_stun.udp, pass.udp) && !identical(pass.udp.inner, pass.udp.outer))
+        if (!cache::get(protocol::udp, m_stun.udp, pass.udp) && !identical(pass.udp.inner, pass.udp.outer))
         {
             pass.udp.force.nat = true;
 
@@ -570,8 +570,8 @@ public:
             }
 
             auto changed_full = binding.changed_endpoint();
-            auto changed_addr = plexus::endpoint{ changed_full.address, m_stun.udp.port };
-            auto changed_port = plexus::endpoint{ m_stun.udp.address, changed_full.port };
+            auto changed_addr = endpoint{ changed_full.address, m_stun.udp.port };
+            auto changed_port = endpoint{ m_stun.udp.address, changed_full.port };
 
             _trc_ << "first mapping test...";
 
@@ -649,7 +649,7 @@ public:
             catch(const plexus::timeout_error&) {}
         }
 
-        cache::set(plexus::protocol::udp, m_stun.udp, pass.udp);
+        cache::set(protocol::udp, m_stun.udp, pass.udp);
 
         _inf_ << "udp traverse: inner=" << pass.udp.inner << " outer=" << pass.udp.outer << " force=" << pass.udp.force;
     }
@@ -660,11 +660,11 @@ public:
 
         auto binding = exec_tcp_binding(yield, m_bind.tcp, m_stun.tcp);
 
-        pass.tcp.force = plexus::firewall { false, true, false, false, firewall::independent, firewall::independent };
+        pass.tcp.force = firewall { false, true, false, false, firewall::independent, firewall::independent };
         pass.tcp.inner = m_bind.tcp;
         pass.tcp.outer = binding.mapped_endpoint();
 
-        if (!cache::get(plexus::protocol::tcp, m_stun.tcp, pass.tcp) && !identical(pass.tcp.inner, pass.tcp.outer))
+        if (!cache::get(protocol::tcp, m_stun.tcp, pass.tcp) && !identical(pass.tcp.inner, pass.tcp.outer))
         {
             pass.tcp.force.nat = true;
             pass.tcp.force.filtering = firewall::address_and_port_dependent;
@@ -675,8 +675,8 @@ public:
             }
 
             auto changed_full = binding.changed_endpoint();
-            auto changed_addr = plexus::endpoint{ changed_full.address, m_stun.tcp.port };
-            auto changed_port = plexus::endpoint{ m_stun.tcp.address, changed_full.port };
+            auto changed_addr = endpoint{ changed_full.address, m_stun.tcp.port };
+            auto changed_port = endpoint{ m_stun.tcp.address, changed_full.port };
 
             _trc_ << "first mapping test...";
 
@@ -715,7 +715,7 @@ public:
             {
                 _trc_ << "hairpin test...";
 
-                auto self = plexus::network::create_tcp_socket(m_io, m_bind.tcp, pass.tcp.outer);
+                auto self = network::create_tcp_socket(m_io, m_bind.tcp, pass.tcp.outer);
                 self->connect(yield, 1400);
                 self->shutdown();
 
@@ -724,7 +724,7 @@ public:
             catch(const std::exception&) { }
         }
 
-        cache::set(plexus::protocol::tcp, m_stun.tcp, pass.tcp);
+        cache::set(protocol::tcp, m_stun.tcp, pass.tcp);
 
         _inf_ << "tcp traverse: inner=" << pass.tcp.inner << " outer=" << pass.tcp.outer << " force=" << pass.tcp.force;
     }

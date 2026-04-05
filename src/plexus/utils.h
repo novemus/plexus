@@ -90,7 +90,7 @@ boost::asio::ip::basic_endpoint<proto> parse_endpoint(const std::string& url, co
 }
 
 template<class proto>
-plexus::endpoint locate(const plexus::endpoint& ep)
+endpoint locate(const endpoint& ep)
 {
     if (ep.port == 0)
     {
@@ -100,7 +100,7 @@ plexus::endpoint locate(const plexus::endpoint& ep)
         socket.bind(ep);
 
         auto ep = socket.local_endpoint();
-        return plexus::endpoint { ep.address(), ep.port() };
+        return endpoint { ep.address(), ep.port() };
     }
     return ep;
 }

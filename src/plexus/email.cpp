@@ -198,7 +198,7 @@ class smtp
 
     std::string make_message(const reference& data)
     {
-        if (data.qos.proto == protocol::udp && data.qos.role == relation::either)
+        if (data.qos.proto == protocol::udp && data.qos.role == schema::either)
             return plexus::utils::format("PLEXUS 3.0 %s %u %llu", data.udp.outer.address.to_string().c_str(), data.udp.outer.port, data.puzzle);
 
         return plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %llu",
@@ -454,7 +454,7 @@ class imap
                         reference data;
                         data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
                         data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
-                        data.qos = criteria { protocol::udp, relation::either };
+                        data.qos = criteria { protocol::udp, schema::either };
                         data.puzzle = std::stoull(match.str(3));
 
                         m_letter = data;

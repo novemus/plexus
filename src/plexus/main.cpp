@@ -16,7 +16,9 @@
 #include <unordered_map>
 #include <boost/program_options.hpp>
 
-template<const char* service> struct plexus_endpoint : public plexus::endpoint { };
+using namespace plexus;
+
+template<const char* service> struct plexus_endpoint : public endpoint { };
 
 constexpr char stun_server_default_port[] = "3478";
 constexpr char stun_client_default_port[] = "0";
@@ -38,12 +40,12 @@ void validate(boost::any& result, const std::vector<std::string>& values, plexus
     {
         if (std::strcmp(service, stun_server_default_port) == 0 || std::strcmp(service, stun_client_default_port) == 0)
         {
-            auto ep = plexus::utils::parse_endpoint<boost::asio::ip::udp>(url, service);
+            auto ep = utils::parse_endpoint<boost::asio::ip::udp>(url, service);
             result = plexus_endpoint<service> { ep.address(), ep.port() };
         }
         else
         {
-            auto ep = plexus::utils::parse_endpoint<boost::asio::ip::tcp>(url, service);
+            auto ep = utils::parse_endpoint<boost::asio::ip::tcp>(url, service);
             result = plexus_endpoint<service> { ep.address(), ep.port() };
         }
     }
@@ -61,9 +63,9 @@ int main(int argc, char** argv)
         ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate connection")
         ("app-name", boost::program_options::value<std::string>()->required(), "name of the application")
         ("app-repo", boost::program_options::value<std::string>()->default_value(""), "path to the application repository")
-        ("app-qos", boost::program_options::value<plexus::criteria>()->default_value(plexus::criteria()), "application criteria: udp:client|udp:server|tcp:client|tcp:server|ssl:client|ssl:server")
-        ("host-id", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the host: <email/pin>")
-        ("peer-id", boost::program_options::value<plexus::identity>()->default_value(plexus::identity()), "identifier of the peer: <email/pin>")
+        ("app-qos", boost::program_options::value<criteria>()->default_value(criteria()), "application protocol and connection schema: udp:client|udp:server|udp:mutual|tcp:client|tcp:server|tcp:mutual|ssl:client|ssl:server|ssl:mutual|any:either")
+        ("host-id", boost::program_options::value<identity>()->default_value(identity()), "identifier of the host: <email/pin>")
+        ("peer-id", boost::program_options::value<identity>()->default_value(identity()), "identifier of the peer: <email/pin>")
         ("udp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "udp endpoint to bind the application")
         ("tcp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "tcp endpoint to bind the application")
         ("udp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the udp STUN server")
@@ -136,7 +138,7 @@ int main(int argc, char** argv)
     {
         wormhole::log::set(vm["log-level"].as<wormhole::log::severity>(), vm["log-file"].as<std::string>());
 
-        auto launch = [&](const plexus::identity& host, const plexus::identity& peer, const plexus::contract& info)
+        auto launch = [&](const identity& host, const identity& peer, const contract& info)
         {
             static constexpr const char* HOSTID = "%hostid%";
             static constexpr const char* PEERID = "%peerid%";
@@ -172,13 +174,13 @@ int main(int argc, char** argv)
                     else if (token == PEERID)
                         replacements[token] = peer.owner + "/" + peer.pin;
                     else if (token == INNER)
-                        replacements[token] = plexus::endpoint::to_string(info.inner);
+                        replacements[token] = endpoint::to_string(info.inner);
                     else if (token == OUTER)
-                        replacements[token] = plexus::endpoint::to_string(info.outer);
+                        replacements[token] = endpoint::to_string(info.outer);
                     else if (token == ALIEN)
-                        replacements[token] = plexus::endpoint::to_string(info.alien);
+                        replacements[token] = endpoint::to_string(info.alien);
                     else if (token == QOS)
-                        replacements[token] = plexus::criteria::to_string(info.qos);
+                        replacements[token] = criteria::to_string(info.qos);
                     else if (token == SECRET)
                         replacements[token] = std::to_string(info.secret);
                     else if (token == HOSTCERT)
@@ -216,7 +218,7 @@ int main(int argc, char** argv)
                 );
         };
 
-        plexus::options config = {
+        options config = {
             vm["app-name"].as<std::string>(),
             vm["app-repo"].as<std::string>(),
             vm["udp-bind"].as<stun_client_endpoint>(),
@@ -224,10 +226,10 @@ int main(int argc, char** argv)
             vm["udp-stun"].as<stun_server_endpoint>(),
             vm["tcp-stun"].as<stun_server_endpoint>(),
             vm["punch-hops"].as<uint16_t>(),
-            vm["app-qos"].as<plexus::criteria>(),
+            vm["app-qos"].as<criteria>(),
             vm.count("email-smtps")
-                ? plexus::rendezvous {
-                    plexus::emailer {
+                ? rendezvous {
+                    emailer {
                         vm["email-smtps"].as<smtp_server_endpoint>(),
                         vm["email-imaps"].as<imap_server_endpoint>(),
                         vm["email-login"].as<std::string>(),
@@ -236,8 +238,8 @@ int main(int argc, char** argv)
                         vm["email-key"].as<std::string>(),
                         vm["email-ca"].as<std::string>() 
                     }}
-                : plexus::rendezvous {
-                    plexus::dhtnode {
+                : rendezvous {
+                    dhtnode {
                         vm["dht-bootstrap"].as<std::string>(),
                         vm["dht-port"].as<uint16_t>(),
                         vm["dht-network"].as<uint32_t>() 
@@ -246,8 +248,8 @@ int main(int argc, char** argv)
 
         boost::asio::io_context io;
         vm["accept"].as<bool>()
-            ? plexus::spawn_accept(io, config, vm["host-id"].as<plexus::identity>(), vm["peer-id"].as<plexus::identity>(), launch)
-            : plexus::spawn_invite(io, config, vm["host-id"].as<plexus::identity>(), vm["peer-id"].as<plexus::identity>(), launch);
+            ? plexus::spawn_accept(io, config, vm["host-id"].as<identity>(), vm["peer-id"].as<identity>(), launch)
+            : plexus::spawn_invite(io, config, vm["host-id"].as<identity>(), vm["peer-id"].as<identity>(), launch);
         io.run();
     }
     catch(const std::exception& e)

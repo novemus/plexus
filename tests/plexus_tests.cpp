@@ -20,16 +20,18 @@
 
 namespace tests
 {
+    using namespace plexus;
+
     class context
     {
         std::string m_app;
         std::string m_repo;
-        plexus::identity m_host;
-        plexus::identity m_peer;
-        plexus::emailer m_emailer;
-        plexus::dhtnode m_dhtnode;
-        plexus::endpoint m_udp_stun;
-        plexus::endpoint m_tcp_stun;
+        identity m_host;
+        identity m_peer;
+        emailer m_emailer;
+        dhtnode m_dhtnode;
+        endpoint m_udp_stun;
+        endpoint m_tcp_stun;
         uint16_t m_hops;
 
     public:
@@ -39,25 +41,25 @@ namespace tests
             wormhole::log::set(wormhole::log::debug);
 
             m_app = "plexus_test_app";
-            m_host.owner = plexus::utils::getenv<std::string>("EMAIL_LOGIN", "");
+            m_host.owner = utils::getenv<std::string>("EMAIL_LOGIN", "");
             m_host.pin = "host";
-            m_peer.owner = plexus::utils::getenv<std::string>("EMAIL_LOGIN", "");
+            m_peer.owner = utils::getenv<std::string>("EMAIL_LOGIN", "");
             m_peer.pin = "peer";
 
-            m_emailer = plexus::emailer {
-                plexus::utils::getenv<plexus::endpoint>("SMTP_SERVER", plexus::endpoint{}),
-                plexus::utils::getenv<plexus::endpoint>("IMAP_SERVER", plexus::endpoint{}),
-                plexus::utils::getenv<std::string>("EMAIL_LOGIN", ""),
-                plexus::utils::getenv<std::string>("EMAIL_PASSWORD", ""),
+            m_emailer = emailer {
+                utils::getenv<endpoint>("SMTP_SERVER", endpoint{}),
+                utils::getenv<endpoint>("IMAP_SERVER", endpoint{}),
+                utils::getenv<std::string>("EMAIL_LOGIN", ""),
+                utils::getenv<std::string>("EMAIL_PASSWORD", ""),
                 "", "", ""
             };
 
-            m_dhtnode = plexus::dhtnode { plexus::utils::getenv<std::string>("DHT_BOOTSTRAP", ""), 0, 0 };
+            m_dhtnode = dhtnode { utils::getenv<std::string>("DHT_BOOTSTRAP", ""), 0, 0 };
 
             m_repo = std::filesystem::temp_directory_path().generic_u8string() + "/" + m_app;
-            m_udp_stun = plexus::utils::getenv<plexus::endpoint>("UDP_STUN_SERVER", plexus::endpoint{});
-            m_tcp_stun = plexus::utils::getenv<plexus::endpoint>("TCP_STUN_SERVER", plexus::endpoint{});
-            m_hops = plexus::utils::getenv<uint16_t>("PUNCH_HOPS", 5);
+            m_udp_stun = utils::getenv<endpoint>("UDP_STUN_SERVER", endpoint{});
+            m_tcp_stun = utils::getenv<endpoint>("TCP_STUN_SERVER", endpoint{});
+            m_hops = utils::getenv<uint16_t>("PUNCH_HOPS", 5);
 
             auto host_dir = m_repo + "/" + m_host.owner + "/" + m_host.pin;
             auto peer_dir = m_repo + "/" + m_peer.owner + "/" + m_peer.pin;
@@ -77,31 +79,31 @@ namespace tests
             std::filesystem::create_symlink(std::filesystem::canonical("certs/ca.crt"), peer_dir + "/ca.crt");
         }
 
-        plexus::options make_config(bool email, plexus::protocol proto, plexus::relation role) const
+        options make_config(bool email, protocol proto, schema role) const
         {
-            return plexus::options {
+            return options {
                 m_app,
                 m_repo,
-                plexus::endpoint {},
-                plexus::endpoint {},
+                endpoint {},
+                endpoint {},
                 m_udp_stun,
                 m_tcp_stun,
                 m_hops,
-                plexus::criteria { proto, role },
+                criteria { proto, role },
                 email 
-                    ? plexus::rendezvous { m_emailer } 
-                    : plexus::rendezvous { m_dhtnode }
+                    ? rendezvous { m_emailer } 
+                    : rendezvous { m_dhtnode }
             };
         }
 
         void make_stun_test() const
         {
             boost::asio::io_context io;
-            plexus::explore_network(io, plexus::endpoint{}, plexus::endpoint{}, m_udp_stun, m_tcp_stun,
-                [&](const plexus::traverse& pass)
+            explore_network(io, endpoint{}, endpoint{}, m_udp_stun, m_tcp_stun,
+                [&](const traverse& pass)
                 {
-                    BOOST_CHECK_NE(pass.udp.outer, plexus::endpoint{});
-                    BOOST_CHECK_NE(pass.tcp.outer, plexus::endpoint{});
+                    BOOST_CHECK_NE(pass.udp.outer, endpoint{});
+                    BOOST_CHECK_NE(pass.tcp.outer, endpoint{});
                 },
                 [&](const std::string& error)
                 {
@@ -114,27 +116,27 @@ namespace tests
 
         void make_rendezvous_test(bool email) const
         {
-            auto config = make_config(email, plexus::protocol::udp, plexus::relation::either);
+            auto config = make_config(email, protocol::udp, schema::either);
             auto acc = std::async(std::launch::async, [&]()
             {
                 boost::asio::io_context io;
 
-                plexus::spawn_accept(io, config, m_host, m_peer, 
-                    [&](const plexus::identity& host, const plexus::identity& peer, const plexus::contract& term)
+                spawn_accept(io, config, m_host, m_peer, 
+                    [&](const identity& host, const identity& peer, const contract& term)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, host.owner);
                         BOOST_CHECK_EQUAL(m_host.pin, host.pin);
                         BOOST_CHECK_EQUAL(m_peer.owner, peer.owner);
                         BOOST_CHECK_EQUAL(m_peer.pin, peer.pin);
-                        BOOST_CHECK_EQUAL(term.qos.proto, plexus::protocol::udp);
-                        BOOST_CHECK_EQUAL(term.qos.role, plexus::relation::server);
-                        BOOST_CHECK_NE(term.inner, plexus::endpoint{});
-                        BOOST_CHECK_NE(term.outer, plexus::endpoint{});
-                        BOOST_CHECK_NE(term.alien, plexus::endpoint{});
+                        BOOST_CHECK_EQUAL(term.qos.proto, protocol::udp);
+                        BOOST_CHECK_EQUAL(term.qos.role, schema::server);
+                        BOOST_CHECK_NE(term.inner, endpoint{});
+                        BOOST_CHECK_NE(term.outer, endpoint{});
+                        BOOST_CHECK_NE(term.alien, endpoint{});
                         BOOST_CHECK_NE(term.secret, 0);
                         io.stop();
                     },
-                    [&](const plexus::identity& host, const plexus::identity& peer, const std::string& error)
+                    [&](const identity& host, const identity& peer, const std::string& error)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, host.owner);
                         BOOST_CHECK_EQUAL(m_host.pin, host.pin);
@@ -151,22 +153,22 @@ namespace tests
             {
                 boost::asio::io_context io;
 
-                plexus::spawn_invite(io, config, m_peer, m_host, 
-                    [&](const plexus::identity& host, const plexus::identity& peer, const plexus::contract& term)
+                spawn_invite(io, config, m_peer, m_host, 
+                    [&](const identity& host, const identity& peer, const contract& term)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, peer.owner);
                         BOOST_CHECK_EQUAL(m_host.pin, peer.pin);
                         BOOST_CHECK_EQUAL(m_peer.owner, host.owner);
                         BOOST_CHECK_EQUAL(m_peer.pin, host.pin);
-                        BOOST_CHECK_EQUAL(term.qos.proto, plexus::protocol::udp);
-                        BOOST_CHECK_EQUAL(term.qos.role, plexus::relation::client);
-                        BOOST_CHECK_NE(term.inner, plexus::endpoint{});
-                        BOOST_CHECK_NE(term.outer, plexus::endpoint{});
-                        BOOST_CHECK_NE(term.alien, plexus::endpoint{});
+                        BOOST_CHECK_EQUAL(term.qos.proto, protocol::udp);
+                        BOOST_CHECK_EQUAL(term.qos.role, schema::client);
+                        BOOST_CHECK_NE(term.inner, endpoint{});
+                        BOOST_CHECK_NE(term.outer, endpoint{});
+                        BOOST_CHECK_NE(term.alien, endpoint{});
                         BOOST_CHECK_NE(term.secret, 0);
                         io.stop();
                     },
-                    [&](const plexus::identity& host, const plexus::identity& peer, const std::string& error)
+                    [&](const identity& host, const identity& peer, const std::string& error)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, peer.owner);
                         BOOST_CHECK_EQUAL(m_host.pin, peer.pin);
@@ -189,8 +191,8 @@ namespace tests
             {
                 boost::asio::io_context io;
 
-                plexus::receive_advent(io, email ? plexus::rendezvous { m_emailer } : plexus::rendezvous { m_dhtnode }, m_app, m_repo, m_host, m_peer, 
-                    [&](const plexus::identity& h, const plexus::identity& p)
+                receive_advent(io, email ? rendezvous { m_emailer } : rendezvous { m_dhtnode }, m_app, m_repo, m_host, m_peer, 
+                    [&](const identity& h, const identity& p)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, h.owner);
                         BOOST_CHECK_EQUAL(m_host.pin, h.pin);
@@ -198,7 +200,7 @@ namespace tests
                         BOOST_CHECK_EQUAL(m_peer.pin, p.pin);
                         io.stop();
                     },
-                    [&](const plexus::identity& h, const plexus::identity& p, const std::string& error)
+                    [&](const identity& h, const identity& p, const std::string& error)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, h.owner);
                         BOOST_CHECK_EQUAL(m_host.pin, h.pin);
@@ -215,8 +217,8 @@ namespace tests
             {
                 boost::asio::io_context io;
 
-                plexus::forward_advent(io, email ? plexus::rendezvous { m_emailer } : plexus::rendezvous { m_dhtnode }, m_app, m_repo, m_peer, m_host,
-                    [&](const plexus::identity& h, const plexus::identity& p)
+                forward_advent(io, email ? rendezvous { m_emailer } : rendezvous { m_dhtnode }, m_app, m_repo, m_peer, m_host,
+                    [&](const identity& h, const identity& p)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, p.owner);
                         BOOST_CHECK_EQUAL(m_host.pin, p.pin);
@@ -224,7 +226,7 @@ namespace tests
                         BOOST_CHECK_EQUAL(m_peer.pin, h.pin);
                         io.stop();
                     },
-                    [&](const plexus::identity& h, const plexus::identity& p, const std::string& error)
+                    [&](const identity& h, const identity& p, const std::string& error)
                     {
                         BOOST_CHECK_EQUAL(m_host.owner, p.owner);
                         BOOST_CHECK_EQUAL(m_host.pin, p.pin);
@@ -243,17 +245,17 @@ namespace tests
 
         template<typename channel> void make_application_test()
         {
-            auto proto = std::is_same<channel, tubus::udp_channel>::value ? plexus::protocol::udp : plexus::protocol::tcp;
-            auto config = make_config(false, proto, plexus::relation::either);
+            auto proto = std::is_same<channel, tubus::udp_channel>::value ? protocol::udp : protocol::tcp;
+            auto config = make_config(false, proto, schema::either);
 
             auto acc = std::async(std::launch::async, [&]()
             {
                 boost::asio::io_context io;
-                plexus::spawn_accept(io, config, m_host, m_peer, 
-                    [&](const plexus::identity& host, const plexus::identity& peer, const plexus::contract& term)
+                spawn_accept(io, config, m_host, m_peer, 
+                    [&](const identity& host, const identity& peer, const contract& term)
                     {
                         BOOST_REQUIRE_EQUAL(term.qos.proto, proto);
-                        BOOST_REQUIRE_EQUAL(term.qos.role, plexus::relation::server);
+                        BOOST_REQUIRE_EQUAL(term.qos.role, schema::server);
 
                         auto server = channel::create(io, term.secret);
                         server->open(term.inner);
@@ -280,7 +282,7 @@ namespace tests
                             });
                         });
                     },
-                    [&](const plexus::identity& host, const plexus::identity& peer, const std::string& error)
+                    [&](const identity& host, const identity& peer, const std::string& error)
                     {
                         BOOST_ERROR(error.c_str());
                         io.stop();
@@ -292,11 +294,11 @@ namespace tests
             auto inv = std::async(std::launch::async, [&]()
             {
                 boost::asio::io_context io;
-                plexus::spawn_invite(io, config, m_peer, m_host,
-                    [&](const plexus::identity& host, const plexus::identity& peer, const plexus::contract& term)
+                spawn_invite(io, config, m_peer, m_host,
+                    [&](const identity& host, const identity& peer, const contract& term)
                     {
                         BOOST_REQUIRE_EQUAL(term.qos.proto, proto);
-                        BOOST_REQUIRE_EQUAL(term.qos.role, plexus::relation::client);
+                        BOOST_REQUIRE_EQUAL(term.qos.role, schema::client);
 
                         auto client = channel::create(io, term.secret);
                         client->open(term.inner);
@@ -323,7 +325,7 @@ namespace tests
                             });
                         });
                     },
-                    [&](const plexus::identity& host, const plexus::identity& peer, const std::string& error)
+                    [&](const identity& host, const identity& peer, const std::string& error)
                     {
                         BOOST_ERROR(error.c_str());
                         io.stop();

@@ -18,9 +18,9 @@
 namespace plexus {
 
 using protocol = wormhole::protocol;
-using relation = wormhole::relation;
+using schema   = wormhole::schema;
 using endpoint = wormhole::endpoint;
-using criteria = wormhole::quality;
+using criteria = wormhole::criteria;
 
 struct firewall
 {

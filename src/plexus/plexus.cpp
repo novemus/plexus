@@ -125,7 +125,7 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
     {
         if (host_pass.tcp.force.mapping == firewall::independent && !host_pass.tcp.force.variable_address)
         {
-            if (host_pass.qos.role == relation::server || host_pass.qos.role == relation::either)
+            if (host_pass.qos.role == schema::server || host_pass.qos.role == schema::either)
             {
                 if (host_pass.qos.proto == protocol::ssl || (host_pass.qos.proto == protocol::any && !host_pass.tcp.force.nat))
                     host_variants |= SSL_SERVER;
@@ -135,14 +135,14 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
         }
         if (host_pass.tcp.force.mapping == firewall::independent || peer_pass.tcp.force.filtering == firewall::independent)
         {
-            if (host_pass.qos.role == relation::client || host_pass.qos.role == relation::either)
+            if (host_pass.qos.role == schema::client || host_pass.qos.role == schema::either)
             {
                 if (host_pass.qos.proto == protocol::ssl || host_pass.qos.proto == protocol::any)
                     host_variants |= SSL_CLIENT;
                 if (host_pass.qos.proto == protocol::tcp || host_pass.qos.proto == protocol::any)
                     host_variants |= TCP_CLIENT;
             }
-            if (host_pass.qos.role == relation::mutual || host_pass.qos.role == relation::either)
+            if (host_pass.qos.role == schema::mutual || host_pass.qos.role == schema::either)
             {
                 if (host_pass.qos.proto == protocol::ssl || host_pass.qos.proto == protocol::any)
                     host_variants |= SSL_MUTUAL;
@@ -152,7 +152,7 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
         }
         if (peer_pass.tcp.force.mapping == firewall::independent && !peer_pass.tcp.force.variable_address)
         {
-            if (peer_pass.qos.role == relation::server || peer_pass.qos.role == relation::either)
+            if (peer_pass.qos.role == schema::server || peer_pass.qos.role == schema::either)
             {
                 if (peer_pass.qos.proto == protocol::ssl || (peer_pass.qos.proto == protocol::any && !peer_pass.tcp.force.nat))
                     peer_variants |= SSL_SERVER;
@@ -162,14 +162,14 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
         }
         if (peer_pass.tcp.force.mapping == firewall::independent || host_pass.tcp.force.filtering == firewall::independent)
         {
-            if (peer_pass.qos.role == relation::client || peer_pass.qos.role == relation::either)
+            if (peer_pass.qos.role == schema::client || peer_pass.qos.role == schema::either)
             {
                 if (peer_pass.qos.proto == protocol::ssl || peer_pass.qos.proto == protocol::any)
                     peer_variants |= SSL_CLIENT;
                 if (peer_pass.qos.proto == protocol::tcp || peer_pass.qos.proto == protocol::any)
                     peer_variants |= TCP_CLIENT;
             }
-            if (peer_pass.qos.role == relation::mutual || peer_pass.qos.role == relation::either)
+            if (peer_pass.qos.role == schema::mutual || peer_pass.qos.role == schema::either)
             {
                 if (peer_pass.qos.proto == protocol::ssl || peer_pass.qos.proto == protocol::any)
                     peer_variants |= SSL_MUTUAL;
@@ -183,7 +183,7 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
     {
         if (host_pass.udp.force.mapping == firewall::independent && !host_pass.udp.force.variable_address)
         {
-            if (host_pass.qos.role == relation::server || host_pass.qos.role == relation::either)
+            if (host_pass.qos.role == schema::server || host_pass.qos.role == schema::either)
             {
                 if (host_pass.qos.proto == protocol::udp || host_pass.qos.proto == protocol::any)
                     host_variants |= UDP_SERVER;
@@ -191,12 +191,12 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
         }
         if (host_pass.udp.force.mapping == firewall::independent || peer_pass.udp.force.filtering == firewall::independent)
         {
-            if (host_pass.qos.role == relation::client || host_pass.qos.role == relation::either)
+            if (host_pass.qos.role == schema::client || host_pass.qos.role == schema::either)
             {
                 if (host_pass.qos.proto == protocol::udp || host_pass.qos.proto == protocol::any)
                     host_variants |= UDP_CLIENT;
             }
-            if (host_pass.qos.role == relation::mutual || host_pass.qos.role == relation::either)
+            if (host_pass.qos.role == schema::mutual || host_pass.qos.role == schema::either)
             {
                 if (host_pass.qos.proto == protocol::udp || host_pass.qos.proto == protocol::any)
                     host_variants |= UDP_MUTUAL;
@@ -204,7 +204,7 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
         }
         if (peer_pass.udp.force.mapping == firewall::independent && !peer_pass.udp.force.variable_address)
         {
-            if (peer_pass.qos.role == relation::server || peer_pass.qos.role == relation::either)
+            if (peer_pass.qos.role == schema::server || peer_pass.qos.role == schema::either)
             {
                 if (peer_pass.qos.proto == protocol::udp || peer_pass.qos.proto == protocol::any)
                     peer_variants |= UDP_SERVER;
@@ -212,12 +212,12 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
         }
         if (peer_pass.udp.force.mapping == firewall::independent || host_pass.udp.force.filtering == firewall::independent)
         {
-            if (peer_pass.qos.role == relation::client || peer_pass.qos.role == relation::either)
+            if (peer_pass.qos.role == schema::client || peer_pass.qos.role == schema::either)
             {
                 if (peer_pass.qos.proto == protocol::udp || peer_pass.qos.proto == protocol::any)
                     peer_variants |= UDP_CLIENT;
             }
-            if (peer_pass.qos.role == relation::mutual || peer_pass.qos.role == relation::either)
+            if (peer_pass.qos.role == schema::mutual || peer_pass.qos.role == schema::either)
             {
                 if (peer_pass.qos.proto == protocol::udp || peer_pass.qos.proto == protocol::any)
                     peer_variants |= UDP_MUTUAL;
@@ -229,23 +229,23 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
     uint16_t rhs = accept ? peer_variants : host_variants;
 
     if ((lhs & SSL_SERVER) && (rhs & SSL_CLIENT))
-        info.qos = { protocol::ssl, accept ? relation::server : relation::client };
+        info.qos = { protocol::ssl, accept ? schema::server : schema::client };
     else if ((lhs & SSL_CLIENT) && (rhs & SSL_SERVER))
-        info.qos = { protocol::ssl, accept ? relation::client : relation::server };
+        info.qos = { protocol::ssl, accept ? schema::client : schema::server };
     else if ((lhs & TCP_SERVER) && (rhs & TCP_CLIENT))
-        info.qos = { protocol::tcp, accept ? relation::server : relation::client };
+        info.qos = { protocol::tcp, accept ? schema::server : schema::client };
     else if ((lhs & TCP_CLIENT) && (rhs & TCP_SERVER))
-        info.qos = { protocol::tcp, accept ? relation::client : relation::server };
+        info.qos = { protocol::tcp, accept ? schema::client : schema::server };
     else if ((lhs & UDP_SERVER) && (rhs & UDP_CLIENT))
-        info.qos = { protocol::udp, accept ? relation::server : relation::client };
+        info.qos = { protocol::udp, accept ? schema::server : schema::client };
     else if ((lhs & UDP_CLIENT) && (rhs & UDP_SERVER))
-        info.qos = { protocol::udp, accept ? relation::client : relation::server };
+        info.qos = { protocol::udp, accept ? schema::client : schema::server };
     else if ((lhs & UDP_MUTUAL) && (rhs & UDP_MUTUAL))
-        info.qos = { protocol::udp, relation::mutual };
+        info.qos = { protocol::udp, schema::mutual };
     else if ((lhs & TCP_MUTUAL) && (rhs & TCP_MUTUAL))
-        info.qos = { protocol::tcp, relation::mutual };
+        info.qos = { protocol::tcp, schema::mutual };
     else if ((lhs & SSL_MUTUAL) && (rhs & SSL_MUTUAL))
-        info.qos = { protocol::ssl, relation::mutual };
+        info.qos = { protocol::ssl, schema::mutual };
     else
         throw std::runtime_error("unsuitable conditions");
 
