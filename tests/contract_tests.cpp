@@ -52,7 +52,6 @@ namespace tests
 
         host.qos.role = plexus::relation::server;
         peer.qos.role = plexus::relation::client;
-
         info = plexus::make_contract(bind, bind, host, peer, true);
         BOOST_CHECK_EQUAL(info.qos.proto, proto);
         BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::server);
@@ -63,7 +62,6 @@ namespace tests
 
         host.qos.role = plexus::relation::client;
         peer.qos.role = plexus::relation::server;
-
         info = plexus::make_contract(bind, bind, host, peer, true);
         BOOST_CHECK_EQUAL(info.qos.proto, proto);
         BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
@@ -72,27 +70,31 @@ namespace tests
         BOOST_CHECK_EQUAL(info.qos.proto, proto);
         BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
 
-        host.qos.role = plexus::relation::client;
-        peer.qos.role = plexus::relation::client;
-
+        host.qos.role = plexus::relation::mutual;
+        peer.qos.role = plexus::relation::mutual;
         info = plexus::make_contract(bind, bind, host, peer, false);
         BOOST_CHECK_EQUAL(info.qos.proto, proto);
         BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::mutual);
 
-        pmap.force.variable_address = true;
+        peer.qos.role = plexus::relation::either;
+        info = plexus::make_contract(bind, bind, host, peer, true);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto);
+        BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::mutual);
+
+        peer.qos.role = plexus::relation::server;
         BOOST_REQUIRE_THROW(plexus::make_contract(bind, bind, host, peer, true), std::runtime_error);
 
-        pmap.force.variable_address = false;
+        peer.qos.role = plexus::relation::client;
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, bind, host, peer, false), std::runtime_error);
+
         host.qos.role = plexus::relation::server;
         peer.qos.role = plexus::relation::server;
-
         BOOST_REQUIRE_THROW(plexus::make_contract(bind, bind, host, peer, true), std::runtime_error);
 
         host.qos.role = plexus::relation::either;
         peer.qos.role = plexus::relation::either;
         host.qos.proto = proto == plexus::protocol::any ? plexus::protocol::udp : proto;
         peer.qos.proto = proto == plexus::protocol::any ? plexus::protocol::tcp : plexus::protocol(proto + 1);
-
         BOOST_REQUIRE_THROW(plexus::make_contract(bind, bind, host, peer, false), std::runtime_error);
 
         host.qos.proto = proto;
@@ -100,7 +102,6 @@ namespace tests
         host.qos.role = plexus::relation::server;
         peer.qos.role = plexus::relation::either;
         hmap.force.mapping = plexus::firewall::address_and_port_dependent;
-
         BOOST_REQUIRE_THROW(plexus::make_contract(bind, bind, host, peer, true), std::runtime_error);
 
         host.qos.role = plexus::relation::either;
@@ -109,7 +110,6 @@ namespace tests
         pmap.force.hairpin = false;
         hmap.force.hairpin = false;
         hmap.outer.address = pmap.outer.address;
-
         BOOST_REQUIRE_THROW(plexus::make_contract(bind, bind, host, peer, false), std::runtime_error);
     }
 
@@ -395,23 +395,21 @@ BOOST_AUTO_TEST_CASE(cone_any_contract)
     BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
 
     host.qos.proto = plexus::protocol::ssl;
-
     info = plexus::make_contract(udp, tcp, host, peer, false);
     BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::ssl);
     BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
 
-    host.qos.proto = plexus::protocol::any;
     peer.udp.force.nat = true;
     peer.tcp.force.nat = true;
-
+    host.qos.proto = plexus::protocol::any;
     info = plexus::make_contract(udp, tcp, host, peer, true);
     BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::udp);
     BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::client);
 
     host.qos.proto = plexus::protocol::tcp;
-
-    BOOST_REQUIRE_THROW(plexus::make_contract(udp, tcp, host, peer, true), std::runtime_error);
-    BOOST_REQUIRE_THROW(plexus::make_contract(udp, tcp, host, peer, false), std::runtime_error); 
+    info = plexus::make_contract(udp, tcp, host, peer, false);
+    BOOST_CHECK_EQUAL(info.qos.proto, plexus::protocol::tcp);
+    BOOST_CHECK_EQUAL(info.qos.role, plexus::relation::mutual);
 
     host.qos.proto = plexus::protocol::any;
     peer.udp.force.nat = false;
