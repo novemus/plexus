@@ -201,7 +201,8 @@ class smtp
         if (data.qos.proto == protocol::udp && data.qos.role == schema::either)
             return plexus::utils::format("PLEXUS 3.0 %s %u %llu", data.udp.outer.address.to_string().c_str(), data.udp.outer.port, data.puzzle);
 
-        return plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %llu",
+        return plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %s %llu",
+            boost::posix_time::to_iso_string(data.timestamp).c_str(),
             endpoint::to_string(data.udp.outer).c_str(),
             firewall::to_string(data.udp.force).c_str(),
             endpoint::to_string(data.tcp.outer).c_str(),
@@ -452,6 +453,7 @@ class imap
                     if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                     {
                         reference data;
+                        data.timestamp = boost::posix_time::max_date_time;
                         data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
                         data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
                         data.qos = criteria { protocol::udp, schema::either };
@@ -459,16 +461,17 @@ class imap
 
                         m_letter = data;
                     }
-                    else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
+                    else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
                     {
                         reference data;
 
-                        data.udp.outer = endpoint::from_string(match.str(1));
-                        data.udp.force = firewall::from_string(match.str(2));
-                        data.tcp.outer = endpoint::from_string(match.str(3));
-                        data.tcp.force = firewall::from_string(match.str(4));
-                        data.qos = criteria::from_string(match.str(5));
-                        data.puzzle = std::stoull(match.str(6));
+                        data.timestamp = boost::posix_time::from_iso_string(match.str(1));
+                        data.udp.outer = endpoint::from_string(match.str(2));
+                        data.udp.force = firewall::from_string(match.str(3));
+                        data.tcp.outer = endpoint::from_string(match.str(4));
+                        data.tcp.force = firewall::from_string(match.str(5));
+                        data.qos = criteria::from_string(match.str(6));
+                        data.puzzle = std::stoull(match.str(7));
 
                         m_letter = data;
                     }

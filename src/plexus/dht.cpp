@@ -474,6 +474,7 @@ public:
                 std::smatch match;
                 if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
                 {
+                    ptr->data.timestamp = boost::posix_time::min_date_time;
                     ptr->data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
                     ptr->data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
                     ptr->data.qos = criteria { protocol::udp, schema::either };
@@ -483,14 +484,15 @@ public:
                     ptr->timer.cancel(ec);
                     return false;
                 }
-                else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
+                else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
                 {
-                    ptr->data.udp.outer = endpoint::from_string(match.str(1));
-                    ptr->data.udp.force = firewall::from_string(match.str(2));
-                    ptr->data.tcp.outer = endpoint::from_string(match.str(3));
-                    ptr->data.tcp.force = firewall::from_string(match.str(4));
-                    ptr->data.qos = criteria::from_string(match.str(5));
-                    ptr->data.puzzle = std::stoull(match.str(6));
+                    ptr->data.timestamp = boost::posix_time::from_iso_string(match.str(1));
+                    ptr->data.udp.outer = endpoint::from_string(match.str(2));
+                    ptr->data.udp.force = firewall::from_string(match.str(3));
+                    ptr->data.tcp.outer = endpoint::from_string(match.str(4));
+                    ptr->data.tcp.force = firewall::from_string(match.str(5));
+                    ptr->data.qos = criteria::from_string(match.str(6));
+                    ptr->data.puzzle = std::stoull(match.str(7));
 
                     boost::system::error_code ec;
                     ptr->timer.cancel(ec);
@@ -581,24 +583,25 @@ public:
             throw plexus::context_error(__FUNCTION__, ec);
     }
 
-    static forward_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& gateway) noexcept(false)
+    static forward_ptr start(boost::asio::io_context& io, const repository& repo, const identity& host, const identity& peer, uint64_t id, const std::string& subject, const reference& data) noexcept(false)
     {
         std::shared_ptr<forward> op(new forward(io, repo.node()));
 
         auto to = repo.load_cert(peer);
         auto from = repo.load_key(host);
-        auto message = gateway.qos.proto == protocol::udp && gateway.qos.role == schema::either
+        auto message = data.qos.proto == protocol::udp && data.qos.role == schema::either
                            ? plexus::utils::format("PLEXUS 3.0 %s %u %llu",
-                                 gateway.udp.outer.address.to_string().c_str(),
-                                 gateway.udp.outer.port,
-                                 gateway.puzzle)
-                           : plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %llu",
-                                 endpoint::to_string(gateway.udp.outer).c_str(),
-                                 firewall::to_string(gateway.udp.force).c_str(),
-                                 endpoint::to_string(gateway.tcp.outer).c_str(),
-                                 firewall::to_string(gateway.tcp.force).c_str(),
-                                 criteria::to_string(gateway.qos).c_str(),
-                                 gateway.puzzle);
+                                data.udp.outer.address.to_string().c_str(),
+                                data.udp.outer.port,
+                                data.puzzle)
+                           : plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %s %llu",
+                                boost::posix_time::to_iso_string(data.timestamp).c_str(),
+                                endpoint::to_string(data.udp.outer).c_str(),
+                                firewall::to_string(data.udp.force).c_str(),
+                                endpoint::to_string(data.tcp.outer).c_str(),
+                                firewall::to_string(data.tcp.force).c_str(),
+                                criteria::to_string(data.qos).c_str(),
+                                data.puzzle);
 
         op->hash = dht::InfoHash::get(to->getId().toString() + repo.app + subject);
         op->timer.expires_from_now(boost::posix_time::milliseconds(await_timeout));

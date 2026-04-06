@@ -104,16 +104,16 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
     static constexpr uint16_t UDP_CLIENT = 0x0080;
     static constexpr uint16_t UDP_MUTUAL = 0x0100;
 
-    bool tcp_available = host_pass.tcp.outer != endpoint{} && peer_pass.tcp.outer != endpoint{}
+    bool tcp_capable = host_pass.tcp.outer != endpoint{} && peer_pass.tcp.outer != endpoint{}
                       && (!host_pass.tcp.force.variable_address || !peer_pass.tcp.force.variable_address)
                       && (host_pass.tcp.force.mapping == firewall::independent || peer_pass.tcp.force.mapping == firewall::independent)
                       && (host_pass.tcp.outer.address != peer_pass.tcp.outer.address || (host_pass.tcp.force.hairpin && peer_pass.tcp.force.hairpin));
-    bool udp_available = host_pass.udp.outer != endpoint{} && peer_pass.udp.outer != endpoint{}
+    bool udp_capable = host_pass.udp.outer != endpoint{} && peer_pass.udp.outer != endpoint{}
                       && (!host_pass.udp.force.variable_address || !peer_pass.udp.force.variable_address)
                       && (host_pass.udp.force.mapping == firewall::independent || peer_pass.udp.force.mapping == firewall::independent)
                       && (host_pass.udp.outer.address != peer_pass.udp.outer.address || (host_pass.udp.force.hairpin && peer_pass.udp.force.hairpin));
 
-    if (!tcp_available && !udp_available)
+    if (!tcp_capable && !udp_capable)
         throw std::runtime_error("bad network conditions");
 
     contract info;
@@ -121,7 +121,7 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
     uint16_t host_variants = 0;
     uint16_t peer_variants = 0;
 
-    if (tcp_available)
+    if (tcp_capable)
     {
         if (host_pass.tcp.force.mapping == firewall::independent && !host_pass.tcp.force.variable_address)
         {
@@ -179,7 +179,7 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
         }
     }
 
-    if (udp_available)
+    if (udp_capable)
     {
         if (host_pass.udp.force.mapping == firewall::independent && !host_pass.udp.force.variable_address)
         {
@@ -296,8 +296,14 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
             auto broker = plexus::create_sync_broker(io, config.udp_stun, config.tcp_stun, config.udp_bind, config.tcp_bind, config.hops);
             auto pass = broker->make_traverse(yield, config.qos.proto);
 
-            reference faraway = pipe->pull_request(yield);
-            reference gateway = { { pass.udp.outer, pass.udp.force }, { pass.tcp.outer, pass.tcp.force }, config.qos, plexus::utils::random<uint64_t>() };
+            auto faraway = pipe->pull_request(yield);
+            auto gateway = reference { 
+                reference::map { pass.udp.outer, pass.udp.force },
+                reference::map { pass.tcp.outer, pass.tcp.force },
+                config.qos,
+                utils::random<uint64_t>(),
+                boost::posix_time::microsec_clock::universal_time()
+            };
             pipe->push_response(yield, gateway);
 
             connect(host, peer, broker->await_peer(yield, gateway, faraway));
@@ -330,9 +336,15 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
             auto broker = plexus::create_sync_broker(io, config.udp_stun, config.tcp_stun, config.udp_bind, config.tcp_bind, config.hops);
             auto pass = broker->make_traverse(yield, config.qos.proto);
 
-            plexus::reference gateway = { { pass.udp.outer, pass.udp.force }, { pass.tcp.outer, pass.tcp.force }, config.qos, plexus::utils::random<uint64_t>() };
+            auto gateway = reference { 
+                reference::map { pass.udp.outer, pass.udp.force },
+                reference::map { pass.tcp.outer, pass.tcp.force },
+                config.qos,
+                utils::random<uint64_t>(),
+                boost::posix_time::microsec_clock::universal_time()
+            };
             pipe->push_request(yield, gateway);
-            plexus::reference faraway = pipe->pull_response(yield);
+            auto faraway = pipe->pull_response(yield);
 
             connect(host, peer, broker->touch_peer(yield, gateway, faraway));
         }

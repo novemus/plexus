@@ -53,6 +53,7 @@ struct reference
     map tcp;
     criteria qos;
     uint64_t puzzle = 0;
+    boost::posix_time::ptime timestamp;
 };
 
 contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const reference& host_pass, const reference& peer_pass, bool accept) noexcept(false);

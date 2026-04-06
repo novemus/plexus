@@ -735,13 +735,16 @@ public:
     {
         traverse pass;
 
-        try
+        if (m_stun.udp != endpoint{})
         {
-            make_udp_traverse(yield, pass);
-        }
-        catch(const std::exception& ex)
-        {
-            _wrn_ << "can't make udp traverse: " << ex.what();
+            try
+            {
+                make_udp_traverse(yield, pass);
+            }
+            catch(const std::exception& ex)
+            {
+                _wrn_ << "can't make udp traverse: " << ex.what();
+            }
         }
 
         if (proto != protocol::udp)

@@ -18,6 +18,25 @@
 
 namespace plexus { namespace stun {
 
+boost::posix_time::time_duration connect_delay()
+{
+    static const boost::posix_time::milliseconds s_delay(plexus::utils::getenv<int64_t>("PLEXUS_CONNECT_DELAY", 1000));
+    return s_delay;
+}
+
+boost::posix_time::time_duration sync_timeout()
+{
+    static const boost::posix_time::milliseconds s_timeout(plexus::utils::getenv<int64_t>("PLEXUS_SYNC_TIMEOUT", 20000));
+    return s_timeout;
+}
+
+boost::posix_time::ptime calc_sync_time(const boost::posix_time::ptime& host, const boost::posix_time::ptime& peer, schema role)
+{
+    return role == schema::client
+         ? std::min(std::max(host, peer), boost::posix_time::microsec_clock::universal_time()) + sync_timeout() + connect_delay()
+         : std::min(std::max(host, peer), boost::posix_time::microsec_clock::universal_time()) + sync_timeout();
+}
+
 class broker_impl : public plexus::sync_broker
 {
     boost::asio::io_context& m_io;
@@ -97,6 +116,8 @@ class broker_impl : public plexus::sync_broker
 
     void touch_peer(boost::asio::yield_context yield, const endpoint& peer, uint64_t nonce, schema role) noexcept(false)
     {
+        _dbg_ << "touch peer...";
+
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
@@ -142,6 +163,8 @@ class broker_impl : public plexus::sync_broker
 
     void await_peer(boost::asio::yield_context yield, const endpoint& peer, uint64_t nonce, schema role) noexcept(false)
     {
+        _dbg_ << "await peer...";
+
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
@@ -200,13 +223,20 @@ class broker_impl : public plexus::sync_broker
             if (term.qos.role == schema::server && host.tcp.force.nat)
                 punch_tcp_hole(yield, peer.tcp.outer);
 
-            bool not_awaitable = host.udp.outer == endpoint{} || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
-                              || peer.udp.outer == endpoint{} || peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address
-                              || (host.udp.outer.address == peer.udp.outer.address && (!host.udp.force.hairpin || !peer.udp.force.hairpin));
+            bool no_udp = host.udp.outer == endpoint{} || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
+                       || peer.udp.outer == endpoint{} || peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address
+                       || (host.udp.outer.address == peer.udp.outer.address && (!host.udp.force.hairpin || !peer.udp.force.hairpin));
 
-            if (not_awaitable)
+            if (no_udp)
             {
-                _wrn_ << "can't handshake peer without suitable udp traverse";
+                _dbg_ << "start time-point synchronization...";
+
+                boost::asio::deadline_timer timer(m_io);
+                timer.expires_at(calc_sync_time(host.timestamp, peer.timestamp, term.qos.role));
+                boost::system::error_code ec;
+                timer.async_wait(yield[ec]);
+
+                _dbg_ << "synchronization finished";
                 return term;
             }
         }
@@ -218,7 +248,7 @@ class broker_impl : public plexus::sync_broker
         if (term.qos.role == schema::client)
         {
             boost::asio::deadline_timer timer(m_io);
-            timer.expires_from_now(boost::posix_time::milliseconds(plexus::utils::getenv<int64_t>("PLEXUS_PRECONNECT_TIMEOUT", 1000)));
+            timer.expires_from_now(connect_delay());
             boost::system::error_code ec;
             timer.async_wait(yield[ec]);
         }
@@ -237,8 +267,8 @@ public:
         m_bind.udp = utils::locate<boost::asio::ip::udp>(udp_bind);
         m_bind.tcp = utils::locate<boost::asio::ip::tcp>(tcp_bind);
 
-        _dbg_ << "udp_stun=" << m_stun.udp << " udp_bind=" << m_bind.udp;
-        _dbg_ << "tcp_stun=" << m_stun.tcp << " tcp_bind=" << m_bind.tcp;
+        _dbg_ << "udp.stun=" << m_stun.udp << " udp.bind=" << m_bind.udp;
+        _dbg_ << "tcp.stun=" << m_stun.tcp << " tcp.bind=" << m_bind.tcp;
     }
 
     contract touch_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override

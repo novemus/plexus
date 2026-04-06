@@ -119,12 +119,6 @@ int main(int argc, char** argv)
             return -1;
         }
 
-        if (udp_stun == stun_server_endpoint())
-            vm.at("udp-stun").value() = tcp_stun;
-
-        if (tcp_stun == stun_server_endpoint())
-            vm.at("tcp-stun").value() = udp_stun;
-
         boost::program_options::notify(vm);
     }
     catch (const std::exception& e)
