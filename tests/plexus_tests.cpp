@@ -99,16 +99,24 @@ namespace tests
         void make_stun_test() const
         {
             boost::asio::io_context io;
-            explore_network(io, endpoint{}, endpoint{}, m_udp_stun, m_tcp_stun,
+            explore_network(io, protocol::udp, endpoint{}, m_udp_stun,
                 [&](const traverse& pass)
                 {
                     BOOST_CHECK_NE(pass.udp.outer, endpoint{});
+                },
+                [&](const std::string& error)
+                {
+                    BOOST_ERROR(error.c_str());
+                });
+
+            explore_network(io, protocol::tcp, endpoint{}, m_tcp_stun,
+                [&](const traverse& pass)
+                {
                     BOOST_CHECK_NE(pass.tcp.outer, endpoint{});
                 },
                 [&](const std::string& error)
                 {
                     BOOST_ERROR(error.c_str());
-                    io.stop();
                 });
 
             io.run();

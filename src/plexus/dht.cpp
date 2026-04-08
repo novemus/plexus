@@ -668,7 +668,7 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed response " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed request " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override

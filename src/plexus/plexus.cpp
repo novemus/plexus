@@ -254,27 +254,32 @@ contract make_contract(const endpoint& udp_bind, const endpoint& tcp_bind, const
     info.alien = info.qos.proto == protocol::udp ? peer_pass.udp.outer : peer_pass.tcp.outer;
     info.secret = host_pass.puzzle ^ peer_pass.puzzle;
 
-    _inf_ << "contarct: qos=" << info.qos << " inner=" << info.inner << " outer=" << info.outer << " alien=" << info.alien;
+    _inf_ << "contract: qos=" << info.qos << " inner=" << info.inner << " outer=" << info.outer << " alien=" << info.alien;
 
     return info;
 }
 
-void explore_network(boost::asio::io_context& io, const endpoint& udp_bind, const endpoint& tcp_bind, const endpoint& udp_stun, const endpoint& tcp_stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true)
+void explore_network(boost::asio::io_context& io, protocol proto, const endpoint& bind, const endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true)
 {
-    boost::asio::spawn(io, [&io, udp_bind, tcp_bind, udp_stun, tcp_stun, handler, failure](boost::asio::yield_context yield)
+    boost::asio::spawn(io, [&io, proto, bind, stun, handler, failure](boost::asio::yield_context yield)
     {
-        _inf_ << "exploring network...";
+        _inf_ << "explore network...";
 
         try
         {
-            auto client = plexus::create_stun_client(io, udp_stun, tcp_stun, udp_bind, tcp_bind);
-            auto pass = client->make_traverse(yield, protocol::any);
+            auto client = plexus::create_stun_client(
+                io,
+                proto <= protocol::udp ? stun : endpoint {},
+                proto != protocol::udp ? stun : endpoint {},
+                bind,
+                bind
+            );
 
-            handler(pass);
+            handler(client->make_traverse(yield, proto));
         }
         catch (const std::exception& e)
         {
-            _err_ << "exploring network error: " << e.what();
+            _err_ << "explore network error: " << e.what();
 
             if (failure)
                 failure(e.what());
@@ -289,7 +294,7 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
         auto peer = pipe->peer();
         auto host = pipe->host();
 
-        _inf_ << "accepting: app=" << config.app << " qos=" << config.qos << " host=" << host << " peer=" << peer;
+        _inf_ << "accept: app=" << config.app << " qos=" << config.qos << " host=" << host << " peer=" << peer;
 
         try
         {
@@ -310,7 +315,7 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
         }
         catch (const std::exception& e)
         {
-            _err_ << "accepting: " << e.what();
+            _err_ << "accept: " << e.what();
 
             if (failure)
                 failure(host, peer, e.what());
@@ -329,7 +334,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
         auto peer = pipe->peer();
         auto host = pipe->host();
 
-        _inf_ << "inviting: app=" << config.app << " qos=" << config.qos << " host=" << host << " peer=" << peer;
+        _inf_ << "invite: app=" << config.app << " qos=" << config.qos << " host=" << host << " peer=" << peer;
 
         try
         {
@@ -350,7 +355,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
         }
         catch (const std::exception& e)
         {
-            _err_ << "inviting: " << e.what();
+            _err_ << "invite: " << e.what();
 
             if (failure)
                 failure(host, peer, e.what());

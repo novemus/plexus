@@ -139,7 +139,7 @@ using fallback = std::function<void(const identity& /* host */,
                                     const std::string& /* error */)>;
 
 LIBPLEXUS_EXPORT
-void explore_network(boost::asio::io_context& io, const endpoint& udp_bind, const endpoint& tcp_bind, const endpoint& udp_stun, const endpoint& tcp_stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
+void explore_network(boost::asio::io_context& io, protocol proto, const endpoint& bind, const endpoint& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
 LIBPLEXUS_EXPORT
 void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT

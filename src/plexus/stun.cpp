@@ -744,6 +744,9 @@ public:
             catch(const std::exception& ex)
             {
                 _wrn_ << "can't make udp traverse: " << ex.what();
+
+                if (proto == protocol::udp)
+                    throw;
             }
         }
 
@@ -756,6 +759,9 @@ public:
             catch(const std::exception& ex)
             {
                 _wrn_ << "can't make tcp traverse: " << ex.what();
+
+                if (proto != protocol::any)
+                    throw;
             }
         }
 
