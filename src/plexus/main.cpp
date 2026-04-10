@@ -18,36 +18,30 @@
 
 using namespace plexus;
 
-template<const char* service> struct plexus_endpoint : public endpoint { };
+template<typename proto, const char* service> struct plexus_endpoint : public endpoint { };
 
-constexpr char stun_server_default_port[] = "3478";
-constexpr char stun_client_default_port[] = "0";
-constexpr char smtp_server_default_port[] = "smtps";
-constexpr char imap_client_default_port[] = "imaps";
+constexpr char stun_default_port[] = "3478";
+constexpr char bind_default_port[] = "0";
+constexpr char smtp_default_port[] = "smtps";
+constexpr char imap_default_port[] = "imaps";
 
-using stun_server_endpoint = plexus_endpoint<stun_server_default_port>;
-using stun_client_endpoint = plexus_endpoint<stun_client_default_port>;
-using smtp_server_endpoint = plexus_endpoint<smtp_server_default_port>;
-using imap_server_endpoint = plexus_endpoint<imap_client_default_port>;
+using udp_bind_endpoint = plexus_endpoint<boost::asio::ip::udp, bind_default_port>;
+using tcp_bind_endpoint = plexus_endpoint<boost::asio::ip::tcp, bind_default_port>;
+using udp_stun_endpoint = plexus_endpoint<boost::asio::ip::udp, stun_default_port>;
+using tcp_stun_endpoint = plexus_endpoint<boost::asio::ip::tcp, stun_default_port>;
+using smtp_server_endpoint = plexus_endpoint<boost::asio::ip::tcp, smtp_default_port>;
+using imap_server_endpoint = plexus_endpoint<boost::asio::ip::tcp, imap_default_port>;
 
-template<const char* service>
-void validate(boost::any& result, const std::vector<std::string>& values, plexus_endpoint<service>*, int)
+template<typename proto, const char* service>
+void validate(boost::any& result, const std::vector<std::string>& values, plexus_endpoint<proto, service>*, int)
 {
     boost::program_options::validators::check_first_occurrence(result);
     const std::string& url = boost::program_options::validators::get_single_string(values);
 
     try
     {
-        if (std::strcmp(service, stun_server_default_port) == 0 || std::strcmp(service, stun_client_default_port) == 0)
-        {
-            auto ep = utils::parse_endpoint<boost::asio::ip::udp>(url, service);
-            result = plexus_endpoint<service> { ep.address(), ep.port() };
-        }
-        else
-        {
-            auto ep = utils::parse_endpoint<boost::asio::ip::tcp>(url, service);
-            result = plexus_endpoint<service> { ep.address(), ep.port() };
-        }
+        auto ep = utils::parse_endpoint<proto>(url, service);
+        result = plexus_endpoint<proto, service> { ep.address(), ep.port() };
     }
     catch(const boost::system::system_error&)
     {
@@ -63,13 +57,14 @@ int main(int argc, char** argv)
         ("accept", boost::program_options::bool_switch(), "accept or invite peer to initiate connection")
         ("app-name", boost::program_options::value<std::string>()->required(), "name of the application")
         ("app-repo", boost::program_options::value<std::string>()->default_value(""), "path to the application repository")
-        ("app-qos", boost::program_options::value<criteria>()->default_value(criteria()), "application protocol and connection schema: udp:client|udp:server|udp:mutual|tcp:client|tcp:server|tcp:mutual|ssl:client|ssl:server|ssl:mutual|any:either")
+        ("app-qos", boost::program_options::value<criteria>()->default_value(criteria()), "application protocol and connection schema: <udp|tcp|ssl|any>:<client|server|mutual|either>")
         ("host-id", boost::program_options::value<identity>()->default_value(identity()), "identifier of the host: <email/pin>")
         ("peer-id", boost::program_options::value<identity>()->default_value(identity()), "identifier of the peer: <email/pin>")
-        ("udp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "udp endpoint to bind the application")
-        ("tcp-bind", boost::program_options::value<stun_client_endpoint>()->default_value(stun_client_endpoint()), "tcp endpoint to bind the application")
-        ("udp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the udp STUN server")
-        ("tcp-stun", boost::program_options::value<stun_server_endpoint>()->default_value(stun_server_endpoint()), "endpoint of the tcp STUN server")
+        ("udp-bind", boost::program_options::value<udp_bind_endpoint>()->default_value(udp_bind_endpoint()), "udp endpoint to bind the application")
+        ("tcp-bind", boost::program_options::value<tcp_bind_endpoint>()->default_value(tcp_bind_endpoint()), "tcp endpoint to bind the application")
+        ("udp-stun", boost::program_options::value<udp_stun_endpoint>()->default_value(udp_stun_endpoint()), "endpoint of the udp STUN server")
+        ("tcp-stun", boost::program_options::value<tcp_stun_endpoint>()->default_value(tcp_stun_endpoint()), "endpoint of the tcp STUN server")
+        ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for the NAT punching packet")
         ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "url of the bootstrap DHT service")
         ("dht-port", boost::program_options::value<uint16_t>()->default_value(0), "local port to bind the DHT node")
         ("dht-network", boost::program_options::value<uint32_t>()->default_value(0), "DHT network id")
@@ -80,7 +75,6 @@ int main(int argc, char** argv)
         ("email-cert", boost::program_options::value<std::string>()->default_value(""), "path to the X509 certificate of the email client")
         ("email-key", boost::program_options::value<std::string>()->default_value(""), "path to the Private Key of the email client")
         ("email-ca", boost::program_options::value<std::string>()->default_value(""), "path to the email Certification Authority")
-        ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for the NAT punching packet")
         ("exec-cmd", boost::program_options::value<std::string>()->required(), "command executed after the host is ready to communicate with the peer")
         ("exec-args", boost::program_options::value<std::string>()->default_value("%inner% %outer% %alien% %qos%"), "list of arguments for the command, allowed wildcards: %inner%, %outer%, %alien%, %qos%, %hostid%, %peerid%")
         ("exec-env", boost::program_options::value<std::string>()->default_value(""), "KEY=VALUE list of extra environment for the command, allowed wildcards: %secret%, %hostcert%, %hostkey%, %peercert%")
@@ -110,10 +104,10 @@ int main(int argc, char** argv)
             return -1;
         }
 
-        auto udp_stun = vm["udp-stun"].as<stun_server_endpoint>();
-        auto tcp_stun = vm["tcp-stun"].as<stun_server_endpoint>();
+        auto udp_stun = vm["udp-stun"].as<udp_stun_endpoint>();
+        auto tcp_stun = vm["tcp-stun"].as<tcp_stun_endpoint>();
 
-        if (udp_stun == stun_server_endpoint() && tcp_stun == stun_server_endpoint())
+        if (udp_stun == udp_stun_endpoint() && tcp_stun == tcp_stun_endpoint())
         {
             std::cout << "STUN server is not specified" << std::endl;
             return -1;
@@ -215,10 +209,14 @@ int main(int argc, char** argv)
         options config = {
             vm["app-name"].as<std::string>(),
             vm["app-repo"].as<std::string>(),
-            vm["udp-bind"].as<stun_client_endpoint>(),
-            vm["tcp-bind"].as<stun_client_endpoint>(),
-            vm["udp-stun"].as<stun_server_endpoint>(),
-            vm["tcp-stun"].as<stun_server_endpoint>(),
+            plexus::location {
+                vm["udp-bind"].as<udp_bind_endpoint>(),
+                vm["tcp-bind"].as<tcp_bind_endpoint>()
+            },
+            plexus::location {
+                vm["udp-stun"].as<udp_stun_endpoint>(),
+                vm["tcp-stun"].as<tcp_stun_endpoint>()
+            },
             vm["punch-hops"].as<uint16_t>(),
             vm["app-qos"].as<criteria>(),
             vm.count("email-smtps")

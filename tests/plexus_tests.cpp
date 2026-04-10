@@ -30,8 +30,7 @@ namespace tests
         identity m_peer;
         emailer m_emailer;
         dhtnode m_dhtnode;
-        endpoint m_udp_stun;
-        endpoint m_tcp_stun;
+        location m_stun;
         uint16_t m_hops;
 
     public:
@@ -57,8 +56,8 @@ namespace tests
             m_dhtnode = dhtnode { utils::getenv<std::string>("DHT_BOOTSTRAP", ""), 0, 0 };
 
             m_repo = std::filesystem::temp_directory_path().generic_u8string() + "/" + m_app;
-            m_udp_stun = utils::getenv<endpoint>("UDP_STUN_SERVER", endpoint{});
-            m_tcp_stun = utils::getenv<endpoint>("TCP_STUN_SERVER", endpoint{});
+            m_stun.udp = utils::getenv<endpoint>("UDP_STUN_SERVER", endpoint{});
+            m_stun.tcp = utils::getenv<endpoint>("TCP_STUN_SERVER", endpoint{});
             m_hops = utils::getenv<uint16_t>("PUNCH_HOPS", 5);
 
             auto host_dir = m_repo + "/" + m_host.owner + "/" + m_host.pin;
@@ -84,10 +83,8 @@ namespace tests
             return options {
                 m_app,
                 m_repo,
-                endpoint {},
-                endpoint {},
-                m_udp_stun,
-                m_tcp_stun,
+                location {},
+                m_stun,
                 m_hops,
                 criteria { proto, role },
                 email 
@@ -99,7 +96,7 @@ namespace tests
         void make_stun_test() const
         {
             boost::asio::io_context io;
-            explore_network(io, protocol::udp, endpoint{}, m_udp_stun,
+            explore_network(io, location{}, location{m_stun.udp, endpoint {}},
                 [&](const traverse& pass)
                 {
                     BOOST_CHECK_NE(pass.udp.outer, endpoint{});
@@ -109,7 +106,7 @@ namespace tests
                     BOOST_ERROR(error.c_str());
                 });
 
-            explore_network(io, protocol::tcp, endpoint{}, m_tcp_stun,
+            explore_network(io, location{}, location{endpoint {}, m_stun.tcp},
                 [&](const traverse& pass)
                 {
                     BOOST_CHECK_NE(pass.tcp.outer, endpoint{});

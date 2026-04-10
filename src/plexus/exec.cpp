@@ -29,7 +29,7 @@
     #include <boost/process.hpp>
     #ifdef WIN32
         #include <boost/process/windows.hpp>
-        creation_flags.hpp
+        #include <boost/process/windows/creation_flags.hpp>
     #else
         #include <spawn.h>
         #include <boost/process/extend.hpp>

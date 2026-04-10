@@ -261,14 +261,8 @@ public:
 class client_impl : public stun_client
 {
     boost::asio::io_context& m_io;
-    struct {
-        endpoint udp;
-        endpoint tcp;
-    } m_stun;
-    struct {
-        endpoint udp;
-        endpoint tcp;
-    } m_bind;
+    location m_stun;
+    location m_bind;
 
     struct cache
     {
@@ -331,13 +325,13 @@ class client_impl : public stun_client
 
 public:
 
-    client_impl(boost::asio::io_context& io, const endpoint& udp_stun, const endpoint& tcp_stun, const endpoint& udp_bind, const endpoint& tcp_bind) 
+    client_impl(boost::asio::io_context& io, const location& stun, const location& bind) 
         : m_io(io)
     {
-        m_stun.udp = udp_stun;
-        m_stun.tcp = tcp_stun;
-        m_bind.udp = utils::locate<boost::asio::ip::udp>(udp_bind);
-        m_bind.tcp = utils::locate<boost::asio::ip::tcp>(tcp_bind);
+        m_stun.udp = stun.udp;
+        m_stun.tcp = stun.tcp;
+        m_bind.udp = utils::locate<boost::asio::ip::udp>(bind.udp);
+        m_bind.tcp = utils::locate<boost::asio::ip::tcp>(bind.tcp);
     }
 
     message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<network::udp_socket> sock, const endpoint& to, const endpoint& from, const message& req = message(0), int64_t deadline = 4600)
@@ -743,14 +737,14 @@ public:
             }
             catch(const std::exception& ex)
             {
-                _wrn_ << "can't make udp traverse: " << ex.what();
-
                 if (proto == protocol::udp)
                     throw;
+
+                _wrn_ << "can't make udp traverse: " << ex.what();
             }
         }
 
-        if (proto != protocol::udp)
+        if (m_stun.tcp != endpoint{} && proto != protocol::udp)
         {
             try
             {
@@ -758,10 +752,10 @@ public:
             }
             catch(const std::exception& ex)
             {
-                _wrn_ << "can't make tcp traverse: " << ex.what();
-
-                if (proto != protocol::any)
+                if (proto > protocol::udp)
                     throw;
+
+                _wrn_ << "can't make tcp traverse: " << ex.what();
             }
         }
 
@@ -771,9 +765,9 @@ public:
 
 }
 
-std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_context& io, const endpoint& udp_stun, const endpoint& tcp_stun, const endpoint& udp_bind, const endpoint& tcp_bind) noexcept(true)
+std::shared_ptr<plexus::stun_client> create_stun_client(boost::asio::io_context& io, const location& stun, const location& bind) noexcept(true)
 {
-    return std::make_shared<plexus::stun::client_impl>(io, udp_stun, tcp_stun, udp_bind, tcp_bind);
+    return std::make_shared<plexus::stun::client_impl>(io, stun, bind);
 }
 
 }
