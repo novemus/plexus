@@ -46,11 +46,11 @@ namespace tests
         BOOST_CHECK_EQUAL(info.alien, pmap.outer);
         BOOST_CHECK_EQUAL(info.secret, 0);
         BOOST_CHECK_EQUAL(info.qos.proto, proto);
-        BOOST_CHECK_EQUAL(info.qos.role, schema::server);
+        BOOST_CHECK_EQUAL(info.qos.role, proto == protocol::udp ? schema::server : schema::mutual);
 
         info = plexus::make_contract(bind, host, peer, false);
         BOOST_CHECK_EQUAL(info.qos.proto, proto);
-        BOOST_CHECK_EQUAL(info.qos.role, schema::client);
+        BOOST_CHECK_EQUAL(info.qos.role,proto == protocol::udp ? schema::client : schema::mutual);
 
         host.qos.role = schema::server;
         peer.qos.role = schema::client;
@@ -271,7 +271,7 @@ BOOST_AUTO_TEST_CASE(simple_any_contract)
     BOOST_CHECK_EQUAL(info.alien, peer.tcp.outer);
     BOOST_CHECK_EQUAL(info.secret, 0);
     BOOST_CHECK_EQUAL(info.qos.proto, protocol::tcp);
-    BOOST_CHECK_EQUAL(info.qos.role, schema::client);
+    BOOST_CHECK_EQUAL(info.qos.role, schema::mutual);
 
     peer.qos.proto = protocol::ssl;
 
@@ -281,7 +281,7 @@ BOOST_AUTO_TEST_CASE(simple_any_contract)
     BOOST_CHECK_EQUAL(info.alien, peer.tcp.outer);
     BOOST_CHECK_EQUAL(info.secret, 0);
     BOOST_CHECK_EQUAL(info.qos.proto, protocol::ssl);
-    BOOST_CHECK_EQUAL(info.qos.role, schema::client);
+    BOOST_CHECK_EQUAL(info.qos.role, schema::mutual);
 
     peer.qos.proto = protocol::any;
     peer.udp.force.nat = false;
@@ -403,13 +403,13 @@ BOOST_AUTO_TEST_CASE(cone_any_contract)
     peer.tcp.force.nat = true;
     host.qos.proto = protocol::any;
     info = plexus::make_contract(bind, host, peer, true);
-    BOOST_CHECK_EQUAL(info.qos.proto, protocol::udp);
+    BOOST_CHECK_EQUAL(info.qos.proto, protocol::ssl);
     BOOST_CHECK_EQUAL(info.qos.role, schema::client);
 
     host.qos.proto = protocol::tcp;
     info = plexus::make_contract(bind, host, peer, false);
     BOOST_CHECK_EQUAL(info.qos.proto, protocol::tcp);
-    BOOST_CHECK_EQUAL(info.qos.role, schema::mutual);
+    BOOST_CHECK_EQUAL(info.qos.role, schema::client);
 
     host.qos.proto = protocol::any;
     peer.udp.force.nat = false;

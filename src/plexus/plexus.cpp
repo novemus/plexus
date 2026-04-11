@@ -127,9 +127,9 @@ contract make_contract(const location& bind, const reference& host, const refere
         {
             if (host.qos.role == schema::server || host.qos.role == schema::either)
             {
-                if (host.qos.proto == protocol::ssl || (host.qos.proto == protocol::any && !host.tcp.force.nat))
+                if ((host.qos.proto == protocol::ssl || host.qos.proto == protocol::any) && (host.qos.role == schema::server || !host.tcp.force.nat || host.tcp.force.filtering == firewall::independent))
                     host_variants |= SSL_SERVER;
-                if (host.qos.proto == protocol::tcp || (host.qos.proto == protocol::any && !host.tcp.force.nat))
+                if ((host.qos.proto == protocol::tcp || host.qos.proto == protocol::any) && (host.qos.role == schema::server || !host.tcp.force.nat || host.tcp.force.filtering == firewall::independent))
                     host_variants |= TCP_SERVER;
             }
         }
@@ -154,9 +154,9 @@ contract make_contract(const location& bind, const reference& host, const refere
         {
             if (peer.qos.role == schema::server || peer.qos.role == schema::either)
             {
-                if (peer.qos.proto == protocol::ssl || (peer.qos.proto == protocol::any && !peer.tcp.force.nat))
+                if ((peer.qos.proto == protocol::ssl || peer.qos.proto == protocol::any) && (peer.qos.role == schema::server || !peer.tcp.force.nat || peer.tcp.force.filtering == firewall::independent))
                     peer_variants |= SSL_SERVER;
-                if (peer.qos.proto == protocol::tcp || (peer.qos.proto == protocol::any && !peer.tcp.force.nat))
+                if ((peer.qos.proto == protocol::tcp || peer.qos.proto == protocol::any) && (peer.qos.role == schema::server || !peer.tcp.force.nat || peer.tcp.force.filtering == firewall::independent))
                     peer_variants |= TCP_SERVER;
             }
         }
