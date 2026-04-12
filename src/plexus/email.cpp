@@ -286,7 +286,7 @@ class imap
     response_parser_t login_parser;
     response_parser_t select_parser;
     response_parser_t search_parser;
-    response_parser_t end_parser;
+    response_parser_t status_parser;
     response_parser_t header_parser;
     response_parser_t body_parser;
 
@@ -300,17 +300,24 @@ class imap
                 return done;
             };
 
-        success_checker = [](const std::string& response) -> bool {
+        success_checker = [this](const std::string& response) -> bool {
             std::smatch match;
-            bool done = std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (OK|NO) .*\\r\\n$"));
-            if (done && match[2] != "OK")
-                throw plexus::context_error(__FUNCTION__, response);
-            return done;
+            if (std::regex_search(response, match, std::regex("(.*\\r\\n)?A\\d+ (OK|NO) .*\\r\\n$")))
+            {
+                if (match[2] == "NO")
+                    throw plexus::context_error(__FUNCTION__, response);
+                
+                if (std::regex_search(response, match, std::regex("OK \\[CLIENTBUG\\]")))
+                    m_next = std::numeric_limits<uint64_t>::max();
+
+                return true;
+            }
+            return false;
         };
 
         idle_parser = [](const std::string& response) -> bool {
             std::smatch match;
-            if (std::regex_search(response, match, std::regex("(.*\\r\\n)?\\d+ (NO|BAD) .*\\r\\n")))
+            if (std::regex_search(response, match, std::regex("(.*\\r\\n)?A\\d+ (NO|BAD) .*\\r\\n")))
                 throw plexus::context_error(__FUNCTION__, response);
             return std::regex_search(response, match, std::regex("\\+ idling\\r\\n.+\\r\\n"));
         };
@@ -338,10 +345,29 @@ class imap
                     ss >> validity;
 
                     if (validity != m_validity)
-                        m_position = 0;
+                    {
+                        m_validity = validity;
+                        m_next = std::numeric_limits<uint64_t>::max();
+                        m_seen = 0;
 
-                    m_validity = validity;
+                        if (std::regex_search(response, match, std::regex("\\[UIDNEXT (\\d+)\\]")))
+                        {
+                            std::stringstream ss;
+                            ss << match[1].str();
+
+                            uint64_t next;
+                            ss >> next;
+
+                            m_seen = next - 1;
+                            m_next = m_seen;
+                        }
+                    }
+                    else
+                    {
+                        m_next = m_seen;
+                    }
                 }
+
                 return true;
             }
             return false;
@@ -359,11 +385,9 @@ class imap
                     uint64_t uid = 0;
                     while (stream >> uid)
                     {
-                        if (uid > m_position)
+                        if (uid > m_seen)
                         {
-                            m_position = uid;
- 
-                            _trc_ << "search: uid=" << uid;
+                            m_next = uid;
                             break;
                         }
                     }
@@ -373,16 +397,22 @@ class imap
             return false;
         };
 
-        end_parser = [this](const std::string& response) -> bool {
+        status_parser = [this](const std::string& response) -> bool {
             if (success_checker(response))
             {
-                m_position = 0;
+                m_seen = 0;
+                m_next = 0;
                 std::smatch match;
-                if (std::regex_search(response, match, std::regex("\\* \\d+ FETCH +\\(UID (\\d+)\\)\\r\\n.*")))
+                if (std::regex_search(response, match, std::regex("\\* STATUS INBOX \\(UIDNEXT (\\d+)\\)\\r\\n.*")))
                 {
                     std::stringstream ss;
                     ss << match[1].str();
-                    ss >> m_position;
+
+                    uint64_t next;
+                    ss >> next;
+
+                    m_seen = next - 1;
+                    m_next = m_seen;
                 }
                 return true;
             }
@@ -392,6 +422,13 @@ class imap
         header_parser = [this](const std::string& response) -> bool {
             if (success_checker(response))
             {
+                if (m_next == std::numeric_limits<uint64_t>::max())
+                {
+                    m_couple = {};
+                    m_letter = {};
+                    return true;
+                }
+
                 static const std::regex from(utils::format("From: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n"));
                 static const std::regex to(utils::format("To: ([^\\r\\n]+) <([^\\r\\n]+)>\\r\\n"));
 
@@ -422,6 +459,7 @@ class imap
                     m_couple = {};
                     m_letter = {};
                 }
+
                 return true;
             }
             return false;
@@ -430,6 +468,13 @@ class imap
         body_parser = [this](const std::string& response) -> bool {
             if (success_checker(response))
             {
+                if (m_next == std::numeric_limits<uint64_t>::max())
+                {
+                    m_couple = {};
+                    m_letter = {};
+                    return true;
+                }
+
                 if (m_config.are_allowed(m_couple.host, m_couple.peer))
                 {
                     static const std::regex pattern("BODY\\[TEXT\\] \\{(\\d+)\\}\\r\\n");
@@ -509,7 +554,8 @@ public:
         , m_config(other.m_config)
         , m_idle(other.m_idle)
         , m_validity(other.m_validity)
-        , m_position(other.m_position)
+        , m_seen(other.m_seen)
+        , m_next(other.m_next)
         , m_filter(other.m_filter)
         , m_couple(other.m_couple)
         , m_letter(other.m_letter)
@@ -531,7 +577,8 @@ public:
         session->connect(yield, connect_checker);
         session->request(yield, utils::format("A%03d LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.password.c_str()), login_parser);
         session->request(yield, utils::format("A%03d SELECT INBOX\r\n", ++seq), select_parser);
-        session->request(yield, utils::format("A%03d FETCH * UID\r\n", ++seq), end_parser);
+        if (m_next != m_seen)
+            session->request(yield, utils::format("A%03d STATUS INBOX (UIDNEXT)\r\n", ++seq), status_parser);
         session->request(yield, utils::format("A%03d LOGOUT\r\n", ++seq), success_checker);
     }
 
@@ -554,22 +601,25 @@ public:
             m_config.ca
         );
 
-        uint64_t validity = m_validity;
-
         uint8_t seq = 0;
         session->connect(yield, connect_checker);
         session->request(yield, utils::format("A%03d LOGIN %s %s\r\n", ++seq, m_config.login.c_str(), m_config.password.c_str()), login_parser);
-        session->request(yield, utils::format("A%03d SELECT INBOX\r\n", ++seq), select_parser);
 
-        if (validity != m_validity)
-             session->request(yield, utils::format("A%03d FETCH * UID\r\n", ++seq), end_parser);
+        m_next = std::numeric_limits<uint64_t>::max();
 
         do
         {
-            uint64_t end = m_position;
-            session->request(yield, utils::format("A%03d UID SEARCH UID %d:*\r\n", ++seq, m_position + 1), search_parser);
+            if (m_next != m_seen)
+            {
+                session->request(yield, utils::format("A%03d SELECT INBOX\r\n", ++seq), select_parser);
 
-            if (m_position == end)
+                if (m_next != m_seen)
+                    session->request(yield, utils::format("A%03d STATUS INBOX (UIDNEXT)\r\n", ++seq), status_parser);
+            }
+
+            session->request(yield, utils::format("A%03d UID SEARCH UID %d:*\r\n", ++seq, m_seen + 1), search_parser);
+
+            if (m_next == m_seen)
             {
                 if (elapsed())
                     throw plexus::timeout_error(__FUNCTION__);
@@ -585,25 +635,28 @@ public:
                 }
                 session->request(yield, utils::format("A%03d NOOP\r\n", ++seq), success_checker);
             }
-            else
+            else if (m_next != std::numeric_limits<uint64_t>::max())
             {
                 session->request(yield,
-                    utils::format("A%03d UID FETCH %d (BODY[HEADER.FIELDS (SUBJECT FROM TO)])\r\n", ++seq, m_position),
+                    utils::format("A%03d UID FETCH %d (BODY.PEEK[HEADER.FIELDS (SUBJECT FROM TO)])\r\n", ++seq, m_next),
                     header_parser
                 );
 
                 if (m_config.are_defined(m_couple.host, m_couple.peer))
                 {
                     session->request(yield,
-                        utils::format("A%03d UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++seq, m_position),
+                        utils::format("A%03d UID FETCH %d (BODY.PEEK[TEXT])\r\n", ++seq, m_next),
                         body_parser
                     );
                 }
+
+                if (m_next != std::numeric_limits<uint64_t>::max())
+                    m_seen = m_next;
             }
         }
         while (!m_letter.has_value());
 
-        session->request(yield, utils::format("A%03d UID STORE %d +flags \\DELETED\r\n", ++seq, m_position), success_checker);
+        session->request(yield, utils::format("A%03d UID STORE %d +flags \\DELETED\r\n", ++seq, m_seen), success_checker);
         session->request(yield, utils::format("A%03d LOGOUT\r\n", ++seq), success_checker);
     }
 
@@ -625,25 +678,14 @@ public:
         return m_couple.peer;
     }
 
-    void host(const identity& info) noexcept(true)
-    {
-        m_filter.host = info;
-        m_letter = {};
-    }
-
-    void peer(const identity& info) noexcept(true)
-    {
-        m_filter.peer = info;
-        m_letter = {};
-    }
-
 private:
 
     boost::asio::io_context& m_io;
     context m_config;
     bool m_idle = false;
     uint64_t m_validity = 0;
-    uint64_t m_position = 0;
+    uint64_t m_seen = 0;
+    uint64_t m_next = std::numeric_limits<uint64_t>::max();
     std::string m_subject;
     struct {
         identity host;
