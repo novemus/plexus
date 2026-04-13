@@ -104,11 +104,11 @@ contract make_contract(const location& bind, const reference& host, const refere
     static constexpr uint16_t UDP_CLIENT = 0x0080;
     static constexpr uint16_t UDP_MUTUAL = 0x0100;
 
-    bool tcp_capable = host.tcp.outer != endpoint{} && peer.tcp.outer != endpoint{}
+    bool tcp_capable = host.tcp.outer != endpoint{} && peer.tcp.outer != endpoint{} && host.tcp.outer.address.is_v4() == peer.tcp.outer.address.is_v4()
                       && (!host.tcp.force.variable_address || !peer.tcp.force.variable_address)
                       && (host.tcp.force.mapping == firewall::independent || peer.tcp.force.mapping == firewall::independent)
                       && (host.tcp.outer.address != peer.tcp.outer.address || (host.tcp.force.hairpin && peer.tcp.force.hairpin));
-    bool udp_capable = host.udp.outer != endpoint{} && peer.udp.outer != endpoint{}
+    bool udp_capable = host.udp.outer != endpoint{} && peer.udp.outer != endpoint{} && host.udp.outer.address.is_v4() == peer.udp.outer.address.is_v4()
                       && (!host.udp.force.variable_address || !peer.udp.force.variable_address)
                       && (host.udp.force.mapping == firewall::independent || peer.udp.force.mapping == firewall::independent)
                       && (host.udp.outer.address != peer.udp.outer.address || (host.udp.force.hairpin && peer.udp.force.hairpin));

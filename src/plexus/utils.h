@@ -71,22 +71,22 @@ boost::asio::ip::basic_endpoint<proto> parse_endpoint(const std::string& url, co
     typename proto::resolver resolver(io);
 
     std::smatch match;
-    if (std::regex_search(url, match, std::regex("^(\\w+://)?\\[([a-zA-Z0-9:]+)\\]:(\\d+).*")))
+    if (std::regex_search(url, match, std::regex("^(\\w+://)?\\[([a-fA-F0-9:]+)\\]:(\\d+).*")))
         return *resolver.resolve(match[2].str(), match[3].str()).begin();
 
-    if (std::regex_search(url, match, std::regex("^(\\w+)://\\[([a-zA-Z0-9:]+)\\].*")))
+    if (std::regex_search(url, match, std::regex("^(\\w+)://\\[([a-fA-F0-9:]+)\\].*")))
         return *resolver.resolve(match[2].str(), match[1].str()).begin();
 
-    if (std::regex_search(url, match, std::regex("^\\[([a-zA-Z0-9:]+)\\].*")))
+    if (std::regex_search(url, match, std::regex("^\\[([a-fA-F0-9:]+)\\].*")))
         return *resolver.resolve(match[1].str(), service).begin();
 
-    if (std::regex_search(url, match, std::regex("^(\\w+://)?([\\w\\.]+):(\\d+).*")))
-        return *resolver.resolve(match[2].str(), match[3].str()).begin();
+    if (std::regex_search(url, match, std::regex("^(\\w+://)?([\\w\\._-]+):(\\d+).*")))
+        return *resolver.resolve(proto::v4(), match[2].str(), match[3].str()).begin();
 
-    if (std::regex_search(url, match, std::regex("^(\\w+)://([\\w\\.]+).*")))
-        return *resolver.resolve(match[2].str(), match[1].str()).begin();
+    if (std::regex_search(url, match, std::regex("^(\\w+)://([\\w\\._-]+).*")))
+        return *resolver.resolve(proto::v4(), match[2].str(), match[1].str()).begin();
 
-    return *resolver.resolve(url, service).begin();
+    return *resolver.resolve(proto::v4(), url, service).begin();
 }
 
 template<class proto>
