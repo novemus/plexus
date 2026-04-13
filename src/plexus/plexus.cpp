@@ -123,7 +123,10 @@ contract make_contract(const location& bind, const reference& host, const refere
 
     if (tcp_capable)
     {
-        if (host.tcp.force.mapping == firewall::independent && !host.tcp.force.variable_address)
+        bool host_tcp_hole_is_stable = host.tcp.force.mapping == firewall::independent && !host.tcp.force.variable_address;
+        bool peer_tcp_hole_is_stable = peer.tcp.force.mapping == firewall::independent && !peer.tcp.force.variable_address;
+
+        if (host_tcp_hole_is_stable)
         {
             if (host.qos.role == schema::server || host.qos.role == schema::either)
             {
@@ -131,16 +134,6 @@ contract make_contract(const location& bind, const reference& host, const refere
                     host_variants |= SSL_SERVER;
                 if ((host.qos.proto == protocol::tcp || host.qos.proto == protocol::any) && (host.qos.role == schema::server || !host.tcp.force.nat || host.tcp.force.filtering == firewall::independent))
                     host_variants |= TCP_SERVER;
-            }
-        }
-        if (host.tcp.force.mapping == firewall::independent || peer.tcp.force.filtering == firewall::independent)
-        {
-            if (host.qos.role == schema::client || host.qos.role == schema::either)
-            {
-                if (host.qos.proto == protocol::ssl || host.qos.proto == protocol::any)
-                    host_variants |= SSL_CLIENT;
-                if (host.qos.proto == protocol::tcp || host.qos.proto == protocol::any)
-                    host_variants |= TCP_CLIENT;
             }
             if (host.qos.role == schema::mutual || host.qos.role == schema::either)
             {
@@ -150,7 +143,17 @@ contract make_contract(const location& bind, const reference& host, const refere
                     host_variants |= TCP_MUTUAL;
             }
         }
-        if (peer.tcp.force.mapping == firewall::independent && !peer.tcp.force.variable_address)
+        if (host_tcp_hole_is_stable || (peer_tcp_hole_is_stable && peer.tcp.force.filtering == firewall::independent))
+        {
+            if (host.qos.role == schema::client || host.qos.role == schema::either)
+            {
+                if (host.qos.proto == protocol::ssl || host.qos.proto == protocol::any)
+                    host_variants |= SSL_CLIENT;
+                if (host.qos.proto == protocol::tcp || host.qos.proto == protocol::any)
+                    host_variants |= TCP_CLIENT;
+            }
+        }
+        if (peer_tcp_hole_is_stable)
         {
             if (peer.qos.role == schema::server || peer.qos.role == schema::either)
             {
@@ -158,16 +161,6 @@ contract make_contract(const location& bind, const reference& host, const refere
                     peer_variants |= SSL_SERVER;
                 if ((peer.qos.proto == protocol::tcp || peer.qos.proto == protocol::any) && (peer.qos.role == schema::server || !peer.tcp.force.nat || peer.tcp.force.filtering == firewall::independent))
                     peer_variants |= TCP_SERVER;
-            }
-        }
-        if (peer.tcp.force.mapping == firewall::independent || host.tcp.force.filtering == firewall::independent)
-        {
-            if (peer.qos.role == schema::client || peer.qos.role == schema::either)
-            {
-                if (peer.qos.proto == protocol::ssl || peer.qos.proto == protocol::any)
-                    peer_variants |= SSL_CLIENT;
-                if (peer.qos.proto == protocol::tcp || peer.qos.proto == protocol::any)
-                    peer_variants |= TCP_CLIENT;
             }
             if (peer.qos.role == schema::mutual || peer.qos.role == schema::either)
             {
@@ -177,24 +170,29 @@ contract make_contract(const location& bind, const reference& host, const refere
                     peer_variants |= TCP_MUTUAL;
             }
         }
+        if (peer_tcp_hole_is_stable || (host_tcp_hole_is_stable && host.tcp.force.filtering == firewall::independent))
+        {
+            if (peer.qos.role == schema::client || peer.qos.role == schema::either)
+            {
+                if (peer.qos.proto == protocol::ssl || peer.qos.proto == protocol::any)
+                    peer_variants |= SSL_CLIENT;
+                if (peer.qos.proto == protocol::tcp || peer.qos.proto == protocol::any)
+                    peer_variants |= TCP_CLIENT;
+            }
+        }
     }
 
     if (udp_capable)
     {
-        if (host.udp.force.mapping == firewall::independent && !host.udp.force.variable_address)
+        bool host_udp_hole_is_stable = host.udp.force.mapping == firewall::independent && !host.udp.force.variable_address;
+        bool peer_udp_hole_is_stable = peer.udp.force.mapping == firewall::independent && !peer.udp.force.variable_address;
+
+        if (host_udp_hole_is_stable)
         {
             if (host.qos.role == schema::server || host.qos.role == schema::either)
             {
                 if (host.qos.proto == protocol::udp || host.qos.proto == protocol::any)
                     host_variants |= UDP_SERVER;
-            }
-        }
-        if (host.udp.force.mapping == firewall::independent || peer.udp.force.filtering == firewall::independent)
-        {
-            if (host.qos.role == schema::client || host.qos.role == schema::either)
-            {
-                if (host.qos.proto == protocol::udp || host.qos.proto == protocol::any)
-                    host_variants |= UDP_CLIENT;
             }
             if (host.qos.role == schema::mutual || host.qos.role == schema::either)
             {
@@ -202,25 +200,33 @@ contract make_contract(const location& bind, const reference& host, const refere
                     host_variants |= UDP_MUTUAL;
             }
         }
-        if (peer.udp.force.mapping == firewall::independent && !peer.udp.force.variable_address)
+        if (host_udp_hole_is_stable || (peer_udp_hole_is_stable && peer.udp.force.filtering == firewall::independent))
+        {
+            if (host.qos.role == schema::client || host.qos.role == schema::either)
+            {
+                if (host.qos.proto == protocol::udp || host.qos.proto == protocol::any)
+                    host_variants |= UDP_CLIENT;
+            }
+        }
+        if (peer_udp_hole_is_stable)
         {
             if (peer.qos.role == schema::server || peer.qos.role == schema::either)
             {
                 if (peer.qos.proto == protocol::udp || peer.qos.proto == protocol::any)
                     peer_variants |= UDP_SERVER;
             }
+            if (peer.qos.role == schema::mutual || peer.qos.role == schema::either)
+            {
+                if (peer.qos.proto == protocol::udp || peer.qos.proto == protocol::any)
+                    peer_variants |= UDP_MUTUAL;
+            }
         }
-        if (peer.udp.force.mapping == firewall::independent || host.udp.force.filtering == firewall::independent)
+        if (peer_udp_hole_is_stable || (host_udp_hole_is_stable && host.udp.force.filtering == firewall::independent))
         {
             if (peer.qos.role == schema::client || peer.qos.role == schema::either)
             {
                 if (peer.qos.proto == protocol::udp || peer.qos.proto == protocol::any)
                     peer_variants |= UDP_CLIENT;
-            }
-            if (peer.qos.role == schema::mutual || peer.qos.role == schema::either)
-            {
-                if (peer.qos.proto == protocol::udp || peer.qos.proto == protocol::any)
-                    peer_variants |= UDP_MUTUAL;
             }
         }
     }
