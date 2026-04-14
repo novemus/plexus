@@ -61,58 +61,69 @@ template<class var_t> var_t getenv(const std::string& name, const var_t& def)
     return def;
 }
 
-template<class proto>
-boost::asio::ip::basic_endpoint<proto> parse_endpoint(const std::string& url, const std::string& service)
+template<class protocol>
+endpoint resolve_some(const std::string& hostname, const std::string& service)
 {
-    if (url.empty() && service.empty())
-        return boost::asio::ip::basic_endpoint<proto>();
-
     boost::asio::io_context io;
-    typename proto::resolver resolver(io);
+    typename protocol::resolver resolver(io);
+    typename protocol::endpoint ep;
 
-    std::smatch match;
-    if (std::regex_search(url, match, std::regex("^(\\w+://)?\\[([a-fA-F0-9:]+)\\]:(\\d+).*")))
-        return *resolver.resolve(match[2].str(), match[3].str()).begin();
+    try
+    {
+        std::smatch match;
+        if (std::regex_search(hostname, match, std::regex("^\\[(.+)\\]:(\\d+)$")))
+            ep = *resolver.resolve(match[1].str(), match[2].str()).begin();
+        else if (std::regex_search(hostname, match, std::regex("^(.+):(\\d+)$")))
+            ep = *resolver.resolve(match[1].str(), match[2].str()).begin();
+        else
+            ep = *resolver.resolve(hostname, service).begin();
+    }
+    catch(const std::exception& ex)
+    {
+        throw std::runtime_error("can't resolve '" + hostname + "' endpoint: " + ex.what());
+    }
 
-    if (std::regex_search(url, match, std::regex("^(\\w+)://\\[([a-fA-F0-9:]+)\\].*")))
-        return *resolver.resolve(match[2].str(), match[1].str()).begin();
-
-    if (std::regex_search(url, match, std::regex("^\\[([a-fA-F0-9:]+)\\].*")))
-        return *resolver.resolve(match[1].str(), service).begin();
-
-    if (std::regex_search(url, match, std::regex("^(\\w+://)?([\\w\\._-]+):(\\d+).*")))
-        return *resolver.resolve(proto::v4(), match[2].str(), match[3].str()).begin();
-
-    if (std::regex_search(url, match, std::regex("^(\\w+)://([\\w\\._-]+).*")))
-        return *resolver.resolve(proto::v4(), match[2].str(), match[1].str()).begin();
-
-    return *resolver.resolve(proto::v4(), url, service).begin();
+    return endpoint { ep.address(), ep.port() };
 }
 
-template<class proto>
-endpoint locate(const endpoint& ep)
+template<class protocol>
+endpoint resolve_same(const boost::asio::ip::address& address, const std::string& hostname, const std::string& service)
 {
-    if (ep.port == 0)
+    boost::asio::io_context io;
+    typename protocol::resolver resolver(io);
+    typename protocol::endpoint ep;
+
+    try
+    {
+        std::smatch match;
+        if (address.is_v6() && std::regex_search(hostname, match, std::regex("^\\[(.+)\\]:(\\d+)$")))
+            ep = *resolver.resolve(protocol::v6(), match[1].str(), match[2].str()).begin();
+        else if(address.is_v4() && std::regex_search(hostname, match, std::regex("^(.+):(\\d+)$")))
+            ep = *resolver.resolve(protocol::v4(), match[1].str(), match[2].str()).begin();
+        else
+            ep = *resolver.resolve(address.is_v4() ? protocol::v4() : protocol::v6(), hostname, service).begin();
+    }
+    catch(const std::exception& ex)
+    {
+        throw std::runtime_error("can't resolve '" + hostname + "' endpoint: " + ex.what());
+    }
+
+    return endpoint { ep.address(), ep.port() };
+}
+
+template<class protocol>
+endpoint locate(const endpoint& local)
+{
+    if (local.port == 0)
     {
         boost::asio::io_context io;
-        typename proto::socket socket(io, ep.address.is_v6() ? proto::v6() : proto::v4());
+        typename protocol::socket socket(io, local.address.is_v6() ? protocol::v6() : protocol::v4());
         socket.set_option(boost::asio::socket_base::reuse_address(true));
-        socket.bind(ep);
-
+        socket.bind(local);
         auto ep = socket.local_endpoint();
         return endpoint { ep.address(), ep.port() };
     }
-    return ep;
+    return local;
 }
 
-}
-
-template<class proto>
-std::ostream& operator<<(std::ostream& stream, const boost::asio::ip::basic_endpoint<proto>& endpoint)
-{
-    if (stream.rdbuf())
-        return stream << endpoint.address().to_string() << ":" << endpoint.port();
-    return stream;
-}
-
-}
+}}

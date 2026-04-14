@@ -125,7 +125,7 @@ struct options
     std::string app;     // application id
     std::string repo;    // path to the application repository
     location bind;       // endpoints to bind the application
-    location stun;       // endpoints of the stun server
+    location stun;       // endpoints of the stun servers
     uint16_t hops;       // ttl of the hole punching packet
     criteria qos;        // application protocol and connection strategy
     rendezvous mediator; // rendezvous service

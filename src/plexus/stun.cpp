@@ -161,7 +161,7 @@ class message : public tubus::mutable_buffer
         if (ptr)
         {
             uint16_t length = read_short(ptr, 2);
-            
+
             if (ptr[5] == flag::ip_v4)
             {
                 if (length != 8u)
@@ -177,7 +177,7 @@ class message : public tubus::mutable_buffer
                 if (length != 20u)
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
-                endpoint {
+                return endpoint {
                     boost::asio::ip::make_address(utils::format("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
                     read_short(ptr, 6)
                 };
