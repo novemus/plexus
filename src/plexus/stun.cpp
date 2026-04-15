@@ -598,7 +598,7 @@ public:
                 }
             }
 
-            auto filter = plexus::network::create_udp_socket(m_io);
+            auto filter = plexus::network::create_udp_socket(m_io, endpoint { m_bind.udp.address, 0 });
             try
             {
                 _trc_ << "first filtering test...";
