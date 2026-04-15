@@ -334,22 +334,22 @@ public:
         m_bind.tcp = utils::locate<boost::asio::ip::tcp>(bind.tcp);
     }
 
-    message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<network::udp_socket> sock, const endpoint& to, const endpoint& from, const message& req = message(0), int64_t deadline = 4600)
+    message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<network::udp_socket> sock, const endpoint& to, const endpoint& from, uint8_t flag = 0, int64_t deadline = 4600)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
-        message res;
-
         int64_t timeout = 200;
         while (timer().total_milliseconds() < deadline)
         {
+            message req(flag);
             sock->send_to(req, to, yield, timeout);
 
             try
             {
+                message res;
                 res.truncate(sock->receive_from(res, from, yield, timeout));
 
                 if (timer().total_milliseconds() >= deadline)
@@ -389,12 +389,12 @@ public:
 
                 timeout = std::min<int64_t>(1600, timeout * 2);
             }
-        } 
+        }
 
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    message exec_tcp_binding(boost::asio::yield_context yield, const endpoint& bind, const endpoint& stun, const message& req = message(0), int64_t deadline = 10000)
+    message exec_tcp_binding(boost::asio::yield_context yield, const endpoint& bind, const endpoint& stun, uint8_t flag = 0, int64_t deadline = 10000)
     {
         auto timeout = [deadline, start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -406,6 +406,7 @@ public:
             auto sock = plexus::network::create_tcp_socket(m_io, bind, stun);
             sock->connect(yield, timeout());
 
+            message req(flag);
             if (sock->write(req, yield, timeout()) != req.size())
                 throw plexus::context_error(__FUNCTION__, "can't write message");
 
@@ -603,7 +604,7 @@ public:
             {
                 _trc_ << "first filtering test...";
 
-                exec_udp_binding(yield, filter, m_stun.udp, changed_full, message(flag::change_address | flag::change_port), 1400);
+                exec_udp_binding(yield, filter, m_stun.udp, changed_full, flag::change_address | flag::change_port, 1400);
                 pass.udp.force.filtering = firewall::independent;
             }
             catch(const plexus::timeout_error&)
@@ -612,7 +613,7 @@ public:
                 {
                     _trc_ << "second filtering test...";
 
-                    exec_udp_binding(yield, filter, m_stun.udp, changed_addr, message(flag::change_address), 1400);
+                    exec_udp_binding(yield, filter, m_stun.udp, changed_addr, flag::change_address, 1400);
                     pass.udp.force.filtering = firewall::port_dependent;
                 }
                 catch(const plexus::timeout_error&)
@@ -621,7 +622,7 @@ public:
                     {
                         _trc_ << "third filtering test...";
 
-                        exec_udp_binding(yield, filter, m_stun.udp, changed_port, message(flag::change_port), 1400);
+                        exec_udp_binding(yield, filter, m_stun.udp, changed_port, flag::change_port, 1400);
                         pass.udp.force.filtering = firewall::address_dependent;
                     }
                     catch(const plexus::timeout_error&)
@@ -637,7 +638,7 @@ public:
             {
                 _trc_ << "hairpin test...";
 
-                exec_udp_binding(yield, mapper, pass.udp.outer, pass.udp.outer, message(0), 1400);
+                exec_udp_binding(yield, mapper, pass.udp.outer, pass.udp.outer, 0, 1400);
                 pass.udp.force.hairpin = true;
             }
             catch(const plexus::timeout_error&) {}
