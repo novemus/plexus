@@ -26,7 +26,7 @@
 #include <ws2tcpip.h>
 #endif
 
-/* 
+/*
  * Procedure of polling the STUN server to test network traverse
  *
  * SA - source ip address of the stun server
@@ -71,7 +71,7 @@
  *      Tell the stun server to reply from source address and changed port.
  *      If response will be received, then there is the address dependent filtering,
  *      otherwise there is the address and port dependent filtering
- * 
+ *
  * ***** HAIRPIN *****
  *
  * HAIRPIN_TEST: MA, MP, AF=0, PF=0
@@ -81,6 +81,18 @@
  */
 
 namespace plexus { namespace stun {
+
+bool strict_nat_checkup()
+{
+    static const bool s_strict(utils::getenv<bool>("PLEXUS_STRICT_NAT_CHECKUP", true));
+    return s_strict;
+}
+
+std::chrono::minutes cache_period()
+{
+    static const std::chrono::minutes s_period(utils::getenv<int64_t>("PLEXUS_STUN_CACHE_PERIOD", 30));
+    return s_period;
+}
 
 typedef std::array<uint8_t, 16> transaction_id;
 
@@ -274,12 +286,11 @@ class client_impl : public stun_client
             auto now = std::chrono::steady_clock::now();
             auto age = std::chrono::duration_cast<std::chrono::minutes>(now - val.time);
 
-            if (age < std::chrono::minutes(15) && hole.inner.address == val.hole.inner.address && hole.outer.address == val.hole.outer.address)
+            if (age < cache_period() && hole.inner.address == val.hole.inner.address && hole.outer.address == val.hole.outer.address)
             {
                 hole.force = val.hole.force;
                 return true;
             }
-
             return false;
         }
 
@@ -291,7 +302,7 @@ class client_impl : public stun_client
             auto now = std::chrono::steady_clock::now();
             auto age = std::chrono::duration_cast<std::chrono::minutes>(now - val.time);
 
-            if (age > std::chrono::minutes(15) || hole.inner.address != val.hole.inner.address || hole.outer.address != val.hole.outer.address)
+            if (age > cache_period() || hole.inner.address != val.hole.inner.address || hole.outer.address != val.hole.outer.address || firewall::to_number(hole.force) != firewall::to_number(val.hole.force))
             {
                 val.hole = hole;
                 val.time = now;
@@ -555,48 +566,74 @@ public:
         pass.udp.inner = m_bind.udp;
         pass.udp.outer = binding.mapped_endpoint();
 
-        if (!cache::get(protocol::udp, m_stun.udp, pass.udp) && !identical(pass.udp.inner, pass.udp.outer))
+        if (!cache::get(protocol::udp, m_stun.udp, pass.udp))
         {
-            pass.udp.force.nat = true;
-
-            if (pass.udp.inner.port != pass.udp.outer.port)
-            {
-                pass.udp.force.random_port = true;
-            }
-
             auto changed_full = binding.changed_endpoint();
             auto changed_addr = endpoint{ changed_full.address, m_stun.udp.port };
             auto changed_port = endpoint{ m_stun.udp.address, changed_full.port };
 
-            _trc_ << "first mapping test...";
-
-            auto first_endpoint = exec_udp_binding(yield, mapper, changed_full, changed_full).mapped_endpoint();
-            if (first_endpoint == pass.udp.outer)
+            if (!identical(pass.udp.inner, pass.udp.outer))
             {
-                pass.udp.force.mapping = firewall::independent;
-            }
-            else
-            {
-                _trc_ << "second mapping test...";
+                pass.udp.force.nat = true;
 
-                auto second_endpoint = exec_udp_binding(yield, mapper, changed_addr, changed_addr).mapped_endpoint();
-                if (second_endpoint == pass.udp.outer)
+                if (pass.udp.inner.port != pass.udp.outer.port)
                 {
-                    pass.udp.force.mapping = firewall::port_dependent;
-                }
-                else if (second_endpoint == first_endpoint)
-                {
-                    pass.udp.force.mapping = firewall::address_dependent;
-                }
-                else
-                {
-                    pass.udp.force.mapping = firewall::address_and_port_dependent;
+                    pass.udp.force.random_port = true;
                 }
 
-                if (second_endpoint.address != pass.udp.outer.address || second_endpoint.address != first_endpoint.address)
+                try
                 {
-                    pass.udp.force.variable_address = true;
+                    _trc_ << "first mapping test...";
+
+                    auto first_endpoint = exec_udp_binding(yield, mapper, changed_full, changed_full).mapped_endpoint();
+                    if (first_endpoint == pass.udp.outer)
+                    {
+                        pass.udp.force.mapping = firewall::independent;
+                    }
+                    else
+                    {
+                        _trc_ << "second mapping test...";
+
+                        auto second_endpoint = exec_udp_binding(yield, mapper, changed_addr, changed_addr).mapped_endpoint();
+                        if (second_endpoint == pass.udp.outer)
+                        {
+                            pass.udp.force.mapping = firewall::port_dependent;
+                        }
+                        else if (second_endpoint == first_endpoint)
+                        {
+                            pass.udp.force.mapping = firewall::address_dependent;
+                        }
+                        else
+                        {
+                            pass.udp.force.mapping = firewall::address_and_port_dependent;
+                        }
+
+                        if (second_endpoint.address != pass.udp.outer.address || second_endpoint.address != first_endpoint.address)
+                        {
+                            pass.udp.force.variable_address = true;
+                        }
+                    }
                 }
+                catch(const plexus::timeout_error& ex)
+                {
+                    if (strict_nat_checkup())
+                        throw;
+
+                    _wrn_ << ex.what();
+
+                    pass.udp.force.mapping = firewall::independent;
+                }
+
+                pass.udp.force.hairpin = false;
+
+                try
+                {
+                    _trc_ << "hairpin test...";
+
+                    exec_udp_binding(yield, mapper, pass.udp.outer, pass.udp.outer, 0, 1400);
+                    pass.udp.force.hairpin = true;
+                }
+                catch(const plexus::timeout_error&) {}
             }
 
             auto filter = plexus::network::create_udp_socket(m_io, endpoint { m_bind.udp.address, 0 });
@@ -632,19 +669,8 @@ public:
                 }
             }
 
-            pass.udp.force.hairpin = false;
-
-            try
-            {
-                _trc_ << "hairpin test...";
-
-                exec_udp_binding(yield, mapper, pass.udp.outer, pass.udp.outer, 0, 1400);
-                pass.udp.force.hairpin = true;
-            }
-            catch(const plexus::timeout_error&) {}
+            cache::set(protocol::udp, m_stun.udp, pass.udp);
         }
-
-        cache::set(protocol::udp, m_stun.udp, pass.udp);
 
         _inf_ << "udp traverse: inner=" << pass.udp.inner << " outer=" << pass.udp.outer << " force=" << pass.udp.force;
     }
@@ -659,67 +685,81 @@ public:
         pass.tcp.inner = m_bind.tcp;
         pass.tcp.outer = binding.mapped_endpoint();
 
-        if (!cache::get(protocol::tcp, m_stun.tcp, pass.tcp) && !identical(pass.tcp.inner, pass.tcp.outer))
+        if (!cache::get(protocol::tcp, m_stun.tcp, pass.tcp))
         {
-            pass.tcp.force.nat = true;
-            pass.tcp.force.filtering = firewall::address_and_port_dependent;
-
-            if (pass.tcp.inner.port != pass.tcp.outer.port)
+            if (!identical(pass.tcp.inner, pass.tcp.outer))
             {
-                pass.tcp.force.random_port = true;
-            }
+                pass.tcp.force.nat = true;
+                pass.tcp.force.filtering = firewall::address_and_port_dependent;
 
-            auto changed_full = binding.changed_endpoint();
-            auto changed_addr = endpoint{ changed_full.address, m_stun.tcp.port };
-            auto changed_port = endpoint{ m_stun.tcp.address, changed_full.port };
-
-            _trc_ << "first mapping test...";
-
-            auto first_endpoint = exec_tcp_binding(yield, m_bind.tcp, changed_full).mapped_endpoint();
-            if (first_endpoint == pass.tcp.outer)
-            {
-                pass.tcp.force.mapping = firewall::independent;
-            }
-            else
-            {
-                _trc_ << "second mapping test...";
-
-                auto second_endpoint = exec_tcp_binding(yield, m_bind.tcp, changed_addr).mapped_endpoint();
-                if (second_endpoint == pass.tcp.outer)
+                if (pass.tcp.inner.port != pass.tcp.outer.port)
                 {
-                    pass.tcp.force.mapping = firewall::port_dependent;
-                }
-                else if (second_endpoint == first_endpoint)
-                {
-                    pass.tcp.force.mapping = firewall::address_dependent;
-                }
-                else
-                {
-                    pass.tcp.force.mapping = firewall::address_and_port_dependent;
+                    pass.tcp.force.random_port = true;
                 }
 
-                if (second_endpoint.address != pass.tcp.outer.address || second_endpoint.address != first_endpoint.address)
+                auto changed_full = binding.changed_endpoint();
+                auto changed_addr = endpoint{ changed_full.address, m_stun.udp.port };
+
+                try
                 {
-                    pass.tcp.force.variable_address = true;
+                    _trc_ << "first mapping test...";
+
+                    auto first_endpoint = exec_tcp_binding(yield, m_bind.tcp, changed_full).mapped_endpoint();
+                    if (first_endpoint == pass.tcp.outer)
+                    {
+                        pass.tcp.force.mapping = firewall::independent;
+                    }
+                    else
+                    {
+                        _trc_ << "second mapping test...";
+
+                        auto second_endpoint = exec_tcp_binding(yield, m_bind.tcp, changed_addr).mapped_endpoint();
+                        if (second_endpoint == pass.tcp.outer)
+                        {
+                            pass.tcp.force.mapping = firewall::port_dependent;
+                        }
+                        else if (second_endpoint == first_endpoint)
+                        {
+                            pass.tcp.force.mapping = firewall::address_dependent;
+                        }
+                        else
+                        {
+                            pass.tcp.force.mapping = firewall::address_and_port_dependent;
+                        }
+
+                        if (second_endpoint.address != pass.tcp.outer.address || second_endpoint.address != first_endpoint.address)
+                        {
+                            pass.tcp.force.variable_address = true;
+                        }
+                    }
                 }
+                catch(const plexus::timeout_error& ex)
+                {
+                    if (strict_nat_checkup())
+                        throw;
+
+                    _wrn_ << ex.what();
+
+                    pass.tcp.force.mapping = firewall::independent;
+                }
+
+                pass.tcp.force.hairpin = false;
+
+                try
+                {
+                    _trc_ << "hairpin test...";
+
+                    auto self = network::create_tcp_socket(m_io, m_bind.tcp, pass.tcp.outer);
+                    self->connect(yield, 1400);
+                    self->shutdown();
+
+                    pass.tcp.force.hairpin = true;
+                }
+                catch(const std::exception&) { }
             }
 
-            pass.tcp.force.hairpin = false;
-
-            try
-            {
-                _trc_ << "hairpin test...";
-
-                auto self = network::create_tcp_socket(m_io, m_bind.tcp, pass.tcp.outer);
-                self->connect(yield, 1400);
-                self->shutdown();
-
-                pass.tcp.force.hairpin = true;
-            }
-            catch(const std::exception&) { }
+            cache::set(protocol::tcp, m_stun.tcp, pass.tcp);
         }
-
-        cache::set(protocol::tcp, m_stun.tcp, pass.tcp);
 
         _inf_ << "tcp traverse: inner=" << pass.tcp.inner << " outer=" << pass.tcp.outer << " force=" << pass.tcp.force;
     }
@@ -738,9 +778,7 @@ public:
             }
             catch(const std::exception& ex)
             {
-                if (proto == protocol::udp)
-                    throw;
-
+                pass.udp.outer = endpoint{};
                 _wrn_ << "can't make udp traverse: " << ex.what();
             }
         }
@@ -753,9 +791,7 @@ public:
             }
             catch(const std::exception& ex)
             {
-                if (proto > protocol::udp)
-                    throw;
-
+                pass.tcp.outer = endpoint{};
                 _wrn_ << "can't make tcp traverse: " << ex.what();
             }
         }
