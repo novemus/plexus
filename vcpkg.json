@@ -9,10 +9,7 @@
         "boost-bind",
         "boost-date-time",
         "boost-coroutine",
-        {
-            "name": "boost-process",
-            "platform": "windows"
-        },
+        "boost-process",
         {
             "name": "boost-filesystem",
             "platform": "windows"

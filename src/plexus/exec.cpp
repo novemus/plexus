@@ -15,6 +15,8 @@
     #include <boost/process/v1/child.hpp>
     #ifdef WIN32
         #include <boost/process/v1/windows.hpp>
+    #endif
+    #if defined WIN32 || __APPLE__
         #include <boost/process/v1/env.hpp>
         #include <boost/process/v1/args.hpp>
         #include <boost/process/v1/start_dir.hpp>
