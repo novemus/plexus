@@ -92,6 +92,41 @@ std::istream& operator>>(std::istream& in, identity& val) noexcept(false)
     return in;
 }
 
+std::ostream& operator<<(std::ostream& out, const checkup& val) noexcept(false)
+{
+    switch (val)
+    {
+        case checkup::strict:
+            return out << "strict";
+        case checkup::faulty:
+            return out << "faulty";
+        case checkup::simple:
+            return out << "simple";
+        case checkup::noneed:
+            return out << "noneed";
+        default:
+            break;
+    }
+    throw std::runtime_error("unknown checkup value");
+}
+
+std::istream& operator>>(std::istream& in, checkup& val) noexcept(false)
+{
+    std::string str;
+    in >> str;
+    if (str == "strict" || str == "0")
+        val = checkup::strict;
+    else if (str == "faulty" || str == "1")
+        val = checkup::faulty;
+    else if (str == "simple" || str == "2")
+        val = checkup::simple;
+    else if (str == "noneed" || str == "3")
+        val = checkup::noneed;
+    else
+        throw std::runtime_error("unknown checkup value");
+    return in;
+}
+
 contract make_contract(const location& bind, const reference& host, const reference& peer, bool accept) noexcept(false)
 {
     static constexpr uint16_t SSL_SERVER = 0x0001;
@@ -104,11 +139,11 @@ contract make_contract(const location& bind, const reference& host, const refere
     static constexpr uint16_t UDP_CLIENT = 0x0080;
     static constexpr uint16_t UDP_MUTUAL = 0x0100;
 
-    bool tcp_capable = host.tcp.outer != endpoint{} && peer.tcp.outer != endpoint{} && host.tcp.outer.address.is_v4() == peer.tcp.outer.address.is_v4()
+    bool tcp_capable = !host.tcp.outer.address.is_unspecified() && !peer.tcp.outer.address.is_unspecified() && host.tcp.outer.address.is_v4() == peer.tcp.outer.address.is_v4()
                       && (!host.tcp.force.variable_address || !peer.tcp.force.variable_address)
                       && (host.tcp.force.mapping == firewall::independent || peer.tcp.force.mapping == firewall::independent)
                       && (host.tcp.outer.address != peer.tcp.outer.address || (host.tcp.force.hairpin && peer.tcp.force.hairpin));
-    bool udp_capable = host.udp.outer != endpoint{} && peer.udp.outer != endpoint{} && host.udp.outer.address.is_v4() == peer.udp.outer.address.is_v4()
+    bool udp_capable = !host.udp.outer.address.is_unspecified() && !peer.udp.outer.address.is_unspecified() && host.udp.outer.address.is_v4() == peer.udp.outer.address.is_v4()
                       && (!host.udp.force.variable_address || !peer.udp.force.variable_address)
                       && (host.udp.force.mapping == firewall::independent || peer.udp.force.mapping == firewall::independent)
                       && (host.udp.outer.address != peer.udp.outer.address || (host.udp.force.hairpin && peer.udp.force.hairpin));
@@ -265,16 +300,16 @@ contract make_contract(const location& bind, const reference& host, const refere
     return info;
 }
 
-void explore_network(boost::asio::io_context& io, const location& bind, const location& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true)
+void explore_network(boost::asio::io_context& io, const location& bind, const location& stun, checkup mode, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true)
 {
-    boost::asio::spawn(io, [&io, bind, stun, handler, failure](boost::asio::yield_context yield)
+    boost::asio::spawn(io, [&io, bind, stun, mode, handler, failure](boost::asio::yield_context yield)
     {
         _inf_ << "explore network...";
 
         try
         {
             auto client = plexus::create_stun_client(io, stun, bind);
-            handler(client->make_traverse(yield, protocol::any));
+            handler(client->make_traverse(yield, protocol::any, mode));
         }
         catch (const std::exception& e)
         {
@@ -298,7 +333,7 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
         try
         {
             auto broker = plexus::create_sync_broker(io, config.stun, config.bind, config.hops);
-            auto pass = broker->make_traverse(yield, config.qos.proto);
+            auto pass = broker->make_traverse(yield, config.qos.proto, config.mode);
 
             auto faraway = pipe->pull_request(yield);
             auto gateway = reference { 
@@ -338,7 +373,7 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
         try
         {
             auto broker = plexus::create_sync_broker(io, config.stun, config.bind, config.hops);
-            auto pass = broker->make_traverse(yield, config.qos.proto);
+            auto pass = broker->make_traverse(yield, config.qos.proto, config.mode);
 
             auto gateway = reference { 
                 reference::map { pass.udp.outer, pass.udp.force },

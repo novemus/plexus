@@ -38,7 +38,8 @@ int main(int argc, char** argv)
         ("tcp-bind", boost::program_options::value<std::string>()->default_value("0.0.0.0:0"), "tcp endpoint to bind the application")
         ("udp-stun", boost::program_options::value<std::string>()->default_value("stunserver2025.stunprotocol.org"), "udp STUN server")
         ("tcp-stun", boost::program_options::value<std::string>()->default_value("stunserver2025.stunprotocol.org"), "tcp STUN server")
-        ("punch-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for the NAT punching packet")
+        ("nat-test", boost::program_options::value<checkup>()->default_value(checkup::strict), "NAT explore mode: <strict|faulty|simple|noneed>")
+        ("nat-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for the NAT punching packet")
         ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "url of the bootstrap DHT service")
         ("dht-port", boost::program_options::value<uint16_t>()->default_value(0), "local port to bind the DHT node")
         ("dht-network", boost::program_options::value<uint32_t>()->default_value(0), "DHT network id")
@@ -186,7 +187,8 @@ int main(int argc, char** argv)
             vm["app-repo"].as<std::string>(),
             bind,
             stun,
-            vm["punch-hops"].as<uint16_t>(),
+            vm["nat-hops"].as<uint16_t>(),
+            vm["nat-test"].as<checkup>(),
             vm["app-qos"].as<criteria>(),
             vm.count("email-smtps")
                 ? rendezvous {

@@ -120,6 +120,11 @@ struct location
     endpoint tcp;
 };
 
+enum checkup
+{
+    strict, faulty, simple, noneed
+};
+
 struct options
 {
     std::string app;     // application id
@@ -127,6 +132,7 @@ struct options
     location bind;       // endpoints to bind the application
     location stun;       // endpoints of the stun servers
     uint16_t hops;       // ttl of the hole punching packet
+    checkup mode;        // nat explore mode
     criteria qos;        // application protocol and connection strategy
     rendezvous mediator; // rendezvous service
 };
@@ -143,7 +149,7 @@ using fallback = std::function<void(const identity& /* host */,
                                     const std::string& /* error */)>;
 
 LIBPLEXUS_EXPORT
-void explore_network(boost::asio::io_context& io, const location& bind, const location& stun, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
+void explore_network(boost::asio::io_context& io, const location& bind, const location& stun, checkup mode, const std::function<void(const traverse&)>& handler, const std::function<void(const std::string&)>& failure) noexcept(true);
 LIBPLEXUS_EXPORT
 void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT
@@ -157,5 +163,6 @@ LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const identity& val
 LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, identity& val) noexcept(false);
 LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const firewall& val) noexcept(false);
 LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, firewall& val) noexcept(false);
-
+LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const checkup& val) noexcept(false);
+LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, checkup& val) noexcept(false);
 }

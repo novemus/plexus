@@ -65,7 +65,7 @@ static constexpr const char* ca_file_name = "ca.crt";
 struct stun_client
 {
     virtual ~stun_client() {}
-    virtual traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) = 0;
+    virtual traverse make_traverse(boost::asio::yield_context yield, protocol proto, checkup mode) noexcept(false) = 0;
 };
 
 std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const location& stun, const location& bind) noexcept(true);

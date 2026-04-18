@@ -30,8 +30,10 @@ namespace tests
         identity m_peer;
         emailer m_emailer;
         dhtnode m_dhtnode;
+        location m_bind;
         location m_stun;
         uint16_t m_hops;
+        checkup m_mode;
 
     public:
 
@@ -46,8 +48,8 @@ namespace tests
             m_peer.pin = "peer";
 
             m_emailer = emailer {
-                utils::getenv<endpoint>("SMTP_SERVER", endpoint{}),
-                utils::getenv<endpoint>("IMAP_SERVER", endpoint{}),
+                utils::resolve_some<boost::asio::ip::tcp>(utils::getenv<std::string>("SMTP_SERVER", ""), "smtps"),
+                utils::resolve_some<boost::asio::ip::tcp>(utils::getenv<std::string>("IMAP_SERVER", ""), "imaps"),
                 utils::getenv<std::string>("EMAIL_LOGIN", ""),
                 utils::getenv<std::string>("EMAIL_PASSWORD", ""),
                 "", "", ""
@@ -56,9 +58,12 @@ namespace tests
             m_dhtnode = dhtnode { utils::getenv<std::string>("DHT_BOOTSTRAP", ""), 0, 0 };
 
             m_repo = std::filesystem::temp_directory_path().generic_u8string() + "/" + m_app;
-            m_stun.udp = utils::getenv<endpoint>("UDP_STUN_SERVER", endpoint{});
-            m_stun.tcp = utils::getenv<endpoint>("TCP_STUN_SERVER", endpoint{});
+            m_bind.udp = utils::resolve_some<boost::asio::ip::udp>(utils::getenv<std::string>("UDP_BIND", ""), "0");
+            m_bind.tcp = utils::resolve_some<boost::asio::ip::tcp>(utils::getenv<std::string>("TCP_BIND", ""), "0");
+            m_stun.udp = utils::resolve_same<boost::asio::ip::udp>(m_bind.udp.address, utils::getenv<std::string>("UDP_STUN_SERVER", ""), "3478");
+            m_stun.tcp = utils::resolve_same<boost::asio::ip::tcp>(m_bind.tcp.address, utils::getenv<std::string>("TCP_STUN_SERVER", ""), "3478");
             m_hops = utils::getenv<uint16_t>("PUNCH_HOPS", 5);
+            m_mode = utils::getenv<checkup>("STUN_MODE", checkup::strict);
 
             auto host_dir = m_repo + "/" + m_host.owner + "/" + m_host.pin;
             auto peer_dir = m_repo + "/" + m_peer.owner + "/" + m_peer.pin;
@@ -76,6 +81,9 @@ namespace tests
             std::filesystem::create_symlink(std::filesystem::canonical("certs/client.crt"), peer_dir + "/cert.crt");
             std::filesystem::create_symlink(std::filesystem::canonical("certs/client.key"), peer_dir + "/private.key");
             std::filesystem::create_symlink(std::filesystem::canonical("certs/ca.crt"), peer_dir + "/ca.crt");
+
+            _dbg_ << "stun: udp=" << m_stun.udp << " tcp=" << m_stun.tcp;
+            _dbg_ << "bind: udp=" << m_bind.udp << " tcp=" << m_bind.tcp;
         }
 
         options make_config(bool email, protocol proto, schema role) const
@@ -83,9 +91,10 @@ namespace tests
             return options {
                 m_app,
                 m_repo,
-                location {},
+                m_bind,
                 m_stun,
                 m_hops,
+                m_mode,
                 criteria { proto, role },
                 email 
                     ? rendezvous { m_emailer } 
@@ -96,20 +105,20 @@ namespace tests
         void make_stun_test() const
         {
             boost::asio::io_context io;
-            explore_network(io, location{}, location{m_stun.udp, endpoint {}},
+            explore_network(io, m_bind, location{m_stun.udp, endpoint {}}, m_mode,
                 [&](const traverse& pass)
                 {
-                    BOOST_CHECK_NE(pass.udp.outer, endpoint{});
+                    BOOST_CHECK(!pass.udp.outer.address.is_unspecified());
                 },
                 [&](const std::string& error)
                 {
                     BOOST_ERROR(error.c_str());
                 });
 
-            explore_network(io, location{}, location{endpoint {}, m_stun.tcp},
+            explore_network(io, m_bind, location{endpoint {}, m_stun.tcp}, m_mode,
                 [&](const traverse& pass)
                 {
-                    BOOST_CHECK_NE(pass.tcp.outer, endpoint{});
+                    BOOST_CHECK(!pass.tcp.outer.address.is_unspecified());
                 },
                 [&](const std::string& error)
                 {
@@ -135,9 +144,9 @@ namespace tests
                         BOOST_CHECK_EQUAL(m_peer.pin, peer.pin);
                         BOOST_CHECK_EQUAL(term.qos.proto, protocol::udp);
                         BOOST_CHECK_EQUAL(term.qos.role, schema::server);
-                        BOOST_CHECK_NE(term.inner, endpoint{});
-                        BOOST_CHECK_NE(term.outer, endpoint{});
-                        BOOST_CHECK_NE(term.alien, endpoint{});
+                        BOOST_CHECK_NE(term.inner.port, 0);
+                        BOOST_CHECK(!term.outer.address.is_unspecified());
+                        BOOST_CHECK(!term.alien.address.is_unspecified());
                         BOOST_CHECK_NE(term.secret, 0);
                         io.stop();
                     },
@@ -167,9 +176,9 @@ namespace tests
                         BOOST_CHECK_EQUAL(m_peer.pin, host.pin);
                         BOOST_CHECK_EQUAL(term.qos.proto, protocol::udp);
                         BOOST_CHECK_EQUAL(term.qos.role, schema::client);
-                        BOOST_CHECK_NE(term.inner, endpoint{});
-                        BOOST_CHECK_NE(term.outer, endpoint{});
-                        BOOST_CHECK_NE(term.alien, endpoint{});
+                        BOOST_CHECK_NE(term.inner.port, 0);
+                        BOOST_CHECK(!term.outer.address.is_unspecified());
+                        BOOST_CHECK(!term.alien.address.is_unspecified());
                         BOOST_CHECK_NE(term.secret, 0);
                         io.stop();
                     },

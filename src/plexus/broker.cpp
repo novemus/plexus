@@ -217,9 +217,10 @@ class broker_impl : public plexus::sync_broker
             if (term.qos.role == schema::server && host.tcp.force.nat)
                 punch_tcp_hole(yield, peer.tcp.outer);
 
-            bool no_udp = host.udp.outer == endpoint{} || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
-                       || peer.udp.outer == endpoint{} || peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address
-                       || (host.udp.outer.address == peer.udp.outer.address && (!host.udp.force.hairpin || !peer.udp.force.hairpin));
+            bool no_udp = host.udp.outer.address.is_v4() != peer.udp.outer.address.is_v4()
+                    || host.udp.outer.address.is_unspecified() || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
+                    || peer.udp.outer.address.is_unspecified() || peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address
+                    || (host.udp.outer.address == peer.udp.outer.address && (!host.udp.force.hairpin || !peer.udp.force.hairpin));
 
             if (no_udp)
             {
@@ -275,10 +276,10 @@ public:
         return handshake_peer(yield, host, peer, true);
     }
 
-    traverse make_traverse(boost::asio::yield_context yield, protocol proto) noexcept(false) override
+    traverse make_traverse(boost::asio::yield_context yield, protocol proto, checkup mode) noexcept(false) override
     {
         auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
-        return stun->make_traverse(yield, proto);
+        return stun->make_traverse(yield, proto, mode);
     }
 };
 
