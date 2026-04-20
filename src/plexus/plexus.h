@@ -122,7 +122,7 @@ struct location
 
 enum checkup
 {
-    strict, faulty, simple, noneed
+    noneed, strict, faulty, simple
 };
 
 struct options

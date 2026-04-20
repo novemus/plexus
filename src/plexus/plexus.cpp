@@ -114,14 +114,14 @@ std::istream& operator>>(std::istream& in, checkup& val) noexcept(false)
 {
     std::string str;
     in >> str;
-    if (str == "strict" || str == "0")
-        val = checkup::strict;
-    else if (str == "faulty" || str == "1")
-        val = checkup::faulty;
-    else if (str == "simple" || str == "2")
-        val = checkup::simple;
-    else if (str == "noneed" || str == "3")
+    if (str == "noneed" || str == "0")
         val = checkup::noneed;
+    else if (str == "strict" || str == "1")
+        val = checkup::strict;
+    else if (str == "faulty" || str == "2")
+        val = checkup::faulty;
+    else if (str == "simple" || str == "3")
+        val = checkup::simple;
     else
         throw std::runtime_error("unknown checkup value");
     return in;

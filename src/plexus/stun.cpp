@@ -108,6 +108,8 @@ namespace attr
     const uint16_t error_code = 0x0009;
     const uint16_t unknown_attributes = 0x000a;
     const uint16_t reflected_from = 0x000b;
+    const uint16_t xor_mapped_address = 0x0020;
+    const uint16_t other_address = 0x802c;
 }
 
 namespace flag
@@ -121,6 +123,11 @@ namespace flag
 inline uint16_t read_short(const uint8_t* array, size_t offset = 0)
 {
     return ntohs(*(uint16_t*)(array + offset));
+}
+
+inline uint32_t read_long(const uint8_t* array, size_t offset = 0)
+{
+    return ntohl(*(uint32_t*)(array + offset));
 }
 
 inline uint8_t high_byte(uint16_t value)
@@ -173,8 +180,21 @@ class message : public tubus::mutable_buffer
                 if (length != 8u)
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
+                if (kind == attr::xor_mapped_address)
+                {
+                    uint32_t raw;
+                    std::memcpy(&raw, ptr + 8, 4);
+
+                    raw ^= htonl(0x2112A442);
+
+                    return endpoint {
+                        boost::asio::ip::address_v4(ntohl(raw)),
+                        static_cast<uint16_t>(read_short(ptr, 6) ^ 0x2112)
+                    };
+                }
+
                 return endpoint {
-                    boost::asio::ip::make_address(utils::format("%d.%d.%d.%d", ptr[8], ptr[9], ptr[10], ptr[11])),
+                    boost::asio::ip::address_v4(read_long(ptr, 8)),
                     read_short(ptr, 6)
                 };
             }
@@ -183,18 +203,35 @@ class message : public tubus::mutable_buffer
                 if (length != 20u)
                     throw plexus::context_error(__FUNCTION__, "wrong endpoint data");
 
-                return endpoint {
-                    boost::asio::ip::make_address(utils::format("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x", ptr[8], ptr[9], ptr[10], ptr[11], ptr[12], ptr[13], ptr[14], ptr[15], ptr[16], ptr[17], ptr[18], ptr[19], ptr[20], ptr[21], ptr[22], ptr[23])),
-                    read_short(ptr, 6)
-                };
+                if (kind == attr::xor_mapped_address)
+                {
+                    uint32_t magic = htonl(0x2112A442);
+                    uint8_t mask[16];
+
+                    std::memcpy(mask, &magic, 4);
+                    std::memcpy(mask + 4, (uint8_t*)data() + 8, 12);
+
+                    std::array<unsigned char, 16> bytes;
+                    std::memcpy(bytes.data(), ptr + 8, 16);
+
+                    for (int i = 0; i < 16; ++i)
+                        bytes[i] ^= mask[i];
+
+                    return endpoint {
+                        boost::asio::ip::address_v6(bytes),
+                        static_cast<uint16_t>(read_short(ptr, 6) ^ 0x2112)
+                    };
+                }
+
+                std::array<unsigned char, 16> bytes;
+                std::memcpy(bytes.data(), ptr + 8, 16);
+
+                return endpoint { boost::asio::ip::address_v6(bytes), read_short(ptr, 6) };
             }
         }
 
-        if (kind == attr::mapped_address)
-            throw plexus::context_error(__FUNCTION__, "wrong stun message");
-
         ptr = fetch_attribute_place(attr::mapped_address);
-        return endpoint { ptr[5] == flag::ip_v6 ? boost::asio::ip::address(boost::asio::ip::address_v6()) : boost::asio::ip::address(boost::asio::ip::address_v4()), 0 };
+        return endpoint { ptr && ptr[5] == flag::ip_v6 ? boost::asio::ip::address(boost::asio::ip::address_v6()) : boost::asio::ip::address(boost::asio::ip::address_v4()), 0 };
     }
 
 public:
@@ -205,7 +242,7 @@ public:
 
     message(uint8_t flags) : mutable_buffer(std::vector<uint8_t>{
             0x00, 0x01, 0x00, 0x08,
-            utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
+            0x21, 0x12, 0xa4, 0x42,
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
@@ -217,10 +254,10 @@ public:
     transaction_id transaction() const
     {
         return {
-             get<uint8_t>(4), get<uint8_t>(5), get<uint8_t>(6), get<uint8_t>(7),
-             get<uint8_t>(8), get<uint8_t>(9), get<uint8_t>(10), get<uint8_t>(11), 
-             get<uint8_t>(12), get<uint8_t>(13), get<uint8_t>(14), get<uint8_t>(15),
-             get<uint8_t>(16), get<uint8_t>(17), get<uint8_t>(18), get<uint8_t>(19)
+            get<uint8_t>(4), get<uint8_t>(5), get<uint8_t>(6), get<uint8_t>(7), 
+            get<uint8_t>(8), get<uint8_t>(9), get<uint8_t>(10), get<uint8_t>(11), 
+            get<uint8_t>(12), get<uint8_t>(13), get<uint8_t>(14), get<uint8_t>(15),
+            get<uint8_t>(16), get<uint8_t>(17), get<uint8_t>(18), get<uint8_t>(19)
          };
     }
 
@@ -256,12 +293,14 @@ public:
 
     endpoint changed_endpoint() const
     {
-        return fetch_endpoint(attr::changed_address);
+        endpoint ep = fetch_endpoint(attr::other_address);
+        return ep.address.is_unspecified() ? fetch_endpoint(attr::changed_address) : ep;
     }
 
     endpoint mapped_endpoint() const
     {
-        return fetch_endpoint(attr::mapped_address);
+        endpoint ep = fetch_endpoint(attr::xor_mapped_address);
+        return ep.address.is_unspecified() ? fetch_endpoint(attr::mapped_address) : ep;
     }
 };
 
@@ -368,6 +407,8 @@ public:
 
                 switch (res.type())
                 {
+                    case msg::binding_request:
+                        break;
                     case msg::binding_response:
                     {
                         _trc_ << "mapped_endpoint=" << res.mapped_endpoint()
@@ -375,12 +416,16 @@ public:
                               << " changed_endpoint=" << res.changed_endpoint();
                         break;
                     }
-                    case msg::binding_request:
-                        break;
                     case msg::binding_error_response:
+                    {
+                        _err_ << res.error();
                         throw plexus::context_error(__FUNCTION__, res.error());
+                    }
                     default:
-                        throw plexus::context_error(__FUNCTION__, "server responded with unexpected message type");
+                    {
+                        _err_ << "unexpected stun message " << res.type();
+                        throw plexus::context_error(__FUNCTION__, "unexpected stun message");
+                    }
                 }
 
                 return res;
@@ -436,6 +481,8 @@ public:
 
             switch (res.type())
             {
+                case msg::binding_request:
+                    break;
                 case msg::binding_response:
                 {
                     _trc_ << "mapped_endpoint=" << res.mapped_endpoint()
@@ -443,12 +490,16 @@ public:
                           << " changed_endpoint=" << res.changed_endpoint();
                     break;
                 }
-                case msg::binding_request:
-                    break;
                 case msg::binding_error_response:
+                {
+                    _err_ << res.error();
                     throw plexus::context_error(__FUNCTION__, res.error());
+                }
                 default:
-                    throw plexus::context_error(__FUNCTION__, "server responded with unexpected message type");
+                {
+                    _err_ << "unexpected stun message " << res.type();
+                    throw plexus::context_error(__FUNCTION__, "unexpected stun message");
+                }
             }
 
             return res;
@@ -671,7 +722,7 @@ public:
                     exec_udp_binding(yield, filter, m_stun.udp, changed_full, flag::change_address | flag::change_port, 1400);
                     pass.udp.force.filtering = firewall::independent;
                 }
-                catch(const plexus::timeout_error&)
+                catch(const std::exception&)
                 {
                     try
                     {
@@ -680,7 +731,7 @@ public:
                         exec_udp_binding(yield, filter, m_stun.udp, changed_addr, flag::change_address, 1400);
                         pass.udp.force.filtering = firewall::port_dependent;
                     }
-                    catch(const plexus::timeout_error&)
+                    catch(const std::exception&)
                     {
                         try
                         {
@@ -689,7 +740,7 @@ public:
                             exec_udp_binding(yield, filter, m_stun.udp, changed_port, flag::change_port, 1400);
                             pass.udp.force.filtering = firewall::address_dependent;
                         }
-                        catch(const plexus::timeout_error&) {}
+                        catch(const std::exception&) {}
                     }
                 }
             }
