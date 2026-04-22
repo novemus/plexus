@@ -87,42 +87,19 @@ void exec(const std::string& exe, const std::string& args, const std::string& di
 {
     _dbg_ << "execute: exe=" << exe << " args=" << args << " pwd=" << dir << " log=" << log << " wait=" << wait;
 
-#ifndef WIN32
-    static std::once_flag s_flag;
-    std::call_once(s_flag, []()
-    {
-        struct sigaction sa;
-        sa.sa_handler = [](int num) 
-        { 
-            pid_t pid = waitpid(-1, &num, WNOHANG);
-            while (pid > 0)
-            {
-                _inf_ << "join child process " << pid << " with exit code: " << num;
-                pid = waitpid(-1, &num, WNOHANG);
-            }
-        };
-
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-        sigaction(SIGCHLD, &sa, nullptr);
-    });
-#endif
-
     auto finalize = [](bp::child& c, bool wait)
     {
-        if (!c.running())
-        {
-            c.join();
-            throw std::runtime_error(utils::format("can't run process, exit code: %d", c.exit_code()));
-        }
-
         _dbg_ << "run process " << c.id();
 
         if (wait)
         {
-            c.wait();
+            if (!c.running())
+                c.join();
+            else
+                c.wait();
+
             if (c.exit_code() != 0)
-                throw std::runtime_error(utils::format("process exited with code: %d", c.exit_code()));
+                throw std::runtime_error(utils::format("process %d exited with code: %d", c.id(), c.exit_code()));
         } 
         else
         {
