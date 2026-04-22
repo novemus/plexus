@@ -39,7 +39,7 @@ The `--app-name` key determines the target application. The `--host-id` argument
 
 Some *NAT*s may drop mapping when receiving an incoming packet that does not meet the filtering policy. This packet may be a punching one sent by `plexus` towards the peer. To avoid such situations, `plexus` sets a small *ttl* to the punching packet, by default 7. In general, this is enough for the packet to go beyond the host NAT to punch it, but not to reach the peer NAT and not to drop its peer mapping. If necessary, you can set a more appropriate *ttl* using the `--nat-hops` argument, determining the suitable value by some routing utility.
 
-As soon as both `plexus` instanses make the *passage* to each other, the command specified by `--exec-cmd` will be started. You can pass your arguments to the executable by `--exec-args` argument with the following wildcards:
+As soon as both `plexus` instances make the *passage* to each other, the command specified by `--exec-cmd` will be started. You can pass your arguments to the executable by `--exec-args` argument with the following wildcards:
 
 `%inner%` - local endpoint specified by the `--udp-bind` or `--tcp-bind` arguments
 
@@ -53,7 +53,7 @@ As soon as both `plexus` instanses make the *passage* to each other, the command
 
 `%peerid%` - the peer identifier specified by the `--peer-id` argument
 
-Also you can set the `--exec-env` agrument to pass the list of extra environment to the command with the following wildcards:
+Also you can set the `--exec-env` argument to pass the list of extra environment to the command with the following wildcards:
 
 `%secret%` - shared 64-bit key agreed upon by the rendezvous
 
@@ -67,16 +67,16 @@ To learn about additional parameters run the tool with the `--help` key.
 
 ## Extensions and Library
 
-TCP applications are known to connect unstable via NAT, but the `plexus` can punch TCP holes whenever possible. Specify TCP STUN server with `--tcp-stun` key and apropriate `--app-qos` argument on both sides. It is strongly recommended to specify the `--udp-stun` argument too, since the `plexus` synchronizes the sides using UDP handshake before handing over control to your application. If you need more NAT-tolerance mean to connect TCP applications, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling tool as execution payload. For example, you can forward the remote *ssh* service with the following payload arguments.
+TCP applications are known to connect unstable via NAT, but the `plexus` can punch TCP holes whenever possible. Specify TCP STUN server with `--tcp-stun` key and appropriate `--app-qos` argument on both sides. It is strongly recommended to specify the `--udp-stun` argument too, since the `plexus` synchronizes the sides using UDP handshake before handing over control to your application. If you need more NAT-tolerance mean to connect TCP applications, then consider the [wormhole](https://github.com/novemus/wormhole) tunneling tool as execution payload. For example, you can forward the remote *ssh* service with the following payload arguments.
 
 Remote machine:
 ```console
---exec-cmd=wormhole --exec-args="--purpose=export --service=127.0.0.1:22 --gateway=%gateway% --faraway=%faraway%" --exec-log=export.ssh.log --exec-env="WORMHOLE_SECRET=%secret%"
+--exec-cmd=wormhole --exec-args="--purpose=export --service=127.0.0.1:22 --gateway=%inner% --faraway=%alien%" --exec-log=export.ssh.log --exec-env="WORMHOLE_SECRET=%secret%"
 ```
 
 Local machine:
 ```console
---exec-cmd=wormhole --exec-args="--purpose=import --service=127.0.0.1:2222 --gateway=%gateway% --faraway=%faraway%" --exec-log=import.ssh.log --exec-env="WORMHOLE_SECRET=%secret%"
+--exec-cmd=wormhole --exec-args="--purpose=import --service=127.0.0.1:2222 --gateway=%inner% --faraway=%alien%" --exec-log=import.ssh.log --exec-env="WORMHOLE_SECRET=%secret%"
 ```
 
 Then connect to the remote *ssh* via the local mapping:
