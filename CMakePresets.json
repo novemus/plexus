@@ -134,6 +134,9 @@
                 "noTestsAction": "error",
                 "stopOnFailure": true
             },
+            "environment": {
+                "DYLD_LIBRARY_PATH": "$penv{DYLD_LIBRARY_PATH}:/opt/homebrew/lib"
+            },
             "hidden": true
         },
         {
