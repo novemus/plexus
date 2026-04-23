@@ -21,7 +21,7 @@ $ cmake --build ./build --target install
 
 ## Using
 
-Create an application repository and specify the path to the host directory according to the scheme *apprepo/owner@mailer.com/pin*. You must place there the X509 *cert.crt* certificate and the *private.key* key of the host. Likewise, make the directory for the peer and place there its *cert.crt* certificate. Make the same on the peer machine. The intermediate directory *.../owner@mailer.com/...* can be named as you want if you use the `DHT` rendezvous, but for the `Email` case it must have the name of the appropriate email address. So for compatibility, it is recommended to always use the email address.
+Create an application repository and specify the path to the host directory according to the scheme *apprepo/owner<span>@</span>mailer.com/pin*. You must place there the X509 *cert.crt* certificate and the *private.key* key of the host. Likewise, make the directory for the peer and place there its *cert.crt* certificate. Make the same on the peer machine. The intermediate directory *.../owner<span>@</span>mailer.com/...* can be named as you want if you use the `DHT` rendezvous, but for the `Email` case it must have the name of the appropriate email address. So for compatibility, it is recommended to always use the email address.
 
 To run the example below you need to install the *openvpn*. The *exec.sh* script will try to establish point-to-point VPN connection.
 
@@ -84,7 +84,7 @@ Then connect to the remote *ssh* via the local mapping:
 $ ssh -p 2222 127.0.0.1
 ```
 
-The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/plexus.h) header.
+The `plexus` library API is described in the [plexus.h](https://github.com/novemus/plexus/blob/master/src/plexus/plexus.h) header.
 
 ## Bugs and improvements
 
