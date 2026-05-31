@@ -336,7 +336,7 @@ class client_impl : public stun_client
             auto now = std::chrono::steady_clock::now();
             auto age = std::chrono::duration_cast<std::chrono::minutes>(now - val.time);
 
-            if (age > cache_period() || hole.inner.address != val.hole.inner.address || hole.outer.address != val.hole.outer.address || firewall::to_number(hole.force) != firewall::to_number(val.hole.force))
+            if (age > cache_period() || hole.inner.address != val.hole.inner.address || hole.outer.address != val.hole.outer.address || std::memcmp(&hole.force, &val.hole.force, sizeof(firewall)) != 0)
             {
                 val.hole = hole;
                 val.time = now;

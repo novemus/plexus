@@ -1,14 +1,14 @@
 # README
 
-The [plexus](https://github.com/novemus/plexus) tool is designed to make the possibility of establishing a direct network connection between applications running on machines located behind NATs. To do this `plexus` implements the well-known *UDP/TCP hole punching* technique using STUN. You can use a `DHT` network or `Email` service as a rendezvous to exchange public addresses between local and remote app instances. For success, at least it is necessary that NATs on both sides implement independent mapping policy of internal addresses to public ones. That is, the public address and port assigned by the NAT should not be changed when the destination address/port of the outgoing packet is changed, while the source address/port of the outgoing packet remains unchanged. In addition, you will need an accessible STUN server and email accounts for each side if you want to use `Email` as the rendezvous. You can use one email account for both sides.
+The [plexus](https://github.com/novemus/plexus) tool is designed to make the possibility of establishing a direct network connection between applications running on machines located behind NATs. To do this `plexus` implements the well-known *UDP/TCP hole punching* technique using STUN. You can use a `DHT` network or `Email` service as a rendezvous to exchange public addresses between local and remote app instances. For success, at least it is necessary that NATs on both sides implement independent mapping policy of internal addresses to public ones. That is, the public address and port assigned by the NAT should not be changed when the destination address/port of the outgoing packet is changed, while the source address/port of the outgoing packet remains unchanged. In addition, you will need an accessible STUN server and email accounts for each side if you want to use `Email` as the rendezvous. The `plexus` also supports indirect connection via the [ricochet](https://github.com/novemus/ricochet) relay server.
 
 For those who prefer GUI, there is the [webpier](https://github.com/novemus/webpier) application based on the `plexus` library.
 
 ## Build
 
-You can download [prebuild packages](https://github.com/novemus/plexus/releases) for Debian and Windows platforms.
+You can download [prebuild packages](https://github.com/novemus/plexus/releases) for Linux, MacOS and Windows platforms.
 
-The project depends on [boost](https://github.com/boostorg/boost), [openssl](https://github.com/openssl/openssl), [opendht](https://github.com/savoirfairelinux/opendht), [wormhole](https://github.com/novemus/wormhole) and [tubus](https://github.com/novemus/tubus) libraries. Clone the repository, then configure and build project.
+The project depends on [boost](https://github.com/boostorg/boost), [openssl](https://github.com/openssl/openssl), [opendht](https://github.com/savoirfairelinux/opendht), [wormhole](https://github.com/novemus/wormhole), [tubus](https://github.com/novemus/tubus) and [ricochet-client](https://github.com/novemus/ricochet) libraries. Clone the repository, then configure and build project.
 
 ```console
 $ cd ~

@@ -8,13 +8,14 @@
  * 
  */
 
+#include <boost/asio/error.hpp>
+#include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <ricochet/agent.h>
+#include <wormhole/logger.h>
+#include <tubus/buffer.h>
 #include <plexus/network.h>
 #include <plexus/features.h>
 #include <plexus/utils.h>
-#include <wormhole/logger.h>
-#include <tubus/buffer.h>
-#include <boost/asio/error.hpp>
-#include <boost/date_time/posix_time/posix_time_types.hpp>
 
 namespace plexus { namespace stun {
 
@@ -37,12 +38,27 @@ boost::posix_time::ptime calc_sync_time(const boost::posix_time::ptime& host, co
          : std::min(std::max(host, peer), boost::posix_time::microsec_clock::universal_time()) + sync_timeout();
 }
 
-class broker_impl : public plexus::sync_broker
+namespace rico = ricochet;
+
+class broker_impl : public plexus::link_broker
 {
+    struct relays
+    {
+        struct session
+        {
+            std::shared_ptr<rico::agent> agent;
+            plexus::endpoint relay;
+        };
+
+        session udp;
+        session tcp;
+    };
+
     boost::asio::io_context& m_io;
     location m_stun;
     location m_bind;
     uint16_t m_punch;
+    relays   m_rico;
 
     class handshake : public tubus::mutable_buffer
     {
@@ -208,9 +224,41 @@ class broker_impl : public plexus::sync_broker
         throw plexus::timeout_error(__FUNCTION__);
     }
 
-    contract handshake_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer, bool accept) noexcept(false)
+    static endpoint make_endpoint_for_relay(const reference::mapping& map)
+    {
+        return plexus::endpoint {
+                map.force.variable_address 
+                    ? map.outer.address.is_v4() ? boost::asio::ip::address(boost::asio::ip::address_v4()) : boost::asio::ip::address(boost::asio::ip::address_v6())
+                    : map.outer.address,
+                map.force.mapping == firewall::relation::independent 
+                    ? map.outer.port 
+                    : static_cast<uint16_t>(0)
+            };
+    }
+
+    contract handshake_peer(boost::asio::yield_context yield, const reference& host, const reference& peer, bool accept) noexcept(false)
     {
         auto term = make_contract(m_bind, host, peer, accept);
+
+        if (term.qos.proto != protocol::udp && (term.alien == host.tcp.relay || term.alien == peer.tcp.relay))
+        {
+            if (term.alien == m_rico.tcp.relay)
+                run_tcp_relay(yield, make_endpoint_for_relay(host.tcp), make_endpoint_for_relay(peer.tcp), term.qos.role);
+            else
+                _dbg_ << "using peer's tcp relay " << peer.tcp.relay;
+
+            return term;
+        }
+
+        if (term.qos.proto == protocol::udp && (term.alien == host.udp.relay || term.alien == peer.udp.relay))
+        {
+            if (term.alien == m_rico.udp.relay)
+                run_udp_relay(yield, make_endpoint_for_relay(host.udp), make_endpoint_for_relay(peer.udp), term.qos.role);
+            else
+                _dbg_ << "using peer's udp relay " << peer.udp.relay;
+
+            return term;
+        }
 
         if (term.qos.proto != protocol::udp)
         {
@@ -251,9 +299,49 @@ class broker_impl : public plexus::sync_broker
         return term;
     }
 
+    void run_tcp_relay(boost::asio::yield_context yield, const endpoint& host, const endpoint& peer, schema method) noexcept(false)
+    {
+        if (!m_rico.tcp.agent)
+            throw plexus::context_error("run_tcp_relay", "no relay session");
+
+        try
+        {
+            rico::peer red(host.address, host.port, method != plexus::schema::server ? rico::schema::client : rico::schema::server);
+            rico::peer blue(peer.address, peer.port, method == plexus::schema::client ? rico::schema::server : rico::schema::client);
+
+            m_rico.tcp.agent->launch_relay(yield, red, blue);
+
+            _dbg_ << "tcp relay " << m_rico.tcp.relay << " is launched";
+        }
+        catch (const std::exception& ex)
+        {
+            throw plexus::context_error("run_tcp_relay", ex.what());
+        }
+    }
+
+    void run_udp_relay(boost::asio::yield_context yield, const endpoint& host, const endpoint& peer, schema method) noexcept(false)
+    {
+        if (!m_rico.udp.agent)
+            throw plexus::context_error("run_udp_relay", "no relay session");
+
+        try
+        {
+            rico::peer red(host.address, host.port, method != plexus::schema::server ? rico::schema::client : rico::schema::server);
+            rico::peer blue(peer.address, peer.port, method == plexus::schema::client ? rico::schema::server : rico::schema::client);
+
+            m_rico.udp.agent->launch_relay(yield, red, blue);
+
+            _dbg_ << "udp relay " << m_rico.udp.relay << " is launched";
+        }
+        catch (const std::exception& ex)
+        {
+            throw plexus::context_error("run_udp_relay", ex.what());
+        }
+    }
+
 public:
 
-    broker_impl(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t punch)
+    broker_impl(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t punch, const ricochet& relay)
         : m_io(io)
         , m_punch(punch)
     {
@@ -264,14 +352,62 @@ public:
 
         _dbg_ << "stun: udp=" << m_stun.udp << " tcp=" << m_stun.tcp;
         _dbg_ << "bind: udp=" << m_bind.udp << " tcp=" << m_bind.tcp;
+
+        if (!relay.server.address.is_unspecified() && relay.server.port != 0)
+        {
+            m_rico.udp.agent = rico::create_agent(relay.server, relay.cert, relay.key, relay.ca);
+            m_rico.tcp.agent = rico::create_agent(relay.server, relay.cert, relay.key, relay.ca);
+        }
     }
 
-    contract touch_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override
+    plexus::endpoint get_tcp_relay(boost::asio::yield_context yield) noexcept(false) override
+    {
+        if (!m_rico.tcp.agent)
+            return plexus::endpoint { m_bind.tcp.address.is_v4() ? boost::asio::ip::address(boost::asio::ip::address_v4()) : boost::asio::ip::address(boost::asio::ip::address_v6()), 0 };
+
+        try
+        {
+            rico::endpoint out;
+            m_rico.tcp.agent->assign_relay(yield, m_bind.tcp.address.is_v4() ? rico::protocol::tcp4 : rico::protocol::tcp6, out);
+            m_rico.tcp.relay.address = out.address();
+            m_rico.tcp.relay.port = out.port();
+            return m_rico.tcp.relay;
+        }
+        catch (const std::exception& ex)
+        {
+            _wrn_ << "Can't acquire tcp relay: " << ex.what();
+        }
+
+        return plexus::endpoint { m_bind.tcp.address.is_v4() ? boost::asio::ip::address(boost::asio::ip::address_v4()) : boost::asio::ip::address(boost::asio::ip::address_v6()), 0 };
+    }
+
+    plexus::endpoint get_udp_relay(boost::asio::yield_context yield) noexcept(false) override
+    {
+        if (!m_rico.udp.agent)
+            return plexus::endpoint { m_bind.udp.address.is_v4() ? boost::asio::ip::address(boost::asio::ip::address_v4()) : boost::asio::ip::address(boost::asio::ip::address_v6()), 0 };
+
+        try
+        {
+            rico::endpoint out;
+            m_rico.udp.agent->assign_relay(yield, m_bind.udp.address.is_v4() ? rico::protocol::udp4 : rico::protocol::udp6, out);
+            m_rico.udp.relay.address = out.address();
+            m_rico.udp.relay.port = out.port();
+            return m_rico.udp.relay;
+        }
+        catch (const std::exception& ex)
+        {
+            _wrn_ << "Can't acquire udp relay: " << ex.what();
+        }
+
+        return plexus::endpoint { m_bind.udp.address.is_v4() ? boost::asio::ip::address(boost::asio::ip::address_v4()) : boost::asio::ip::address(boost::asio::ip::address_v6()), 0 };
+    }
+
+    contract touch_peer(boost::asio::yield_context yield, const reference& host, const reference& peer) noexcept(false) override
     {
         return handshake_peer(yield, host, peer, false);
     }
 
-    contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) override
+    contract await_peer(boost::asio::yield_context yield, const reference& host, const reference& peer) noexcept(false) override
     {
         return handshake_peer(yield, host, peer, true);
     }
@@ -285,9 +421,9 @@ public:
 
 }
 
-std::shared_ptr<plexus::sync_broker> create_sync_broker(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t punch) noexcept(false)
+std::shared_ptr<plexus::link_broker> create_link_broker(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t punch, const ricochet& relay) noexcept(false)
 {
-    return std::make_shared<plexus::stun::broker_impl>(io, stun, bind, punch);
+    return std::make_shared<plexus::stun::broker_impl>(io, stun, bind, punch, relay);
 }
 
 }

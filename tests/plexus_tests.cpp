@@ -9,7 +9,6 @@
  */
 
 #include <filesystem>
-#include <fstream>
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/algorithm/string.hpp>
@@ -34,6 +33,7 @@ namespace tests
         location m_stun;
         uint16_t m_hops;
         checkup m_mode;
+        ricochet m_rico;
 
     public:
 
@@ -84,9 +84,14 @@ namespace tests
 
             _dbg_ << "stun: udp=" << m_stun.udp << " tcp=" << m_stun.tcp;
             _dbg_ << "bind: udp=" << m_bind.udp << " tcp=" << m_bind.tcp;
+
+            m_rico.server = utils::resolve_some<boost::asio::ip::tcp>(utils::getenv<std::string>("RICOCHET_SERVER", ""), "0");
+            m_rico.cert = utils::getenv<std::string>("RICOCHET_CERT", "");
+            m_rico.key = utils::getenv<std::string>("RICOCHET_KEY", "");
+            m_rico.ca = utils::getenv<std::string>("RICOCHET_CA", "");
         }
 
-        options make_config(bool email, protocol proto, schema role) const
+        options make_config(bool email, protocol proto, schema role, routing::favour route) const
         {
             return options {
                 m_app,
@@ -96,6 +101,8 @@ namespace tests
                 m_hops,
                 m_mode,
                 criteria { proto, role },
+                m_rico,
+                routing { route, route },
                 email 
                     ? rendezvous { m_emailer } 
                     : rendezvous { m_dhtnode }
@@ -130,7 +137,7 @@ namespace tests
 
         void make_rendezvous_test(bool email) const
         {
-            auto config = make_config(email, protocol::udp, schema::either);
+            auto config = make_config(email, protocol::udp, schema::either, routing::direct);
             auto acc = std::async(std::launch::async, [&]()
             {
                 boost::asio::io_context io;
@@ -257,10 +264,10 @@ namespace tests
             fwd.wait();
         }
 
-        template<typename channel> void make_application_test()
+        template<typename channel> void make_application_test(routing::favour route)
         {
             auto proto = std::is_same<channel, tubus::udp_channel>::value ? protocol::udp : protocol::tcp;
-            auto config = make_config(false, proto, schema::either);
+            auto config = make_config(false, proto, schema::mutual, route);
 
             auto acc = std::async(std::launch::async, [&]()
             {
@@ -269,27 +276,27 @@ namespace tests
                     [&](const identity& host, const identity& peer, const contract& term)
                     {
                         BOOST_REQUIRE_EQUAL(term.qos.proto, proto);
-                        BOOST_REQUIRE_EQUAL(term.qos.role, schema::server);
+                        BOOST_REQUIRE_EQUAL(term.qos.role, schema::mutual);
 
                         auto server = channel::create(io, term.secret);
                         server->open(term.inner);
-                        server->accept(term.alien, [&, server, term](const boost::system::error_code& ec)
+                        server->connect(term.alien, [&, server, term](const boost::system::error_code& ec)
                         {
                             BOOST_REQUIRE_EQUAL(ec, boost::system::error_code());
                             BOOST_CHECK_EQUAL(server->peer(), term.alien);
-                            
-                            tubus::const_buffer wb("server");
+
+                            tubus::const_buffer wb("accept");
                             server->write(wb, [&, server, wb](const boost::system::error_code& ec, size_t size)
                             {
                                 BOOST_REQUIRE_EQUAL(ec, boost::system::error_code());
                                 BOOST_REQUIRE_EQUAL(size, wb.size());
                                 
-                                tubus::mutable_buffer rb(std::strlen("client"));
+                                tubus::mutable_buffer rb(std::strlen("invite"));
                                 server->read(rb, [&, server, rb](const boost::system::error_code& ec, size_t size)
                                 {
                                     BOOST_REQUIRE_EQUAL(ec, boost::system::error_code());
                                     BOOST_REQUIRE_EQUAL(size, rb.size());
-                                    BOOST_CHECK_EQUAL(std::memcmp(rb.data(), "client", rb.size()), 0);
+                                    BOOST_CHECK_EQUAL(std::memcmp(rb.data(), "invite", rb.size()), 0);
                                     server->close();
                                     io.stop();
                                 });
@@ -312,7 +319,7 @@ namespace tests
                     [&](const identity& host, const identity& peer, const contract& term)
                     {
                         BOOST_REQUIRE_EQUAL(term.qos.proto, proto);
-                        BOOST_REQUIRE_EQUAL(term.qos.role, schema::client);
+                        BOOST_REQUIRE_EQUAL(term.qos.role, schema::mutual);
 
                         auto client = channel::create(io, term.secret);
                         client->open(term.inner);
@@ -321,18 +328,18 @@ namespace tests
                             BOOST_REQUIRE_EQUAL(ec, boost::system::error_code());
                             BOOST_CHECK_EQUAL(client->peer(), term.alien);
 
-                            tubus::const_buffer wb("client");
+                            tubus::const_buffer wb("invite");
                             client->write(wb, [&, client, wb](const boost::system::error_code& ec, size_t size)
                             {
                                 BOOST_REQUIRE_EQUAL(ec, boost::system::error_code());
                                 BOOST_REQUIRE_EQUAL(size, wb.size());
 
-                                tubus::mutable_buffer rb(std::strlen("server"));
+                                tubus::mutable_buffer rb(std::strlen("accept"));
                                 client->read(rb, [&, client, rb](const boost::system::error_code& ec, size_t size)
                                 {
                                     BOOST_REQUIRE_EQUAL(ec, boost::system::error_code());
                                     BOOST_REQUIRE_EQUAL(size, rb.size());
-                                    BOOST_CHECK_EQUAL(std::memcmp(rb.data(), "server", rb.size()), 0);
+                                    BOOST_CHECK_EQUAL(std::memcmp(rb.data(), "accept", rb.size()), 0);
                                     client->close();
                                     io.stop();
                                 });
@@ -365,6 +372,12 @@ namespace tests
         return std::getenv("EMAIL_LOGIN") != nullptr && std::getenv("EMAIL_PASSWORD") != nullptr
             && std::getenv("DHT_BOOTSTRAP") != nullptr && std::getenv("UDP_STUN_SERVER") != nullptr 
             && std::getenv("TCP_STUN_SERVER") != nullptr;
+    }
+
+    boost::test_tools::assertion_result is_ricochet_server_defined(boost::unit_test::test_unit_id)
+    {
+        return std::getenv("RICOCHET_SERVER") != nullptr && std::getenv("RICOCHET_CERT") != nullptr
+            && std::getenv("RICOCHET_KEY") != nullptr && std::getenv("RICOCHET_CA") != nullptr;
     }
 }
 
@@ -405,13 +418,25 @@ BOOST_AUTO_TEST_CASE(dht_rendezvous, *boost::unit_test::precondition(tests::is_d
 BOOST_AUTO_TEST_CASE(udp_application, *boost::unit_test::precondition(tests::is_dhtnode_context_defined))
 {
     BOOST_TEST_MESSAGE("testing plexus udp application...");
-    make_application_test<tubus::udp_channel>();
+    make_application_test<tubus::udp_channel>(routing::direct);
 }
 
 BOOST_AUTO_TEST_CASE(tcp_application, *boost::unit_test::precondition(tests::is_dhtnode_context_defined))
 {
     BOOST_TEST_MESSAGE("testing plexus tcp application...");
-    make_application_test<tubus::tcp_channel>();
+    make_application_test<tubus::tcp_channel>(routing::direct);
+}
+
+BOOST_AUTO_TEST_CASE(udp_application_relay, *boost::unit_test::precondition([](boost::unit_test::test_unit_id test) { return tests::is_dhtnode_context_defined(test) && tests::is_ricochet_server_defined(test); }))
+{
+    BOOST_TEST_MESSAGE("testing plexus udp application with relay...");
+    make_application_test<tubus::udp_channel>(routing::bridge);
+}
+
+BOOST_AUTO_TEST_CASE(tcp_application_relay, *boost::unit_test::precondition([](boost::unit_test::test_unit_id test) { return tests::is_dhtnode_context_defined(test) && tests::is_ricochet_server_defined(test); }))
+{
+    BOOST_TEST_MESSAGE("testing plexus tcp application with relay...");
+    make_application_test<tubus::tcp_channel>(routing::bridge);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

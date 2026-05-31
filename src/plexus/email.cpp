@@ -198,15 +198,38 @@ class smtp
 
     std::string make_message(const reference& data)
     {
-        if (data.qos.proto == protocol::udp && data.qos.role == schema::either)
-            return plexus::utils::format("PLEXUS 3.0 %s %u %llu", data.udp.outer.address.to_string().c_str(), data.udp.outer.port, data.puzzle);
+        if (data.qos.proto == protocol::udp && data.qos.role == schema::either && data.udp.route == routing::direct)
+        {
+            return plexus::utils::format("PLEXUS 3.0 %s %u %llu",
+                data.udp.outer.address.to_string().c_str(),
+                data.udp.outer.port,
+                data.puzzle
+            );
+        }
 
-        return plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %s %llu",
+        if (data.udp.route == routing::direct && data.tcp.route == routing::direct)
+        {
+            return plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %s %llu",
+                boost::posix_time::to_iso_string(data.timestamp).c_str(),
+                endpoint::to_string(data.udp.outer).c_str(),
+                utils::to_string(data.udp.force).c_str(),
+                endpoint::to_string(data.tcp.outer).c_str(),
+                utils::to_string(data.tcp.force).c_str(),
+                criteria::to_string(data.qos).c_str(),
+                data.puzzle
+            );
+        }
+
+        return plexus::utils::format("PLEXUS 3.4 %s %s %s %s %s %s %s %s %s %s %llu",
             boost::posix_time::to_iso_string(data.timestamp).c_str(),
             endpoint::to_string(data.udp.outer).c_str(),
-            firewall::to_string(data.udp.force).c_str(),
+            utils::to_string(data.udp.force).c_str(),
+            endpoint::to_string(data.udp.relay).c_str(),
+            utils::to_string(data.udp.route).c_str(),
             endpoint::to_string(data.tcp.outer).c_str(),
-            firewall::to_string(data.tcp.force).c_str(),
+            utils::to_string(data.tcp.force).c_str(),
+            endpoint::to_string(data.tcp.relay).c_str(),
+            utils::to_string(data.tcp.route).c_str(),
             criteria::to_string(data.qos).c_str(),
             data.puzzle
         );
@@ -495,7 +518,7 @@ class imap
                     }
 
                     std::smatch match;
-                    if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
+                    if (std::regex_match(message, match, std::regex("\\s*PLEXUS\\s+3\\.0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)\\s*")))
                     {
                         reference data;
                         data.timestamp = boost::posix_time::max_date_time;
@@ -503,21 +526,34 @@ class imap
                         data.udp.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
                         data.qos = criteria { protocol::udp, schema::either };
                         data.puzzle = std::stoull(match.str(3));
-
                         m_letter = data;
                     }
-                    else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
+                    else if (std::regex_match(message, match, std::regex("\\s*PLEXUS\\s+3\\.3\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s*")))
                     {
                         reference data;
-
                         data.timestamp = boost::posix_time::from_iso_string(match.str(1));
                         data.udp.outer = endpoint::from_string(match.str(2));
-                        data.udp.force = firewall::from_string(match.str(3));
+                        data.udp.force = utils::from_string<firewall>(match.str(3));
                         data.tcp.outer = endpoint::from_string(match.str(4));
-                        data.tcp.force = firewall::from_string(match.str(5));
+                        data.tcp.force = utils::from_string<firewall>(match.str(5));
                         data.qos = criteria::from_string(match.str(6));
                         data.puzzle = std::stoull(match.str(7));
-
+                        m_letter = data;
+                    }
+                    else if (std::regex_match(message, match, std::regex("\\s*PLEXUS\\s+3\\.4\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s*")))
+                    {
+                        reference data;
+                        data.timestamp = boost::posix_time::from_iso_string(match.str(1));
+                        data.udp.outer = endpoint::from_string(match.str(2));
+                        data.udp.force = utils::from_string<firewall>(match.str(3));
+                        data.udp.relay = endpoint::from_string(match.str(4));
+                        data.udp.route = utils::from_string<routing::favour>(match.str(5));
+                        data.tcp.outer = endpoint::from_string(match.str(6));
+                        data.tcp.force = utils::from_string<firewall>(match.str(7));
+                        data.tcp.relay = endpoint::from_string(match.str(8));
+                        data.udp.route = utils::from_string<routing::favour>(match.str(9));
+                        data.qos = criteria::from_string(match.str(10));
+                        data.puzzle = std::stoull(match.str(11));
                         m_letter = data;
                     }
                     else
@@ -712,27 +748,35 @@ public:
     reference pull_request(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, invite_token);
-        _inf_ << "pulled request: " << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.qos;
+        _inf_ << "pulled request: udp=" << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.udp.relay << "|" << faraway.udp.route <<
+                                " tcp=" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.tcp.relay << "|" << faraway.tcp.route <<
+                                " qos=" << faraway.qos;
         return faraway;
     }
 
     reference pull_response(boost::asio::yield_context yield) noexcept(false) override
     {
         const reference& faraway = m_puller.pull(yield, accept_token);
-        _inf_ << "pulled response: " << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.qos;
+        _inf_ << "pulled response: udp=" << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.udp.relay << "|" << faraway.udp.route <<
+                                 " tcp=" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.tcp.relay << "|" << faraway.tcp.route <<
+                                 " qos=" << faraway.qos;
         return faraway;
     }
 
     void push_request(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         m_pusher.push(yield, invite_token, gateway);
-        _inf_ << "pushed request: " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed request: udp=" << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.udp.relay << "|" << gateway.udp.route <<
+                                " tcp=" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.tcp.relay << "|" << gateway.tcp.route <<
+                                " qos=" << gateway.qos;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
     {
         m_pusher.push(yield, accept_token, gateway);
-        _inf_ << "pushed response: " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed response: udp=" << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.udp.relay << "|" << gateway.udp.route <<
+                                 " tcp=" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.tcp.relay << "|" << gateway.tcp.route <<
+                                 " qos=" << gateway.qos;
     }
 
     const identity& host() const noexcept(true) override

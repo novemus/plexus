@@ -4,7 +4,7 @@ message("***** plexus ***** ")
 
 cmake_minimum_required(VERSION 3.21)
 
-project(plexus VERSION 3.3.0 DESCRIPTION "The tool for connecting non-public network applications" LANGUAGES CXX)
+project(plexus VERSION 3.4.0 DESCRIPTION "The tool for connecting non-public network applications" LANGUAGES CXX)
 
 option(PLEXUS_USE_SHARED_LIB "Build shared library" ${BUILD_SHARED_LIBS})
 option(PLEXUS_SKIP_TEST_RULES "Don't generate test rules" ON)
@@ -22,13 +22,13 @@ if (NOT MSVC AND NOT BUILD_SHARED_LIBS)
 endif()
 
 if(NOT PLEXUS_SKIP_TEST_RULES)
-    find_package(Boost 1.80 CONFIG REQUIRED COMPONENTS system program_options coroutine unit_test_framework)
+    find_package(Boost 1.81 CONFIG REQUIRED COMPONENTS system program_options coroutine unit_test_framework)
 else()
-    find_package(Boost 1.80 CONFIG REQUIRED COMPONENTS system program_options coroutine)
+    find_package(Boost 1.81 CONFIG REQUIRED COMPONENTS system program_options coroutine)
 endif()
 
 if (MSVC)
-    find_package(Boost 1.80 CONFIG REQUIRED COMPONENTS filesystem process)
+    find_package(Boost 1.81 CONFIG REQUIRED COMPONENTS filesystem process)
 endif()
 
 if (NOT MSVC AND Boost_VERSION VERSION_GREATER_EQUAL 1.86)
@@ -57,6 +57,12 @@ find_package(wormhole 1.3.0 REQUIRED COMPONENTS libwormhole)
 message("* wormhole Version: ${wormhole_VERSION}")
 message("* wormhole Include Dirs: ${wormhole_INCLUDE_DIRS}")
 message("* wormhole Library: ${wormhole_LIBRARY}")
+
+find_package(ricochet 1.0.0 REQUIRED COMPONENTS libricochet)
+
+message("* ricochet Version: ${ricochet_VERSION}")
+message("* ricochet Include Dirs: ${ricochet_INCLUDE_DIRS}")
+message("* ricochet Library: ${ricochet_LIBRARY}")
 
 find_package(opendht 3.2 REQUIRED)
 find_package(fmt REQUIRED)
@@ -150,8 +156,8 @@ endif()
 target_sources(${LIBPLEXUS} PRIVATE ${SOURCES})
 target_sources(${BINPLEXUS} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> src/plexus/main.cpp)
 
-target_link_libraries(${LIBPLEXUS} PUBLIC tubus::libtubus PRIVATE wormhole::libwormhole "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
-target_link_libraries(${BINPLEXUS} PRIVATE tubus::libtubus wormhole::libwormhole "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
+target_link_libraries(${LIBPLEXUS} PUBLIC tubus::libtubus PRIVATE wormhole::libwormhole ricochet::libricochet "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
+target_link_libraries(${BINPLEXUS} PRIVATE tubus::libtubus wormhole::libwormhole ricochet::libricochet "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
 
 target_compile_features(${LIBPLEXUS} PRIVATE cxx_std_17)
 target_compile_features(${BINPLEXUS} PRIVATE cxx_std_17)
@@ -243,7 +249,7 @@ if(NOT PLEXUS_SKIP_TEST_RULES)
                                   tests/exec_tests.cpp
                                   tests/contract_tests.cpp
                                   tests/plexus_tests.cpp)
-    target_link_libraries(${PLEXUS_TEST} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> tubus::libtubus wormhole::libwormhole "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
+    target_link_libraries(${PLEXUS_TEST} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> tubus::libtubus wormhole::libwormhole ricochet::libricochet "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
 
     target_include_directories(${PLEXUS_TEST} PRIVATE
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"

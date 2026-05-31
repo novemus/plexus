@@ -1,5 +1,9 @@
 # Change Log
 
+## 3.4.0 (Jun 14, 2026)
+
+- Support of indirect connections via Ricochet relay server
+
 ## 3.3.0 (Mar 31, 2026)
 
 - Ability to punch NAT using STUN over TCP

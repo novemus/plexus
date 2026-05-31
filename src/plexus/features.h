@@ -10,14 +10,14 @@
 
 #pragma once
 
-#include <plexus/plexus.h>
-#include <plexus/network.h>
-#include <plexus/utils.h>
 #include <string>
 #include <filesystem>
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
 #include <boost/asio/ip/udp.hpp>
+#include <plexus/plexus.h>
+#include <plexus/network.h>
+#include <plexus/utils.h>
 
 namespace plexus {
 
@@ -43,14 +43,16 @@ void exec(const std::string& prog, const std::string& args = "", const std::stri
 
 struct reference
 {
-    struct map 
+    struct mapping 
     {
         endpoint outer;
         firewall force;
+        endpoint relay;
+        routing::favour route;
     };
 
-    map udp;
-    map tcp;
+    mapping udp;
+    mapping tcp;
     criteria qos;
     uint64_t puzzle = 0;
     boost::posix_time::ptime timestamp;
@@ -70,13 +72,15 @@ struct stun_client
 
 std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const location& stun, const location& bind) noexcept(true);
 
-struct sync_broker : public stun_client
+struct link_broker : public stun_client
 {
+    virtual endpoint get_tcp_relay(boost::asio::yield_context yield) noexcept(false) = 0;
+    virtual endpoint get_udp_relay(boost::asio::yield_context yield) noexcept(false) = 0;
     virtual contract touch_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
     virtual contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
 };
 
-std::shared_ptr<sync_broker> create_sync_broker(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t hops) noexcept(false);
+std::shared_ptr<link_broker> create_link_broker(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t hops, const ricochet& relay) noexcept(false);
 
 struct pipe
 {

@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <chrono>
 #include <random>
 #include <regex>
@@ -64,6 +65,9 @@ template<class var_t> var_t getenv(const std::string& name, const var_t& def)
 template<class protocol>
 endpoint resolve_some(const std::string& hostname, const std::string& service)
 {
+    if (hostname.empty())
+        return endpoint {};
+
     boost::asio::io_context io;
     typename protocol::resolver resolver(io);
     typename protocol::endpoint ep;
@@ -124,6 +128,23 @@ endpoint locate(const endpoint& local)
         return endpoint { ep.address(), ep.port() };
     }
     return local;
+}
+
+template <typename type>
+std::string to_string(const type& value)
+{
+    std::ostringstream oss;
+    oss << value;
+    return oss.str();
+}
+
+template <typename type>
+type from_string(const std::string& str)
+{
+    std::istringstream iss(str);
+    type value;
+    iss >> value;
+    return value;
 }
 
 }}

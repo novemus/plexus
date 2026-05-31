@@ -20,6 +20,7 @@ using namespace plexus;
 
 constexpr char stun_default_port[] = "3478";
 constexpr char bind_default_port[] = "0";
+constexpr char rico_default_port[] = "443";
 constexpr char smtp_default_port[] = "smtps";
 constexpr char imap_default_port[] = "imaps";
 
@@ -38,6 +39,12 @@ int main(int argc, char** argv)
         ("tcp-bind", boost::program_options::value<std::string>()->default_value("0.0.0.0:0"), "tcp endpoint to bind the application")
         ("udp-stun", boost::program_options::value<std::string>()->default_value("stunserver2025.stunprotocol.org"), "udp STUN server")
         ("tcp-stun", boost::program_options::value<std::string>()->default_value("stunserver2025.stunprotocol.org"), "tcp STUN server")
+        ("udp-route", boost::program_options::value<routing::favour>()->default_value(routing::direct), "prefer udp routing: <direct|bridge|either>")
+        ("tcp-route", boost::program_options::value<routing::favour>()->default_value(routing::direct), "prefer tcp routing: <direct|bridge|either>")
+        ("rico-server", boost::program_options::value<std::string>()->default_value(""), "ricocher bridge server")
+        ("rico-cert", boost::program_options::value<std::string>()->default_value(""), "path to the X509 certificate of the ricocher client")
+        ("rico-key", boost::program_options::value<std::string>()->default_value(""), "path to the Private Key of the ricocher client")
+        ("rico-ca", boost::program_options::value<std::string>()->default_value(""), "path to the ricocher Certification Authority")
         ("nat-test", boost::program_options::value<checkup>()->default_value(checkup::strict), "NAT explore mode: <strict|faulty|simple|noneed>")
         ("nat-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for the NAT punching packet")
         ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "url of the bootstrap DHT service")
@@ -190,6 +197,16 @@ int main(int argc, char** argv)
             vm["nat-hops"].as<uint16_t>(),
             vm["nat-test"].as<checkup>(),
             vm["app-qos"].as<criteria>(),
+            ricochet {
+                utils::resolve_some<boost::asio::ip::tcp>(vm["rico-server"].as<std::string>(), rico_default_port),
+                vm["rico-cert"].as<std::string>(),
+                vm["rico-key"].as<std::string>(),
+                vm["rico-ca"].as<std::string>() 
+            },
+            routing {
+                vm["udp-route"].as<routing::favour>(),
+                vm["tcp-route"].as<routing::favour>()
+            },
             vm.count("email-smtps")
                 ? rendezvous {
                     emailer {
@@ -199,7 +216,7 @@ int main(int argc, char** argv)
                         vm["email-password"].as<std::string>(),
                         vm["email-cert"].as<std::string>(),
                         vm["email-key"].as<std::string>(),
-                        vm["email-ca"].as<std::string>() 
+                        vm["email-ca"].as<std::string>()
                     }}
                 : rendezvous {
                     dhtnode {

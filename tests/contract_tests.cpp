@@ -30,6 +30,7 @@ namespace tests
         auto& hmap = proto == protocol::udp ? host.udp : host.tcp;
         hmap.outer = endpoint { boost::asio::ip::make_address("10.0.0.3"), 3000 };
         hmap.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
+        hmap.route = routing::direct;
         host.qos = criteria { proto, schema::either };
         host.puzzle = 1234567890;
 
@@ -37,6 +38,7 @@ namespace tests
         auto& pmap = proto == protocol::udp ? peer.udp : peer.tcp;
         pmap.outer = endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 };
         pmap.force = firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent };
+        pmap.route = routing::direct;
         peer.qos = criteria { proto, schema::either };
         peer.puzzle = 1234567890;
 
@@ -123,6 +125,7 @@ namespace tests
         auto& hmap = proto == protocol::udp ? host.udp : host.tcp;
         hmap.outer = endpoint { boost::asio::ip::make_address("10.0.0.2"), 3000 };
         hmap.force = firewall { true, true, true, true, firewall::address_and_port_dependent, firewall::address_and_port_dependent };
+        hmap.route = routing::direct;
         host.qos = criteria { proto, schema::either };
         host.puzzle = 1234567890;
 
@@ -130,6 +133,7 @@ namespace tests
         auto& pmap = proto == protocol::udp ? peer.udp : peer.tcp;
         pmap.outer = endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 };
         pmap.force = firewall { true, true, true, false, firewall::independent, firewall::independent };
+        pmap.route = routing::direct;
         peer.qos = criteria { proto, schema::either };
         peer.puzzle = 1234567890;
 
@@ -208,6 +212,164 @@ namespace tests
         hmap.force.mapping = firewall::address_and_port_dependent;
         BOOST_REQUIRE_THROW(plexus::make_contract(bind, host, peer, false), std::runtime_error);
     }
+
+    void make_relay_contract_test(protocol proto)
+    {
+        location bind { { boost::asio::ip::make_address("192.168.0.1"), 3000 }, { boost::asio::ip::make_address("192.168.0.1"), 4000 } };
+
+        reference host {
+            reference::mapping {
+                endpoint { boost::asio::ip::make_address("10.0.0.2"), 3000 },
+                firewall { true, false, true, false, firewall::address_and_port_dependent, firewall::address_and_port_dependent },
+                endpoint { boost::asio::ip::make_address("10.124.53.2"), 7000 },
+                routing::bridge
+            },
+            reference::mapping {
+                endpoint { boost::asio::ip::make_address("10.0.0.2"), 4000 },
+                firewall { true, false, true, false, firewall::address_and_port_dependent, firewall::address_and_port_dependent },
+                endpoint { boost::asio::ip::make_address("10.124.53.3"), 8000 },
+                routing::bridge
+            },
+            criteria { proto, schema::either },
+            1234567890
+        };
+
+        reference peer {
+            reference::mapping {
+                endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 },
+                firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent },
+                endpoint { boost::asio::ip::make_address("10.124.53.4"), 7700 },
+                routing::either
+            },
+            reference::mapping {
+                endpoint { boost::asio::ip::make_address("10.0.0.3"), 5000 },
+                firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent },
+                endpoint { boost::asio::ip::make_address("10.124.53.4"), 8800 },
+                routing::either
+            },
+            criteria { proto, schema::either },
+            1234567890
+        };
+
+        auto info = plexus::make_contract(bind, host, peer, true);
+        BOOST_CHECK_EQUAL(info.inner, proto <= protocol::udp ? bind.udp : bind.tcp);
+        BOOST_CHECK_EQUAL(info.outer, proto <= protocol::udp ? host.udp.outer : host.tcp.outer);
+        BOOST_CHECK_EQUAL(info.alien, proto <= protocol::udp ? host.udp.relay : host.tcp.relay);
+        BOOST_CHECK_EQUAL(info.secret, 0);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto <= protocol::udp ? protocol::udp : proto);
+        BOOST_CHECK_EQUAL(info.qos.role, proto <= protocol::udp ? schema::client : schema::mutual);
+
+        info = plexus::make_contract(bind, peer, host, false);
+        BOOST_CHECK_EQUAL(info.inner, proto <= protocol::udp ? bind.udp : bind.tcp);
+        BOOST_CHECK_EQUAL(info.outer, proto <= protocol::udp ? peer.udp.outer : peer.tcp.outer);
+        BOOST_CHECK_EQUAL(info.alien, proto <= protocol::udp ? host.udp.relay : host.tcp.relay);
+        BOOST_CHECK_EQUAL(info.secret, 0);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto <= protocol::udp ? protocol::udp : proto);
+        BOOST_CHECK_EQUAL(info.qos.role, proto <= protocol::udp ? schema::server : schema::mutual);
+
+        host.qos.role = schema::mutual;
+        peer.qos.role = schema::mutual;
+
+        info = plexus::make_contract(bind, host, peer, true);
+        BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
+        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? host.udp.outer : host.tcp.outer);
+        BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? host.udp.relay : host.tcp.relay);
+        BOOST_CHECK_EQUAL(info.secret, 0);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
+        BOOST_CHECK_EQUAL(info.qos.role, schema::mutual);
+
+        info = plexus::make_contract(bind, peer, host, false);
+        BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
+        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? peer.udp.outer : peer.tcp.outer);
+        BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? host.udp.relay : host.tcp.relay);
+        BOOST_CHECK_EQUAL(info.secret, 0);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
+        BOOST_CHECK_EQUAL(info.qos.role, schema::mutual);
+
+        host.qos.role = schema::client;
+        peer.qos.role = schema::server;
+
+        info = plexus::make_contract(bind, host, peer, true);
+        BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
+        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? host.udp.outer : host.tcp.outer);
+        BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? host.udp.relay : host.tcp.relay);
+        BOOST_CHECK_EQUAL(info.secret, 0);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
+        BOOST_CHECK_EQUAL(info.qos.role, schema::client);
+
+        info = plexus::make_contract(bind, peer, host, false);
+        BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
+        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? peer.udp.outer : peer.tcp.outer);
+        BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? host.udp.relay : host.tcp.relay);
+        BOOST_CHECK_EQUAL(info.secret, 0);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
+        BOOST_CHECK_EQUAL(info.qos.role, schema::server);
+
+        host.udp.relay = {};
+        host.tcp.relay = {};
+
+        info = plexus::make_contract(bind, host, peer, true);
+        BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
+        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? host.udp.outer : host.tcp.outer);
+        BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? peer.udp.relay : peer.tcp.relay);
+        BOOST_CHECK_EQUAL(info.secret, 0);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
+        BOOST_CHECK_EQUAL(info.qos.role, schema::client);
+
+        info = plexus::make_contract(bind, peer, host, false);
+        BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
+        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? peer.udp.outer : peer.tcp.outer);
+        BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? peer.udp.relay : peer.tcp.relay);
+        BOOST_CHECK_EQUAL(info.secret, 0);
+        BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
+        BOOST_CHECK_EQUAL(info.qos.role, schema::server);
+
+        host.qos.role = schema::server;
+        peer.qos.role = schema::client;
+
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, host, peer, true), std::runtime_error);
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, peer, host, false), std::runtime_error);
+
+        host.qos.role = schema::client;
+        peer.qos.role = schema::client;
+
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, host, peer, true), std::runtime_error);
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, peer, host, false), std::runtime_error);
+
+        host.qos.role = schema::server;
+        peer.qos.role = schema::server;
+
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, host, peer, true), std::runtime_error);
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, peer, host, false), std::runtime_error);
+
+        peer.udp.route = routing::direct;
+        peer.tcp.route = routing::direct;
+        host.qos.role = schema::either;
+        peer.qos.role = schema::either;
+
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, host, peer, true), std::runtime_error);
+        BOOST_REQUIRE_THROW(plexus::make_contract(bind, peer, host, false), std::runtime_error);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(relay_udp_contract)
+{
+    tests::make_relay_contract_test(protocol::udp);
+}
+
+BOOST_AUTO_TEST_CASE(relay_tcp_contract)
+{
+    tests::make_relay_contract_test(protocol::tcp);
+}
+
+BOOST_AUTO_TEST_CASE(relay_ssl_contract)
+{
+    tests::make_relay_contract_test(protocol::ssl);
+}
+
+BOOST_AUTO_TEST_CASE(relay_any_contract)
+{
+    tests::make_relay_contract_test(protocol::any);
 }
 
 BOOST_AUTO_TEST_CASE(simple_udp_contract)
@@ -230,26 +392,34 @@ BOOST_AUTO_TEST_CASE(simple_any_contract)
     location bind { { boost::asio::ip::make_address("192.168.0.1"), 3000 }, { boost::asio::ip::make_address("192.168.0.1"), 4000 } };
 
     reference host {
-        reference::map {
+        reference::mapping {
             endpoint { boost::asio::ip::make_address("10.0.0.2"), 3000 },
-            firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent }
+            firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent },
+            endpoint { boost::asio::ip::address(), 0 },
+            routing::direct
         },
-        reference::map {
+        reference::mapping {
             endpoint { boost::asio::ip::make_address("10.0.0.2"), 4000 },
-            firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent }
+            firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent },
+            endpoint { boost::asio::ip::address(), 0 },
+            routing::direct
         },
         criteria { protocol::any, schema::either },
         1234567890
     };
 
     reference peer {
-        reference::map {
+        reference::mapping {
             endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 },
-            firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent }
+            firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent },
+            endpoint { boost::asio::ip::address(), 0 },
+            routing::direct
         },
-        reference::map {
+        reference::mapping {
             endpoint { boost::asio::ip::make_address("10.0.0.3"), 5000 },
-            firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent }
+            firewall { true, true, true, false, firewall::independent, firewall::address_and_port_dependent },
+            endpoint { boost::asio::ip::address(), 0 },
+            routing::direct
         },
         criteria { protocol::any, schema::either },
         1234567890
@@ -341,26 +511,34 @@ BOOST_AUTO_TEST_CASE(cone_any_contract)
     location bind { { boost::asio::ip::make_address("192.168.0.1"), 3000 }, { boost::asio::ip::make_address("192.168.0.1"), 4000 } };
 
     reference host {
-        reference::map {
+        reference::mapping {
             endpoint { boost::asio::ip::make_address("10.0.0.2"), 3000 },
-            firewall { true, true, true, true, firewall::address_and_port_dependent, firewall::address_and_port_dependent }
+            firewall { true, true, true, true, firewall::address_and_port_dependent, firewall::address_and_port_dependent },
+            endpoint { boost::asio::ip::address(), 0 },
+            routing::direct
         },
-        reference::map {
+        reference::mapping {
             endpoint { boost::asio::ip::make_address("10.0.0.2"), 4000 },
-            firewall { true, true, true, true, firewall::address_and_port_dependent, firewall::address_and_port_dependent }
+            firewall { true, true, true, true, firewall::address_and_port_dependent, firewall::address_and_port_dependent },
+            endpoint { boost::asio::ip::address(), 0 },
+            routing::direct
         },
         criteria { protocol::any, schema::either },
         1234567890
     };
 
     reference peer {
-        reference::map {
+        reference::mapping {
             endpoint { boost::asio::ip::make_address("10.0.0.3"), 4000 },
-            firewall { false, true, false, false, firewall::independent, firewall::independent }
+            firewall { false, true, false, false, firewall::independent, firewall::independent },
+            endpoint { boost::asio::ip::address(), 0 },
+            routing::direct
         },
-        reference::map {
+        reference::mapping {
             endpoint { boost::asio::ip::make_address("10.0.0.3"), 5000 },
-            firewall { false, true, false, false, firewall::independent, firewall::independent }
+            firewall { false, true, false, false, firewall::independent, firewall::independent },
+            endpoint { boost::asio::ip::address(), 0 },
+            routing::direct
         },
         criteria { protocol::any, schema::either },
         1234567890

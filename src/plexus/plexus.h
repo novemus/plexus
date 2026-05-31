@@ -24,7 +24,7 @@ using criteria = wormhole::criteria;
 
 struct firewall
 {
-    enum linkage : uint8_t
+    enum relation : uint8_t
     {
         independent = 0,
         port_dependent = 1,
@@ -36,19 +36,19 @@ struct firewall
     bool hairpin : 1;
     bool random_port : 1;
     bool variable_address : 1;
-    linkage mapping : 2;
-    linkage filtering : 2;
+    relation mapping : 2;
+    relation filtering : 2;
 
     firewall() 
         : nat(false)
         , hairpin(false)
         , random_port(false)
         , variable_address(false)
-        , mapping(linkage::independent)
-        , filtering(linkage::independent)
+        , mapping(relation::independent)
+        , filtering(relation::independent)
     { }
 
-    firewall(bool n, bool h, bool r, bool v, linkage m, linkage f) 
+    firewall(bool n, bool h, bool r, bool v, relation m, relation f) 
         : nat(n)
         , hairpin(h)
         , random_port(r)
@@ -56,11 +56,6 @@ struct firewall
         , mapping(m)
         , filtering(f)
     { }
-
-    LIBPLEXUS_EXPORT static std::string to_string(const firewall& val) noexcept(false);
-    LIBPLEXUS_EXPORT static firewall from_string(const std::string& str) noexcept(false);
-    LIBPLEXUS_EXPORT static uint8_t to_number(const firewall& val) noexcept(true);
-    LIBPLEXUS_EXPORT static firewall from_number(uint8_t num) noexcept(true);
 };
 
 struct traverse
@@ -80,9 +75,6 @@ struct identity
 {
     std::string owner;
     std::string pin;
-
-    LIBPLEXUS_EXPORT static std::string to_string(const identity& ep) noexcept(false);
-    LIBPLEXUS_EXPORT static identity from_string(const std::string& ep) noexcept(false);
 };
 
 struct contract
@@ -120,9 +112,28 @@ struct location
     endpoint tcp;
 };
 
+struct ricochet
+{
+    endpoint server;  // ricochet server endpoint
+    std::string cert; // client cert
+    std::string key;  // client key
+    std::string ca;   // CA cert
+};
+
 enum checkup
 {
     noneed, strict, faulty, simple
+};
+
+struct routing
+{
+    enum favour
+    {
+        direct, bridge, either
+    };
+
+    favour udp;
+    favour tcp;
 };
 
 struct options
@@ -134,6 +145,8 @@ struct options
     uint16_t hops;       // ttl of the hole punching packet
     checkup mode;        // nat explore mode
     criteria qos;        // application protocol and connection strategy
+    ricochet relay;      // ricochet relay service
+    routing route;       // routing mode
     rendezvous mediator; // rendezvous service
 };
 
@@ -163,6 +176,8 @@ LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const identity& val
 LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, identity& val) noexcept(false);
 LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const firewall& val) noexcept(false);
 LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, firewall& val) noexcept(false);
+LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const routing::favour& val) noexcept(false);
+LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, routing::favour& val) noexcept(false);
 LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const checkup& val) noexcept(false);
 LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, checkup& val) noexcept(false);
 }

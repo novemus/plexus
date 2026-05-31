@@ -472,7 +472,7 @@ public:
 
                 auto message = dht::unpackMsg<std::string>(to->decrypt(value->data));
                 std::smatch match;
-                if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.0 (\\S+) (\\d+) (\\d+)\\s*")))
+                if (std::regex_match(message, match, std::regex("\\s*PLEXUS\\s+3\\.0\\s+(\\S+)\\s+(\\d+)\\s+(\\d+)\\s*")))
                 {
                     ptr->data.timestamp = boost::posix_time::min_date_time;
                     ptr->data.udp.outer = endpoint { boost::asio::ip::make_address(match.str(1)), boost::lexical_cast<uint16_t>(match.str(2)) };
@@ -484,15 +484,35 @@ public:
                     ptr->timer.cancel(ec);
                     return false;
                 }
-                else if (std::regex_match(message, match, std::regex("\\s*PLEXUS 3.3 (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\d+)\\s*")))
+
+                if (std::regex_match(message, match, std::regex("\\s*PLEXUS\\s+3\\.3\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s*")))
                 {
                     ptr->data.timestamp = boost::posix_time::from_iso_string(match.str(1));
                     ptr->data.udp.outer = endpoint::from_string(match.str(2));
-                    ptr->data.udp.force = firewall::from_string(match.str(3));
+                    ptr->data.udp.force = utils::from_string<firewall>(match.str(3));
                     ptr->data.tcp.outer = endpoint::from_string(match.str(4));
-                    ptr->data.tcp.force = firewall::from_string(match.str(5));
+                    ptr->data.tcp.force = utils::from_string<firewall>(match.str(5));
                     ptr->data.qos = criteria::from_string(match.str(6));
                     ptr->data.puzzle = std::stoull(match.str(7));
+
+                    boost::system::error_code ec;
+                    ptr->timer.cancel(ec);
+                    return false;
+                }
+
+                if (std::regex_match(message, match, std::regex("\\s*PLEXUS\\s+3\\.4\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s*")))
+                {
+                    ptr->data.timestamp = boost::posix_time::from_iso_string(match.str(1));
+                    ptr->data.udp.outer = endpoint::from_string(match.str(2));
+                    ptr->data.udp.force = utils::from_string<firewall>(match.str(3));
+                    ptr->data.udp.relay = endpoint::from_string(match.str(4));
+                    ptr->data.udp.route = utils::from_string<routing::favour>(match.str(5));
+                    ptr->data.tcp.outer = endpoint::from_string(match.str(6));
+                    ptr->data.tcp.force = utils::from_string<firewall>(match.str(7));
+                    ptr->data.tcp.relay = endpoint::from_string(match.str(8));
+                    ptr->data.tcp.route = utils::from_string<routing::favour>(match.str(9));
+                    ptr->data.qos = criteria::from_string(match.str(10));
+                    ptr->data.puzzle = std::stoull(match.str(11));
 
                     boost::system::error_code ec;
                     ptr->timer.cancel(ec);
@@ -589,19 +609,41 @@ public:
 
         auto to = repo.load_cert(peer);
         auto from = repo.load_key(host);
-        auto message = data.qos.proto == protocol::udp && data.qos.role == schema::either
-                           ? plexus::utils::format("PLEXUS 3.0 %s %u %llu",
+        auto message = [&]()
+        {
+            if (data.qos.proto == protocol::udp && data.qos.role == schema::either && data.udp.route == routing::direct)
+            {
+                return plexus::utils::format("PLEXUS 3.0 %s %u %llu",
                                 data.udp.outer.address.to_string().c_str(),
                                 data.udp.outer.port,
-                                data.puzzle)
-                           : plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %s %llu",
+                                data.puzzle);
+            }
+
+            if (data.udp.route == routing::direct && data.tcp.route == routing::direct)
+            {
+                return plexus::utils::format("PLEXUS 3.3 %s %s %s %s %s %s %llu",
                                 boost::posix_time::to_iso_string(data.timestamp).c_str(),
                                 endpoint::to_string(data.udp.outer).c_str(),
-                                firewall::to_string(data.udp.force).c_str(),
+                                utils::to_string(data.udp.force).c_str(),
                                 endpoint::to_string(data.tcp.outer).c_str(),
-                                firewall::to_string(data.tcp.force).c_str(),
+                                utils::to_string(data.tcp.force).c_str(),
                                 criteria::to_string(data.qos).c_str(),
                                 data.puzzle);
+            }
+
+            return plexus::utils::format("PLEXUS 3.4 %s %s %s %s %s %s %s %s %s %s %llu",
+                            boost::posix_time::to_iso_string(data.timestamp).c_str(),
+                            endpoint::to_string(data.udp.outer).c_str(),
+                            utils::to_string(data.udp.force).c_str(),
+                            endpoint::to_string(data.udp.relay).c_str(),
+                            utils::to_string(data.udp.route).c_str(),
+                            endpoint::to_string(data.tcp.outer).c_str(),
+                            utils::to_string(data.tcp.force).c_str(),
+                            endpoint::to_string(data.tcp.relay).c_str(),
+                            utils::to_string(data.tcp.route).c_str(),
+                            criteria::to_string(data.qos).c_str(),
+                            data.puzzle);
+        }();
 
         op->hash = dht::InfoHash::get(to->getId().toString() + repo.app + subject);
         op->timer.expires_from_now(boost::posix_time::milliseconds(await_timeout));
@@ -640,7 +682,9 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, invite_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled request " << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.qos;
+        _inf_ << "pulled request: udp=" << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.udp.relay << "|" << faraway.udp.route <<
+                                " tcp=" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.tcp.relay << "|" << faraway.tcp.route <<
+                                " qos=" << faraway.qos;
         return faraway;
     }
 
@@ -649,7 +693,9 @@ public:
         auto op = opendht::acquire::start(m_io, m_repo, m_host, m_peer, m_id, accept_token);
         auto faraway = op->wait(yield);
 
-        _inf_ << "pulled response " << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.qos;
+        _inf_ << "pulled response: udp=" << faraway.udp.outer << "|" << faraway.udp.force << "|" << faraway.udp.relay << "|" << faraway.udp.route <<
+                                 " tcp=" << faraway.tcp.outer << "|" << faraway.tcp.force << "|" << faraway.tcp.relay << "|" << faraway.tcp.route <<
+                                 " qos=" << faraway.qos;
         return faraway;
     }
 
@@ -668,7 +714,9 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed request " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed request: udp=" << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.udp.relay << "|" << gateway.udp.route <<
+                                " tcp=" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.tcp.relay << "|" << gateway.tcp.route <<
+                                " qos=" << gateway.qos;
     }
 
     void push_response(boost::asio::yield_context yield, const reference& gateway) noexcept(false) override
@@ -686,7 +734,9 @@ public:
             }
         }, boost::asio::detached);
 
-        _inf_ << "pushed response " << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.qos;
+        _inf_ << "pushed response: udp=" << gateway.udp.outer << "|" << gateway.udp.force << "|" << gateway.udp.relay << "|" << gateway.udp.route <<
+                                 " tcp=" << gateway.tcp.outer << "|" << gateway.tcp.force << "|" << gateway.tcp.relay << "|" << gateway.tcp.route <<
+                                 " qos=" << gateway.qos;
     }
 
     const identity& host() const noexcept(true) override
