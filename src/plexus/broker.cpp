@@ -140,19 +140,20 @@ class broker_impl : public plexus::link_broker
         handshake out(0, nonce);
         handshake in(nonce);
 
+        boost::asio::ip::udp::endpoint remote = peer;
         while (timer().total_milliseconds() < deadline)
         {
             try
             {
-                pin->send_to(out, peer, yield);
+                pin->send_to(out, remote, yield);
 
                 if (out.flag() == 1)
                 {
-                    _dbg_ << "handshake peer: " << peer;
+                    _dbg_ << "handshake peer " << peer;
                     return;
                 }
 
-                in.truncate(pin->receive_from(in, peer, yield));
+                in.truncate(pin->receive_from(in, remote, yield));
 
                 if (in.flag() == 1)
                 {
@@ -193,22 +194,23 @@ class broker_impl : public plexus::link_broker
         handshake out(1, nonce);
         handshake in(nonce);
 
+        boost::asio::ip::udp::endpoint remote = peer;
         while (timer().total_milliseconds() < deadline)
         {
             try
             {
-                in.truncate(pin->receive_from(in, peer, yield));
+                in.truncate(pin->receive_from(in, remote, yield));
 
                 if (in.flag() == 0)
                 {
-                    pin->send_to(out, peer, yield);
+                    pin->send_to(out, remote, yield);
                 }
 
                 if (in.flag() == 1 || role == schema::server)
                 {
-                    pin->send_to(out, peer, yield);
+                    pin->send_to(out, remote, yield);
 
-                    _dbg_ << "handshake peer: " << peer;
+                    _dbg_ << "handshake peer " << remote;
                     return;
                 }
             }

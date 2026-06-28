@@ -436,9 +436,21 @@ bool make_contract(bool relay, const location& bind, const reference& host, cons
     else
         return false;
 
+    auto correct_outer = [](const endpoint& outer, firewall force)
+    {
+        return endpoint {
+            force.variable_address 
+                ? (outer.address.is_v4() ? boost::asio::ip::address(boost::asio::ip::address_v4()) : boost::asio::ip::address(boost::asio::ip::address_v6()))
+                : outer.address,
+            force.mapping == firewall::independent
+                ? outer.port
+                : static_cast<uint16_t>(0)
+        };
+    };
+
     info.secret = host.puzzle ^ peer.puzzle;
     info.inner = info.qos.proto == protocol::udp ? bind.udp : bind.tcp;
-    info.outer = info.qos.proto == protocol::udp ? host.udp.outer : host.tcp.outer;
+    info.outer = info.qos.proto == protocol::udp ? correct_outer(host.udp.outer, host.udp.force) : correct_outer(host.tcp.outer, host.tcp.force);
 
     if (relay)
     {
@@ -448,7 +460,7 @@ bool make_contract(bool relay, const location& bind, const reference& host, cons
     }
     else
     {
-        info.alien = info.qos.proto == protocol::udp ? peer.udp.outer : peer.tcp.outer;
+        info.alien = info.qos.proto == protocol::udp ? correct_outer(peer.udp.outer, peer.udp.force) : correct_outer(peer.tcp.outer, peer.tcp.force);
     }
 
     _inf_ << "contract: qos=" << info.qos << " inner=" << info.inner << " outer=" << info.outer << " alien=" << info.alien << " relay=" << relay;
@@ -504,8 +516,8 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
 
             auto faraway = pipe->pull_request(yield);
             auto gateway = reference {
-                reference::mapping { pass.udp.outer, pass.udp.force, config.qos.proto <= protocol::udp ? broker->get_udp_relay(yield) : endpoint {}, config.route.udp },
-                reference::mapping { pass.tcp.outer, pass.tcp.force, config.qos.proto != protocol::udp ? broker->get_tcp_relay(yield) : endpoint {}, config.route.tcp },
+                reference::mapping { pass.udp.outer, pass.udp.force, config.qos.proto <= protocol::udp && config.route.udp != routing::direct ? broker->get_udp_relay(yield) : endpoint {}, config.route.udp },
+                reference::mapping { pass.tcp.outer, pass.tcp.force, config.qos.proto != protocol::udp && config.route.tcp != routing::direct ? broker->get_tcp_relay(yield) : endpoint {}, config.route.tcp },
                 config.qos,
                 utils::random<uint64_t>(),
                 boost::posix_time::microsec_clock::universal_time()

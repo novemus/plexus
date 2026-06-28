@@ -139,7 +139,8 @@ namespace tests
 
         auto info = plexus::make_contract(bind, host, peer, true);
         BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
-        BOOST_CHECK_EQUAL(info.outer, hmap.outer);
+        BOOST_CHECK_EQUAL(info.outer.address.is_unspecified(), true);
+        BOOST_CHECK_EQUAL(info.outer.port, 0);
         BOOST_CHECK_EQUAL(info.alien, pmap.outer);
         BOOST_CHECK_EQUAL(info.secret, 0);
         BOOST_CHECK_EQUAL(info.qos.proto, proto);
@@ -253,7 +254,8 @@ namespace tests
 
         auto info = plexus::make_contract(bind, host, peer, true);
         BOOST_CHECK_EQUAL(info.inner, proto <= protocol::udp ? bind.udp : bind.tcp);
-        BOOST_CHECK_EQUAL(info.outer, proto <= protocol::udp ? host.udp.outer : host.tcp.outer);
+        BOOST_CHECK_EQUAL(info.outer.address, protocol::udp ? host.udp.outer.address : host.tcp.outer.address);
+        BOOST_CHECK_EQUAL(info.outer.port, 0);
         BOOST_CHECK_EQUAL(info.alien, proto <= protocol::udp ? host.udp.relay : host.tcp.relay);
         BOOST_CHECK_EQUAL(info.secret, 0);
         BOOST_CHECK_EQUAL(info.qos.proto, proto <= protocol::udp ? protocol::udp : proto);
@@ -272,7 +274,8 @@ namespace tests
 
         info = plexus::make_contract(bind, host, peer, true);
         BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
-        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? host.udp.outer : host.tcp.outer);
+        BOOST_CHECK_EQUAL(info.outer.address, protocol::udp ? host.udp.outer.address : host.tcp.outer.address);
+        BOOST_CHECK_EQUAL(info.outer.port, 0);
         BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? host.udp.relay : host.tcp.relay);
         BOOST_CHECK_EQUAL(info.secret, 0);
         BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
@@ -291,7 +294,8 @@ namespace tests
 
         info = plexus::make_contract(bind, host, peer, true);
         BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
-        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? host.udp.outer : host.tcp.outer);
+        BOOST_CHECK_EQUAL(info.outer.address, protocol::udp ? host.udp.outer.address : host.tcp.outer.address);
+        BOOST_CHECK_EQUAL(info.outer.port, 0);
         BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? host.udp.relay : host.tcp.relay);
         BOOST_CHECK_EQUAL(info.secret, 0);
         BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
@@ -310,7 +314,8 @@ namespace tests
 
         info = plexus::make_contract(bind, host, peer, true);
         BOOST_CHECK_EQUAL(info.inner, proto == protocol::udp ? bind.udp : bind.tcp);
-        BOOST_CHECK_EQUAL(info.outer, proto == protocol::udp ? host.udp.outer : host.tcp.outer);
+        BOOST_CHECK_EQUAL(info.outer.address, protocol::udp ? host.udp.outer.address : host.tcp.outer.address);
+        BOOST_CHECK_EQUAL(info.outer.port, 0);
         BOOST_CHECK_EQUAL(info.alien, proto == protocol::udp ? peer.udp.relay : peer.tcp.relay);
         BOOST_CHECK_EQUAL(info.secret, 0);
         BOOST_CHECK_EQUAL(info.qos.proto, proto == protocol::any ? protocol::ssl : proto);
@@ -546,7 +551,8 @@ BOOST_AUTO_TEST_CASE(cone_any_contract)
 
     auto info = plexus::make_contract(bind, host, peer, true);
     BOOST_CHECK_EQUAL(info.inner, bind.tcp);
-    BOOST_CHECK_EQUAL(info.outer, host.tcp.outer);
+    BOOST_CHECK_EQUAL(info.outer.address.is_unspecified(), true);
+    BOOST_CHECK_EQUAL(info.outer.port, 0);
     BOOST_CHECK_EQUAL(info.alien, peer.tcp.outer);
     BOOST_CHECK_EQUAL(info.secret, 0);
     BOOST_CHECK_EQUAL(info.qos.proto, protocol::ssl);
@@ -556,7 +562,8 @@ BOOST_AUTO_TEST_CASE(cone_any_contract)
 
     info = plexus::make_contract(bind, host, peer, false);
     BOOST_CHECK_EQUAL(info.inner, bind.tcp);
-    BOOST_CHECK_EQUAL(info.outer, host.tcp.outer);
+    BOOST_CHECK_EQUAL(info.outer.address.is_unspecified(), true);
+    BOOST_CHECK_EQUAL(info.outer.port, 0);
     BOOST_CHECK_EQUAL(info.alien, peer.tcp.outer);
     BOOST_CHECK_EQUAL(info.secret, 0);
     BOOST_CHECK_EQUAL(info.qos.proto, protocol::tcp);
@@ -566,7 +573,8 @@ BOOST_AUTO_TEST_CASE(cone_any_contract)
 
     info = plexus::make_contract(bind, host, peer, true);
     BOOST_CHECK_EQUAL(info.inner, bind.udp);
-    BOOST_CHECK_EQUAL(info.outer, host.udp.outer);
+    BOOST_CHECK_EQUAL(info.outer.address.is_unspecified(), true);
+    BOOST_CHECK_EQUAL(info.outer.port, 0);
     BOOST_CHECK_EQUAL(info.alien, peer.udp.outer);
     BOOST_CHECK_EQUAL(info.secret, 0);
     BOOST_CHECK_EQUAL(info.qos.proto, protocol::udp);

@@ -389,6 +389,7 @@ public:
             return boost::posix_time::microsec_clock::universal_time() - start;
         };
 
+        boost::asio::ip::udp::endpoint remote = from;
         int64_t timeout = 200;
         while (timer().total_milliseconds() < deadline)
         {
@@ -398,7 +399,7 @@ public:
             try
             {
                 message res;
-                res.truncate(sock->receive_from(res, from, yield, timeout));
+                res.truncate(sock->receive_from(res, remote, yield, timeout));
 
                 if (timer().total_milliseconds() >= deadline)
                     throw plexus::timeout_error(__FUNCTION__);

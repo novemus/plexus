@@ -117,7 +117,7 @@ template<typename socket_impl, int64_t timeout_ms> struct asio_socket : public s
     }
 
     template <typename mutable_buffer_type>
-    size_t receive_from(const mutable_buffer_type& buffer, const endpoint_type& endpoint, boost::asio::yield_context yield, int64_t timeout = timeout_ms) noexcept(false)
+    size_t receive_from(const mutable_buffer_type& buffer, endpoint_type& endpoint, boost::asio::yield_context yield, int64_t timeout = timeout_ms) noexcept(false)
     {
         auto timer = [start = boost::posix_time::microsec_clock::universal_time()]()
         {
@@ -133,7 +133,10 @@ template<typename socket_impl, int64_t timeout_ms> struct asio_socket : public s
             }, timeout - timer().total_milliseconds());
 
             if (is_matched(source, endpoint))
+            {
+                endpoint = source;
                 return size;
+            }
         }
 
         throw boost::system::error_code(boost::asio::error::operation_aborted);

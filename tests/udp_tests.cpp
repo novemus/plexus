@@ -19,8 +19,8 @@ BOOST_AUTO_TEST_CASE(sync_udp_exchange)
     boost::asio::io_context io;
     boost::asio::spawn(io, [&](boost::asio::yield_context yield)
     {
-        const boost::asio::ip::udp::endpoint lep(boost::asio::ip::make_address("127.0.0.1"), 1234);
-        const boost::asio::ip::udp::endpoint rep(boost::asio::ip::make_address("127.0.0.1"), 4321);
+        boost::asio::ip::udp::endpoint lep(boost::asio::ip::make_address("127.0.0.1"), 1234);
+        boost::asio::ip::udp::endpoint rep(boost::asio::ip::make_address("127.0.0.1"), 4321);
 
         auto lend = plexus::network::create_udp_socket(io, lep);
         auto rend = plexus::network::create_udp_socket(io, rep);
@@ -50,8 +50,8 @@ BOOST_AUTO_TEST_CASE(async_udp_exchange)
 {
     boost::asio::io_context io;
 
-    const boost::asio::ip::udp::endpoint lep(boost::asio::ip::make_address("127.0.0.1"), 1234);
-    const boost::asio::ip::udp::endpoint rep(boost::asio::ip::make_address("127.0.0.1"), 4321);
+    boost::asio::ip::udp::endpoint lep(boost::asio::ip::make_address("127.0.0.1"), 1234);
+    boost::asio::ip::udp::endpoint rep(boost::asio::ip::make_address("127.0.0.1"), 4321);
 
     auto lend = plexus::network::create_udp_socket(io, lep);
     auto rend = plexus::network::create_udp_socket(io, rep);
@@ -67,13 +67,17 @@ BOOST_AUTO_TEST_CASE(async_udp_exchange)
         BOOST_REQUIRE_NO_THROW(udp->send_to(boost::asio::buffer(wb), peer, yield));
         BOOST_REQUIRE_NO_THROW(udp->send_to(boost::asio::buffer(wb), peer, yield));
 
-        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), peer, yield)));
+        auto remote = peer;
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), remote, yield)));
+        BOOST_REQUIRE_EQUAL(remote, peer);
         BOOST_REQUIRE_EQUAL(wb, rb);
 
-        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), peer, yield)));
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), remote, yield)));
+        BOOST_REQUIRE_EQUAL(remote, peer);
         BOOST_REQUIRE_EQUAL(wb, rb);
 
-        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), peer, yield)));
+        BOOST_REQUIRE_NO_THROW(BOOST_REQUIRE_EQUAL(rb.size(), udp->receive_from(boost::asio::buffer(rb), remote, yield)));
+        BOOST_REQUIRE_EQUAL(remote, peer);
         BOOST_REQUIRE_EQUAL(wb, rb);
     };
 
