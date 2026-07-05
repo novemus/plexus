@@ -516,8 +516,22 @@ void spawn_accept(boost::asio::io_context& io, const options& config, const iden
 
             auto faraway = pipe->pull_request(yield);
             auto gateway = reference {
-                reference::mapping { pass.udp.outer, pass.udp.force, config.qos.proto <= protocol::udp && config.route.udp != routing::direct && faraway.udp.relay.address.is_unspecified() ? broker->get_udp_relay(yield) : endpoint {}, config.route.udp },
-                reference::mapping { pass.tcp.outer, pass.tcp.force, config.qos.proto != protocol::udp && config.route.tcp != routing::direct && faraway.tcp.relay.address.is_unspecified() ? broker->get_tcp_relay(yield) : endpoint {}, config.route.tcp },
+                reference::mapping {
+                    pass.udp.outer,
+                    pass.udp.force,
+                    config.qos.proto <= protocol::udp && faraway.qos.proto <= protocol::udp && config.route.udp != routing::direct && faraway.udp.route != routing::direct && faraway.udp.relay.address.is_unspecified() 
+                        ? broker->get_udp_relay(yield)
+                        : endpoint {},
+                    config.route.udp
+                },
+                reference::mapping {
+                    pass.tcp.outer,
+                    pass.tcp.force,
+                    config.qos.proto != protocol::udp && faraway.qos.proto != protocol::udp && config.route.tcp != routing::direct && faraway.tcp.route != routing::direct && faraway.tcp.relay.address.is_unspecified()
+                        ? broker->get_tcp_relay(yield)
+                        : endpoint {},
+                    config.route.tcp
+                },
                 config.qos,
                 utils::random<uint64_t>(),
                 boost::posix_time::microsec_clock::universal_time()
@@ -555,8 +569,22 @@ void spawn_invite(boost::asio::io_context& io, const options& config, const iden
             auto pass = broker->make_traverse(yield, config.qos.proto, config.mode);
 
             auto gateway = reference { 
-                reference::mapping { pass.udp.outer, pass.udp.force, config.qos.proto <= protocol::udp && config.route.udp != routing::direct ? broker->get_udp_relay(yield) : endpoint {}, config.route.udp },
-                reference::mapping { pass.tcp.outer, pass.tcp.force, config.qos.proto != protocol::udp && config.route.tcp != routing::direct ? broker->get_tcp_relay(yield) : endpoint {}, config.route.tcp },
+                reference::mapping {
+                    pass.udp.outer,
+                    pass.udp.force,
+                    config.qos.proto <= protocol::udp && config.route.udp != routing::direct 
+                        ? broker->get_udp_relay(yield) 
+                        : endpoint {},
+                    config.route.udp
+                },
+                reference::mapping {
+                    pass.tcp.outer,
+                    pass.tcp.force,
+                    config.qos.proto != protocol::udp && config.route.tcp != routing::direct
+                        ? broker->get_tcp_relay(yield)
+                        : endpoint {},
+                    config.route.tcp
+                },
                 config.qos,
                 utils::random<uint64_t>(),
                 boost::posix_time::microsec_clock::universal_time()
