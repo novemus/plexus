@@ -48,7 +48,7 @@ struct reference
         endpoint outer;
         firewall force;
         endpoint relay;
-        routing::favour route;
+        routing::favour route = routing::direct;
     };
 
     mapping udp;
