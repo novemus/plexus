@@ -124,6 +124,16 @@ class broker_impl : public plexus::link_broker
         }
     }
 
+    void punch_udp_hole(boost::asio::yield_context yield, const endpoint& peer, uint64_t nonce) noexcept(false)
+    {
+        _dbg_ << "punching udp hole...";
+
+        auto pin = plexus::network::create_udp_socket(m_io, m_bind.udp);
+
+        pin->set_option(boost::asio::ip::unicast::hops(m_punch));
+        pin->send_to(handshake(0, nonce), peer, yield);
+    }
+
     void touch_peer(boost::asio::yield_context yield, const endpoint& peer, uint64_t nonce, schema role) noexcept(false)
     {
         _dbg_ << "touch peer...";
@@ -249,6 +259,9 @@ class broker_impl : public plexus::link_broker
             else
                 _dbg_ << "using peer's tcp relay " << peer.tcp.relay;
 
+            if (term.qos.role == schema::server && host.tcp.force.nat)
+                punch_tcp_hole(yield, term.alien);
+
             return term;
         }
 
@@ -258,6 +271,9 @@ class broker_impl : public plexus::link_broker
                 run_udp_relay(yield, make_endpoint_for_relay(host.udp), make_endpoint_for_relay(peer.udp), term.qos.role);
             else
                 _dbg_ << "using peer's udp relay " << peer.udp.relay;
+            
+            if (term.qos.role == schema::server && host.udp.force.nat)
+                punch_udp_hole(yield, term.alien, term.secret);
 
             return term;
         }
