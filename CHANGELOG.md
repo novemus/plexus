@@ -1,5 +1,11 @@
 # Change Log
 
+## 3.4.1 (Jul 11, 2026)
+
+- Optimization of working with the relay
+- Fix of the bug with route condition
+- Fix of the bug with inability to connect to UDP peer with server role and public IP
+
 ## 3.4.0 (Jun 14, 2026)
 
 - Support of indirect connections via Ricochet relay server

@@ -4,7 +4,7 @@ message("***** plexus ***** ")
 
 cmake_minimum_required(VERSION 3.21)
 
-project(plexus VERSION 3.4.0 DESCRIPTION "The tool for connecting non-public network applications" LANGUAGES CXX)
+project(plexus VERSION 3.4.1 DESCRIPTION "The tool for connecting non-public network applications" LANGUAGES CXX)
 
 option(PLEXUS_USE_SHARED_LIB "Build shared library" ${BUILD_SHARED_LIBS})
 option(PLEXUS_SKIP_TEST_RULES "Don't generate test rules" ON)
@@ -46,13 +46,13 @@ message("* OpenSSL Version: ${OPENSSL_VERSION}")
 message("* OpenSSL Include Dir: ${OPENSSL_INCLUDE_DIR}")
 message("* OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 
-find_package(tubus 1.3.0 REQUIRED COMPONENTS libtubus)
+find_package(tubus 1.3.1 REQUIRED COMPONENTS libtubus)
 
 message("* tubus Version: ${tubus_VERSION}")
 message("* tubus Include Dirs: ${tubus_INCLUDE_DIRS}")
 message("* tubus Library: ${tubus_LIBRARY}")
 
-find_package(wormhole 1.3.0 REQUIRED COMPONENTS libwormhole)
+find_package(wormhole 1.3.1 REQUIRED COMPONENTS libwormhole)
 
 message("* wormhole Version: ${wormhole_VERSION}")
 message("* wormhole Include Dirs: ${wormhole_INCLUDE_DIRS}")
