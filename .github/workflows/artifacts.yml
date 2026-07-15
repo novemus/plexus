@@ -210,7 +210,7 @@ jobs:
 
   macos:
     name: MacOS archive
-    runs-on: macos-latest
+    runs-on: macos-15
     env:
       TARGET_OS: darwin
       TARGET_ARCH: arm64
