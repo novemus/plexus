@@ -146,6 +146,7 @@ jobs:
       TARGET_OS: windows
       TARGET_ARCH: x64
       VCPKG_TOOLCHAIN_FILE: "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
+      GNULIB_ARCHIVE: ${{ vars.GNULIB_ARCHIVE }}
       TUBUS_ARCHIVE: ${{ vars.TUBUS_WINDOWS_ARCHIVE }}
       WORMHOLE_ARCHIVE: ${{ vars.WORMHOLE_WINDOWS_ARCHIVE }}
       OPENDHT_ARCHIVE: ${{ vars.OPENDHT_WINDOWS_ARCHIVE }}
@@ -158,7 +159,9 @@ jobs:
         uses: actions/cache@v4
         id: cache-vcpkg
         with:
-          path: out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\build\*\vcpkg_installed
+          path: |
+            out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\build\*\vcpkg_installed
+            C:\vcpkg\downloads
           key: ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
           restore-keys: |
             ${{ runner.os }}-vcpkg-${{ env.TARGET_ARCH }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
@@ -176,6 +179,19 @@ jobs:
           Expand-Archive -Path C:\tmp\opendht.zip -DestinationPath "${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
           Invoke-WebRequest -Uri ${{ env.RICOCHET_ARCHIVE }} -OutFile C:\tmp\ricochet-client.zip
           Expand-Archive -Path C:\tmp\ricochet-client.zip -DestinationPath "${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
+
+      - name: Prefetch gnulib for vcpkg
+        shell: pwsh
+        run: |
+          $downloads = "C:\vcpkg\downloads"
+          $filename  = "gnulib-3639c57.tar.gz"
+          $dest      = Join-Path $downloads $filename
+
+          New-Item -ItemType Directory -Path $downloads -Force | Out-Null
+
+          if (-not (Test-Path $dest)) {
+            Invoke-WebRequest -Uri "${{ env.GNULIB_ARCHIVE }}" -OutFile $dest
+          }
 
       - name: Build static
         shell: pwsh
