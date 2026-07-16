@@ -231,7 +231,7 @@
                 "RelWithDebInfo"
             ],
             "variables": {
-                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libtubus (>= 1.2.3), libwormhole (>= 1.2.4), ricochet-client (>= 1.0.0)",
+                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libtubus (>= 1.3.1), libwormhole (>= 1.3.1), ricochet-client (>= 1.0.0)",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "Library for connecting network applications through NAT",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.",
                 "CPACK_COMPONENTS_ALL": "library_files;lib_deb_files"
@@ -256,7 +256,7 @@
                 "RelWithDebInfo"
             ],
             "variables": {
-                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.2.5), libwormhole-dev (>= 1.2.6), libopendht-dev (>= 3.4.0), libplexus (>= 3.3.0), ricochet-client (>= 1.0.0)",
+                "CPACK_DEBIAN_PACKAGE_DEPENDS": "libboost-dev (>= 1.74) | libboost1.81-dev, libtubus-dev (>= 1.3.1), libwormhole-dev (>= 1.3.1), libopendht-dev (>= 3.4.0), libplexus (>= 3.4.1), ricochet-client (>= 1.0.0)",
                 "CPACK_PACKAGE_DESCRIPTION_SUMMARY": "C++ development library for connecting network applications through NAT",
                 "CPACK_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.",
                 "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_deb_files;dev_doc_files",
@@ -336,7 +336,7 @@
             "variables": {
                 "CPACK_RPM_PACKAGE_SUMMARY": "C++ development library for connecting network applications through NAT",
                 "CPACK_RPM_PACKAGE_DESCRIPTION": "The 'plexus' library provides the ability to connect network\napplications based on UDP protocol through NAT.",
-                "CPACK_RPM_PACKAGE_REQUIRES": "boost-devel, openssl-devel, libtubus-devel >= 1.2.5, libwormhole-devel >= 1.2.6, ricochet-client >= 1.0.0, libopendht-devel >= 3.4.0, libplexus = %{version}-%{release}",
+                "CPACK_RPM_PACKAGE_REQUIRES": "boost-devel, openssl-devel, libtubus-devel >= 1.3.1, libwormhole-devel >= 1.3.1, ricochet-client >= 1.0.0, libopendht-devel >= 3.4.0, libplexus = %{version}-%{release}",
                 "CPACK_COMPONENTS_ALL": "archive_files;header_files;cmake_files;dev_doc_files",
                 "CPACK_INSTALL_CMAKE_PROJECTS": "../static-relwithdebinfo;tubus;ALL;/;../shared-relwithdebinfo;tubus;ALL;/"
             },
