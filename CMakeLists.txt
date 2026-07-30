@@ -4,7 +4,7 @@ message("***** plexus ***** ")
 
 cmake_minimum_required(VERSION 3.21)
 
-project(plexus VERSION 3.4.1 DESCRIPTION "The tool for connecting non-public network applications" LANGUAGES CXX)
+project(plexus VERSION 3.4.2 DESCRIPTION "The tool for connecting non-public network applications" LANGUAGES CXX)
 
 option(PLEXUS_USE_SHARED_LIB "Build shared library" ${BUILD_SHARED_LIBS})
 option(PLEXUS_SKIP_TEST_RULES "Don't generate test rules" ON)

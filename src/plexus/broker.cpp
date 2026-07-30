@@ -55,7 +55,7 @@ class broker_impl : public plexus::link_broker
     };
 
     boost::asio::io_context& m_io;
-    location m_stun;
+    stunlist m_stun;
     location m_bind;
     uint16_t m_punch;
     relays   m_rico;
@@ -359,17 +359,13 @@ class broker_impl : public plexus::link_broker
 
 public:
 
-    broker_impl(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t punch, const ricochet& relay)
+    broker_impl(boost::asio::io_context& io, const stunlist& stun, const location& bind, uint16_t punch, const ricochet& relay)
         : m_io(io)
+        , m_stun(stun)
         , m_punch(punch)
     {
-        m_stun.udp = stun.udp;
-        m_stun.tcp = stun.tcp;
         m_bind.udp = utils::locate<boost::asio::ip::udp>(bind.udp);
         m_bind.tcp = utils::locate<boost::asio::ip::tcp>(bind.tcp);
-
-        _dbg_ << "stun: udp=" << m_stun.udp << " tcp=" << m_stun.tcp;
-        _dbg_ << "bind: udp=" << m_bind.udp << " tcp=" << m_bind.tcp;
 
         if (!relay.server.address.is_unspecified() && relay.server.port != 0)
         {
@@ -432,14 +428,54 @@ public:
 
     traverse make_traverse(boost::asio::yield_context yield, protocol proto, checkup mode) noexcept(false) override
     {
-        auto stun = plexus::create_stun_client(m_io, m_stun, m_bind);
-        return stun->make_traverse(yield, proto, mode);
+        traverse pass {};
+
+        for (auto& stun : m_stun.udp)
+        {
+            if (stun.address.is_unspecified())
+                continue;
+
+            try
+            {
+                auto client = plexus::create_udp_stun_client(m_io, stun, m_bind.udp);
+                pass.udp = client->explore(yield, mode);
+                break;
+            }
+            catch(const std::exception& ex)
+            {
+                pass.udp.outer = endpoint{};
+                _wrn_ << "can't make udp traverse: " << ex.what();
+            }
+        }
+
+        if (proto != protocol::udp)
+        {
+            for (auto& stun : m_stun.tcp)
+            {
+                if (stun.address.is_unspecified())
+                    continue;
+
+                try
+                {
+                    auto client = plexus::create_tcp_stun_client(m_io, stun, m_bind.tcp);
+                    pass.tcp = client->explore(yield, mode);
+                    break;
+                }
+                catch(const std::exception& ex)
+                {
+                    pass.tcp.outer = endpoint{};
+                    _wrn_ << "can't make tcp traverse: " << ex.what();
+                }
+            }
+        }
+
+        return pass;
     }
 };
 
 }
 
-std::shared_ptr<plexus::link_broker> create_link_broker(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t punch, const ricochet& relay) noexcept(false)
+std::shared_ptr<plexus::link_broker> create_link_broker(boost::asio::io_context& io, const stunlist& stun, const location& bind, uint16_t punch, const ricochet& relay) noexcept(false)
 {
     return std::make_shared<plexus::stun::broker_impl>(io, stun, bind, punch, relay);
 }

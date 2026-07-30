@@ -97,7 +97,7 @@ namespace tests
                 m_app,
                 m_repo,
                 m_bind,
-                m_stun,
+                { { m_stun.udp }, { m_stun.tcp } },
                 m_hops,
                 m_mode,
                 criteria { proto, role },

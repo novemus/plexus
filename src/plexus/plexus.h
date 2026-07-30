@@ -11,6 +11,7 @@
 #pragma once
 
 #include <variant>
+#include <vector>
 #include <boost/asio.hpp>
 #include <plexus/export.h>
 #include <wormhole/wormhole.h>
@@ -112,6 +113,12 @@ struct location
     endpoint tcp;
 };
 
+struct stunlist
+{
+    std::vector<endpoint> udp;
+    std::vector<endpoint> tcp;
+};
+
 struct ricochet
 {
     endpoint server;  // ricochet server endpoint
@@ -141,7 +148,7 @@ struct options
     std::string app;     // application id
     std::string repo;    // path to the application repository
     location bind;       // endpoints to bind the application
-    location stun;       // endpoints of the stun servers
+    stunlist stun;       // endpoints of the stun servers
     uint16_t hops;       // ttl of the hole punching packet
     checkup mode;        // nat explore mode
     criteria qos;        // application protocol and connection strategy

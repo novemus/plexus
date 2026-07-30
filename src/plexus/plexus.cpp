@@ -487,8 +487,21 @@ void explore_network(boost::asio::io_context& io, const location& bind, const lo
 
         try
         {
-            auto client = plexus::create_stun_client(io, stun, bind);
-            handler(client->make_traverse(yield, protocol::any, mode));
+            traverse pass {};
+
+            if (!stun.udp.address.is_unspecified())
+            {
+                auto client = plexus::create_udp_stun_client(io, stun.udp, bind.udp);
+                pass.udp = client->explore(yield, mode);
+            }
+
+            if (!stun.tcp.address.is_unspecified())
+            {
+                auto client = plexus::create_tcp_stun_client(io, stun.tcp, bind.tcp);
+                pass.tcp = client->explore(yield, mode);
+            }
+
+            handler(pass);
         }
         catch (const std::exception& e)
         {

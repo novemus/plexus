@@ -15,6 +15,7 @@
 #include <regex>
 #include <unordered_map>
 #include <boost/program_options.hpp>
+#include <boost/algorithm/string.hpp>
 
 using namespace plexus;
 
@@ -37,8 +38,8 @@ int main(int argc, char** argv)
         ("peer-id", boost::program_options::value<identity>()->default_value(identity()), "identifier of the peer: <email/pin>")
         ("udp-bind", boost::program_options::value<std::string>()->default_value("0.0.0.0:0"), "udp endpoint to bind the application")
         ("tcp-bind", boost::program_options::value<std::string>()->default_value("0.0.0.0:0"), "tcp endpoint to bind the application")
-        ("udp-stun", boost::program_options::value<std::string>()->default_value("stunserver2025.stunprotocol.org"), "udp STUN server")
-        ("tcp-stun", boost::program_options::value<std::string>()->default_value("stunserver2025.stunprotocol.org"), "tcp STUN server")
+        ("udp-stun", boost::program_options::value<std::string>()->default_value("stunserver2025.stunprotocol.org"), "comma-separated list of udp STUN servers")
+        ("tcp-stun", boost::program_options::value<std::string>()->default_value("stunserver2025.stunprotocol.org"), "comma-separated list of tcp STUN servers")
         ("udp-route", boost::program_options::value<routing::favour>()->default_value(routing::direct), "prefer udp routing: <direct|bridge|either>")
         ("tcp-route", boost::program_options::value<routing::favour>()->default_value(routing::direct), "prefer tcp routing: <direct|bridge|either>")
         ("rico-server", boost::program_options::value<std::string>()->default_value(""), "ricocher bridge server")
@@ -47,7 +48,7 @@ int main(int argc, char** argv)
         ("rico-ca", boost::program_options::value<std::string>()->default_value(""), "path to the ricocher Certification Authority")
         ("nat-test", boost::program_options::value<checkup>()->default_value(checkup::strict), "NAT explore mode: <strict|faulty|simple|noneed>")
         ("nat-hops", boost::program_options::value<uint16_t>()->default_value(7), "time-to-live parameter for the NAT punching packet")
-        ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "url of the bootstrap DHT service")
+        ("dht-bootstrap", boost::program_options::value<std::string>()->default_value("bootstrap.jami.net"), "comma-separated list of DHT bootstrap URLs")
         ("dht-port", boost::program_options::value<uint16_t>()->default_value(0), "local port to bind the DHT node")
         ("dht-network", boost::program_options::value<uint32_t>()->default_value(0), "DHT network id")
         ("email-smtps", boost::program_options::value<std::string>(), "smtps server used for the email rendezvous")
@@ -184,10 +185,17 @@ int main(int argc, char** argv)
             utils::resolve_some<boost::asio::ip::tcp>(vm["tcp-bind"].as<std::string>(), bind_default_port)
         };
 
-        location stun {
-            utils::resolve_same<boost::asio::ip::udp>(bind.udp.address, vm["udp-stun"].as<std::string>(), stun_default_port),
-            utils::resolve_same<boost::asio::ip::tcp>(bind.tcp.address, vm["tcp-stun"].as<std::string>(), stun_default_port)
-        };
+        stunlist stun {};
+
+        std::vector<std::string> udp_stuns;
+        boost::split(udp_stuns, vm["udp-stun"].as<std::string>(), boost::is_any_of(",;"));
+        for (auto& serv : udp_stuns)
+            stun.udp.push_back(utils::resolve_same<boost::asio::ip::udp>(bind.udp.address, serv, stun_default_port));
+
+        std::vector<std::string> tcp_stuns;
+        boost::split(tcp_stuns, vm["tcp-stun"].as<std::string>(), boost::is_any_of(",;"));
+        for (auto& serv : tcp_stuns)
+            stun.tcp.push_back(utils::resolve_same<boost::asio::ip::tcp>(bind.tcp.address, serv, stun_default_port));
 
         options config = {
             vm["app-name"].as<std::string>(),

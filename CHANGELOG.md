@@ -1,5 +1,9 @@
 # Change Log
 
+## 3.4.2 (Jul 31, 2026)
+
+- Ability to configure list of stun servers
+
 ## 3.4.1 (Jul 11, 2026)
 
 - Optimization of working with the relay

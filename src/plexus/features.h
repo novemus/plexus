@@ -67,20 +67,22 @@ static constexpr const char* ca_file_name = "ca.crt";
 struct stun_client
 {
     virtual ~stun_client() {}
-    virtual traverse make_traverse(boost::asio::yield_context yield, protocol proto, checkup mode) noexcept(false) = 0;
+    virtual traverse::hole explore(boost::asio::yield_context yield, checkup mode) noexcept(false) = 0;
 };
 
-std::shared_ptr<stun_client> create_stun_client(boost::asio::io_context& io, const location& stun, const location& bind) noexcept(true);
+std::shared_ptr<stun_client> create_udp_stun_client(boost::asio::io_context& io, const endpoint& stun, const endpoint& bind) noexcept(true);
+std::shared_ptr<stun_client> create_tcp_stun_client(boost::asio::io_context& io, const endpoint& stun, const endpoint& bind) noexcept(true);
 
-struct link_broker : public stun_client
+struct link_broker
 {
+    virtual traverse make_traverse(boost::asio::yield_context yield, protocol proto, checkup mode) noexcept(false) = 0;
     virtual endpoint get_tcp_relay(boost::asio::yield_context yield) noexcept(false) = 0;
     virtual endpoint get_udp_relay(boost::asio::yield_context yield) noexcept(false) = 0;
     virtual contract touch_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
     virtual contract await_peer(boost::asio::yield_context yield, const plexus::reference& host, const plexus::reference& peer) noexcept(false) = 0;
 };
 
-std::shared_ptr<link_broker> create_link_broker(boost::asio::io_context& io, const location& stun, const location& bind, uint16_t hops, const ricochet& relay) noexcept(false);
+std::shared_ptr<link_broker> create_link_broker(boost::asio::io_context& io, const stunlist& stun, const location& bind, uint16_t hops, const ricochet& relay) noexcept(false);
 
 struct pipe
 {
