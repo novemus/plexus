@@ -9,7 +9,10 @@
         "boost-bind",
         "boost-date-time",
         "boost-coroutine",
-        "boost-process",
+        {
+            "name": "boost-process",
+            "platform": "!android"
+        },
         {
             "name": "boost-filesystem",
             "platform": "windows"

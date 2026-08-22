@@ -31,7 +31,7 @@ if (MSVC)
     find_package(Boost 1.81 CONFIG REQUIRED COMPONENTS filesystem process)
 endif()
 
-if (NOT MSVC AND Boost_VERSION VERSION_GREATER_EQUAL 1.86)
+if (NOT ANDROID AND NOT MSVC AND Boost_VERSION VERSION_GREATER_EQUAL 1.86)
     find_package(Boost 1.86 CONFIG REQUIRED COMPONENTS process)
 endif()
 
@@ -100,12 +100,13 @@ message("* Jsoncpp Lib Dir: ${Jsoncpp_LIBDIR}")
 
 include(GenerateExportHeader)
 
-set(BINPLEXUS ${PROJECT_NAME})
+if (NOT ANDROID)
+    set(BINPLEXUS ${PROJECT_NAME})
+    add_executable(${BINPLEXUS})
+    add_executable(${PROJECT_NAME}::${BINPLEXUS} ALIAS ${BINPLEXUS})
+endif()
+
 set(LIBPLEXUS lib${PROJECT_NAME})
-
-add_executable(${BINPLEXUS})
-add_executable(${PROJECT_NAME}::${BINPLEXUS} ALIAS ${BINPLEXUS})
-
 add_library(${LIBPLEXUS})
 add_library(${PROJECT_NAME}::${LIBPLEXUS} ALIAS ${LIBPLEXUS})
 
@@ -122,7 +123,7 @@ set(SOURCES "${CMAKE_CURRENT_BINARY_DIR}/export_header/plexus/export.h"
     src/plexus/features.h
     src/plexus/plexus.h
     src/plexus/utils.cpp
-    src/plexus/exec.cpp
+    $<$<NOT:$<BOOL:${ANDROID}>>:src/plexus/exec.cpp>
     src/plexus/smime.cpp
     src/plexus/network.cpp
     src/plexus/email.cpp
@@ -153,27 +154,25 @@ if(NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
     set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 endif()
 
+if (NOT ANDROID)
+    target_sources(${BINPLEXUS} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> src/plexus/main.cpp)
+    target_link_libraries(${BINPLEXUS} PRIVATE tubus::libtubus wormhole::libwormhole ricochet::libricochet "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
+    target_compile_features(${BINPLEXUS} PRIVATE cxx_std_17)
+    target_include_directories(${BINPLEXUS} PRIVATE
+            "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"
+            "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/export_header>"
+            "${opendht_INCLUDEDIR}")
+    set_target_properties(${BINPLEXUS} PROPERTIES DEBUG_POSTFIX "d" COMPILE_FLAGS -DLIBPLEXUS_STATIC_DEFINE)
+    set_target_properties(${BINPLEXUS} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+endif()
+
 target_sources(${LIBPLEXUS} PRIVATE ${SOURCES})
-target_sources(${BINPLEXUS} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> src/plexus/main.cpp)
-
 target_link_libraries(${LIBPLEXUS} PUBLIC tubus::libtubus PRIVATE wormhole::libwormhole ricochet::libricochet "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
-target_link_libraries(${BINPLEXUS} PRIVATE tubus::libtubus wormhole::libwormhole ricochet::libricochet "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
-
 target_compile_features(${LIBPLEXUS} PRIVATE cxx_std_17)
-target_compile_features(${BINPLEXUS} PRIVATE cxx_std_17)
-
-target_include_directories(${BINPLEXUS} PRIVATE
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"S
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/export_header>"
-        "${opendht_INCLUDEDIR}")
-
 target_include_directories(${LIBPLEXUS} PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/export_header>"
         PRIVATE "${opendht_INCLUDEDIR}")
-
-set_target_properties(${BINPLEXUS} PROPERTIES DEBUG_POSTFIX "d" COMPILE_FLAGS -DLIBPLEXUS_STATIC_DEFINE)
-set_target_properties(${BINPLEXUS} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 set_target_properties(${LIBPLEXUS} PROPERTIES DEBUG_POSTFIX "d" OUTPUT_NAME ${PROJECT_NAME} IMPORT_PREFIX "lib")
 set_target_properties(${LIBPLEXUS} PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR} VERSION ${PROJECT_VERSION})
 set_target_properties(${LIBPLEXUS} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
@@ -191,7 +190,9 @@ if(NOT PLEXUS_SKIP_INSTALL_RULES AND NOT CMAKE_SKIP_INSTALL_RULES)
 
     write_basic_package_version_file(plexus-config-version.cmake COMPATIBILITY SameMajorVersion)
 
+if (NOT ANDROID)
     install(TARGETS ${BINPLEXUS} RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT binary_files)
+endif()
 
     install(TARGETS ${LIBPLEXUS} EXPORT plexus_export
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT runtime_files
@@ -246,7 +247,7 @@ if(NOT PLEXUS_SKIP_TEST_RULES)
                                   tests/udp_tests.cpp
                                   tests/tcp_tests.cpp
                                   tests/smime_tests.cpp
-                                  tests/exec_tests.cpp
+                                  $<$<NOT:$<BOOL:${ANDROID}>>:tests/exec_tests.cpp>
                                   tests/contract_tests.cpp
                                   tests/plexus_tests.cpp)
     target_link_libraries(${PLEXUS_TEST} PRIVATE $<TARGET_OBJECTS:${LIBPLEXUS}> tubus::libtubus wormhole::libwormhole ricochet::libricochet "$<$<BOOL:${MSVC}>:Boost::filesystem>" Boost::coroutine Boost::program_options Boost::unit_test_framework OpenSSL::SSL OpenSSL::Crypto opendht fmt::fmt msgpack-cxx PkgConfig::GnuTLS PkgConfig::argon2 PkgConfig::Nettle PkgConfig::Jsoncpp "$<$<BOOL:${MSVC}>:Iphlpapi>")
