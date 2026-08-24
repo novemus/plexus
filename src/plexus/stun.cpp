@@ -109,6 +109,7 @@ namespace attr
     const uint16_t unknown_attributes = 0x000a;
     const uint16_t reflected_from = 0x000b;
     const uint16_t xor_mapped_address = 0x0020;
+    const uint16_t response_origin = 0x802b;
     const uint16_t other_address = 0x802c;
 }
 
@@ -240,9 +241,12 @@ public:
     {
     }
 
-    message(uint8_t flags) : mutable_buffer(std::vector<uint8_t>{
+    message(uint8_t flags, bool classic = false) : mutable_buffer(std::vector<uint8_t>{
             0x00, 0x01, 0x00, 0x08,
-            0x21, 0x12, 0xa4, 0x42,
+            classic ? utils::random<uint8_t>() : uint8_t(0x21),
+            classic ? utils::random<uint8_t>() : uint8_t(0x12),
+            classic ? utils::random<uint8_t>() : uint8_t(0xa4),
+            classic ? utils::random<uint8_t>() : uint8_t(0x42),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
             utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(), utils::random<uint8_t>(),
@@ -288,7 +292,8 @@ public:
 
     endpoint source_endpoint() const
     {
-        return fetch_endpoint(attr::source_address);
+        endpoint ep = fetch_endpoint(attr::source_address);
+        return ep.address.is_unspecified() ? fetch_endpoint(attr::response_origin) : ep;
     }
 
     endpoint changed_endpoint() const
@@ -500,7 +505,7 @@ class udp_client : public client_base
     endpoint m_stun;
     endpoint m_bind;
 
-    message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<network::udp_socket> sock, const endpoint& to, const endpoint& from, uint8_t flag = 0, int64_t deadline = 4600)
+    message exec_udp_binding(boost::asio::yield_context yield, std::shared_ptr<network::udp_socket> sock, const endpoint& to, const endpoint& from, bool classic = false, uint8_t flag = 0, int64_t deadline = 4600)
     {
         if (to.address.is_unspecified() || from.address.is_unspecified())
             throw plexus::context_error(__FUNCTION__, "bad destination");
@@ -512,9 +517,10 @@ class udp_client : public client_base
 
         boost::asio::ip::udp::endpoint remote = from;
         int64_t timeout = 200;
+
         while (timer().total_milliseconds() < deadline)
         {
-            message req(flag);
+            message req(flag, classic);
             sock->send_to(req, to, yield, timeout);
 
             try
@@ -582,10 +588,10 @@ public:
 
         if (mode != checkup::noneed)
         {
-            _trc_ << "punching udp hole...";
-            
+            _trc_ << "make udp traverse...";
+
             auto mapper = network::create_udp_socket(m_io, m_bind);
-            auto binding = exec_udp_binding(yield, mapper, m_stun, m_stun);
+            auto binding = exec_udp_binding(yield, mapper, m_stun, m_stun, mode != checkup::simple);
 
             hole.force = firewall { false, true, false, false, firewall::independent, firewall::independent };
             hole.inner = m_bind;
@@ -614,7 +620,7 @@ public:
                         {
                             _trc_ << "first mapping test...";
 
-                            auto first_endpoint = exec_udp_binding(yield, mapper, changed_full, changed_full).mapped_endpoint();
+                            auto first_endpoint = exec_udp_binding(yield, mapper, changed_full, changed_full, true).mapped_endpoint();
                             if (first_endpoint == hole.outer)
                             {
                                 hole.force.mapping = firewall::independent;
@@ -623,7 +629,7 @@ public:
                             {
                                 _trc_ << "second mapping test...";
 
-                                auto second_endpoint = exec_udp_binding(yield, mapper, changed_addr, changed_addr).mapped_endpoint();
+                                auto second_endpoint = exec_udp_binding(yield, mapper, changed_addr, changed_addr, true).mapped_endpoint();
                                 if (second_endpoint == hole.outer)
                                 {
                                     hole.force.mapping = firewall::port_dependent;
@@ -657,7 +663,7 @@ public:
                     {
                         _trc_ << "hairpin test...";
 
-                        exec_udp_binding(yield, mapper, hole.outer, hole.outer, 0, 1400);
+                        exec_udp_binding(yield, mapper, hole.outer, hole.outer, mode != checkup::simple, 0, 1400);
                         hole.force.hairpin = true;
                     }
                     catch(const plexus::timeout_error&) {}
@@ -670,7 +676,7 @@ public:
                     {
                         _trc_ << "first filtering test...";
 
-                        exec_udp_binding(yield, filter, m_stun, changed_full, flag::change_address | flag::change_port, 1400);
+                        exec_udp_binding(yield, filter, m_stun, changed_full, true, flag::change_address | flag::change_port, 1400);
                         hole.force.filtering = firewall::independent;
                     }
                     catch(const std::exception&)
@@ -679,7 +685,7 @@ public:
                         {
                             _trc_ << "second filtering test...";
 
-                            exec_udp_binding(yield, filter, m_stun, changed_addr, flag::change_address, 1400);
+                            exec_udp_binding(yield, filter, m_stun, changed_addr, true, flag::change_address, 1400);
                             hole.force.filtering = firewall::port_dependent;
                         }
                         catch(const std::exception&)
@@ -688,7 +694,7 @@ public:
                             {
                                 _trc_ << "third filtering test...";
 
-                                exec_udp_binding(yield, filter, m_stun, changed_port, flag::change_port, 1400);
+                                exec_udp_binding(yield, filter, m_stun, changed_port, true, flag::change_port, 1400);
                                 hole.force.filtering = firewall::address_dependent;
                             }
                             catch(const std::exception&) {}
@@ -717,7 +723,7 @@ class tcp_client : public client_base
     endpoint m_stun;
     endpoint m_bind;
 
-    message exec_tcp_binding(boost::asio::yield_context yield, const endpoint& bind, const endpoint& stun, uint8_t flag = 0, int64_t deadline = 10000)
+    message exec_tcp_binding(boost::asio::yield_context yield, const endpoint& bind, const endpoint& stun, bool classic, uint8_t flag = 0, int64_t deadline = 10000)
     {
         if (stun.address.is_unspecified())
             throw plexus::context_error(__FUNCTION__, "bad destination");
@@ -732,7 +738,7 @@ class tcp_client : public client_base
             auto sock = plexus::network::create_tcp_socket(m_io, bind, stun);
             sock->connect(yield, timeout());
 
-            message req(flag);
+            message req(flag, classic);
             if (sock->write(req, yield, timeout()) != req.size())
                 throw plexus::context_error(__FUNCTION__, "can't write message");
 
@@ -781,6 +787,8 @@ class tcp_client : public client_base
         {
             throw plexus::context_error(__FUNCTION__, ex.code());
         }
+
+        throw plexus::context_error(__FUNCTION__, "can't get proper binding response");
     }
 
 public:
@@ -799,9 +807,9 @@ public:
 
         if (mode != checkup::noneed)
         {
-            _trc_ << "punching tcp hole...";
+            _trc_ << "make tcp traverse...";
 
-            auto binding = exec_tcp_binding(yield, m_bind, m_stun);
+            auto binding = exec_tcp_binding(yield, m_bind, m_stun, mode != checkup::simple);
 
             hole.force = firewall { false, true, false, false, firewall::independent, firewall::independent };
             hole.inner = m_bind;
@@ -829,7 +837,7 @@ public:
                         {
                             _trc_ << "first mapping test...";
 
-                            auto first_endpoint = exec_tcp_binding(yield, m_bind, changed_full).mapped_endpoint();
+                            auto first_endpoint = exec_tcp_binding(yield, m_bind, changed_full, true).mapped_endpoint();
                             if (first_endpoint == hole.outer)
                             {
                                 hole.force.mapping = firewall::independent;
@@ -838,7 +846,7 @@ public:
                             {
                                 _trc_ << "second mapping test...";
 
-                                auto second_endpoint = exec_tcp_binding(yield, m_bind, changed_addr).mapped_endpoint();
+                                auto second_endpoint = exec_tcp_binding(yield, m_bind, changed_addr, true).mapped_endpoint();
                                 if (second_endpoint == hole.outer)
                                 {
                                     hole.force.mapping = firewall::port_dependent;
