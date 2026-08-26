@@ -53,7 +53,7 @@ As soon as both `plexus` instances make the *passage* to each other, the command
 
 `%peerid%` - the peer identifier specified by the `--peer-id` argument
 
-Also you can set the `--exec-env` argument to pass the list of extra environment to the command with the following wildcards:
+Also, you can set the `--exec-env` argument to pass the list of extra environment to the command with the following wildcards:
 
 `%secret%` - shared 64-bit key agreed upon by the rendezvous
 
