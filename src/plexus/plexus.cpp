@@ -145,6 +145,18 @@ std::istream& operator>>(std::istream& in, checkup& val) noexcept(false)
     return in;
 }
 
+endpoint adjust_mapped_endpoint(const endpoint& outer, firewall force)
+{
+    return endpoint {
+        force.variable_address 
+            ? (outer.address.is_v4() ? boost::asio::ip::address(boost::asio::ip::address_v4()) : boost::asio::ip::address(boost::asio::ip::address_v6()))
+            : outer.address,
+        force.mapping == firewall::independent
+            ? outer.port
+            : static_cast<uint16_t>(0)
+    };
+}
+
 std::pair<uint16_t, uint16_t> make_relay_variants(const reference& host, const reference& peer) noexcept(false)
 {
     bool tcp_relay_capable = host.tcp.route != routing::direct && peer.tcp.route != routing::direct
@@ -436,21 +448,9 @@ bool make_contract(bool relay, const location& bind, const reference& host, cons
     else
         return false;
 
-    auto correct_outer = [](const endpoint& outer, firewall force)
-    {
-        return endpoint {
-            force.variable_address 
-                ? (outer.address.is_v4() ? boost::asio::ip::address(boost::asio::ip::address_v4()) : boost::asio::ip::address(boost::asio::ip::address_v6()))
-                : outer.address,
-            force.mapping == firewall::independent
-                ? outer.port
-                : static_cast<uint16_t>(0)
-        };
-    };
-
     info.secret = host.puzzle ^ peer.puzzle;
     info.inner = info.qos.proto == protocol::udp ? bind.udp : bind.tcp;
-    info.outer = info.qos.proto == protocol::udp ? correct_outer(host.udp.outer, host.udp.force) : correct_outer(host.tcp.outer, host.tcp.force);
+    info.outer = info.qos.proto == protocol::udp ? adjust_mapped_endpoint(host.udp.outer, host.udp.force) : adjust_mapped_endpoint(host.tcp.outer, host.tcp.force);
 
     if (relay)
     {
@@ -460,7 +460,7 @@ bool make_contract(bool relay, const location& bind, const reference& host, cons
     }
     else
     {
-        info.alien = info.qos.proto == protocol::udp ? correct_outer(peer.udp.outer, peer.udp.force) : correct_outer(peer.tcp.outer, peer.tcp.force);
+        info.alien = info.qos.proto == protocol::udp ? adjust_mapped_endpoint(peer.udp.outer, peer.udp.force) : adjust_mapped_endpoint(peer.tcp.outer, peer.tcp.force);
     }
 
     _inf_ << "contract: qos=" << info.qos << " inner=" << info.inner << " outer=" << info.outer << " alien=" << info.alien << " relay=" << relay;

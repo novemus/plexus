@@ -17,7 +17,11 @@
 #include <plexus/features.h>
 #include <plexus/utils.h>
 
-namespace plexus { namespace stun {
+namespace plexus {
+
+endpoint adjust_mapped_endpoint(const endpoint& outer, firewall force) noexcept(true);
+
+namespace stun {
 
 boost::posix_time::time_duration connect_delay()
 {
@@ -195,11 +199,14 @@ class broker_impl : public plexus::link_broker
 
         auto pin = plexus::network::create_udp_socket(m_io, m_bind.udp);
 
-        boost::asio::ip::unicast::hops old;
-        pin->get_option(old);
-        pin->set_option(boost::asio::ip::unicast::hops(m_punch));
-        pin->send_to(handshake(0, nonce), peer, yield);
-        pin->set_option(old);
+        if (!peer.address.is_unspecified() && peer.port != 0)
+        {
+            boost::asio::ip::unicast::hops old;
+            pin->get_option(old);
+            pin->set_option(boost::asio::ip::unicast::hops(m_punch));
+            pin->send_to(handshake(0, nonce), peer, yield);
+            pin->set_option(old);
+        }
 
         handshake out(1, nonce);
         handshake in(nonce);
@@ -283,12 +290,12 @@ class broker_impl : public plexus::link_broker
             if (term.qos.role == schema::server && host.tcp.force.nat)
                 punch_tcp_hole(yield, peer.tcp.outer);
 
-            bool no_udp = host.udp.outer.address.is_v4() != peer.udp.outer.address.is_v4()
-                    || host.udp.outer.address.is_unspecified() || host.udp.force.mapping != firewall::independent || host.udp.force.variable_address
-                    || peer.udp.outer.address.is_unspecified() || peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address
+            bool cannot_handshake = host.udp.outer.address.is_v4() != peer.udp.outer.address.is_v4()
+                    || host.udp.outer.address.is_unspecified() || ((host.udp.force.mapping != firewall::independent || host.udp.force.variable_address) && (peer.udp.force.filtering != firewall::independent || peer.udp.force.variable_address)) 
+                    || peer.udp.outer.address.is_unspecified() || ((peer.udp.force.mapping != firewall::independent || peer.udp.force.variable_address) && (host.udp.force.filtering != firewall::independent || host.udp.force.variable_address))
                     || (host.udp.outer.address == peer.udp.outer.address && (!host.udp.force.hairpin || !peer.udp.force.hairpin));
 
-            if (no_udp)
+            if (cannot_handshake)
             {
                 _dbg_ << "start time-point synchronization...";
 
@@ -302,9 +309,15 @@ class broker_impl : public plexus::link_broker
             }
         }
 
-        accept
-            ? await_peer(yield, peer.udp.outer, term.secret, term.qos.role)
-            : touch_peer(yield, peer.udp.outer, term.secret, term.qos.role);
+        bool host_awaitable = ((host.udp.force.mapping == firewall::independent && peer.udp.force.mapping == firewall::independent) || host.udp.force.filtering == firewall::independent) && !host.udp.force.variable_address;
+        bool peer_awaitable = ((peer.udp.force.mapping == firewall::independent && host.udp.force.mapping == firewall::independent) || peer.udp.force.filtering == firewall::independent) && !peer.udp.force.variable_address;
+
+        auto remote = adjust_mapped_endpoint(peer.udp.outer, peer.udp.force);
+
+        if ((accept && host_awaitable) || (!accept && !peer_awaitable))
+            await_peer(yield, remote, term.secret, term.qos.role);
+        else
+            touch_peer(yield, remote, term.secret, term.qos.role);
 
         if (term.qos.role == schema::client)
         {
