@@ -27,6 +27,8 @@ jobs:
       OPENDHT_LIB_PACKAGE: ${{ vars.OPENDHT_LIB_DEB_PACKAGE }}
       OPENDHT_DEV_PACKAGE: ${{ vars.OPENDHT_DEV_DEB_PACKAGE }}
       RICOCHET_DEV_PACKAGE: ${{ vars.RICOCHET_DEV_DEB_PACKAGE }}
+      SIMDUTF_LIB_PACKAGE: ${{ vars.SIMDUTF_LIB_DEB_PACKAGE }}
+      SIMDUTF_DEV_PACKAGE: ${{ vars.SIMDUTF_DEV_DEB_PACKAGE }}
 
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +41,8 @@ jobs:
           curl -sL -o /tmp/libtubus-dev.deb ${{ env.TUBUS_DEV_PACKAGE }} && apt-get install -y /tmp/libtubus-dev.deb
           curl -sL -o /tmp/libwormhole.deb ${{ env.WORMHOLE_LIB_PACKAGE }} && apt-get install -y /tmp/libwormhole.deb
           curl -sL -o /tmp/libwormhole-dev.deb ${{ env.WORMHOLE_DEV_PACKAGE }} && apt-get install -y /tmp/libwormhole-dev.deb
+          curl -sL -o /tmp/libsimdutf.deb ${{ env.SIMDUTF_LIB_PACKAGE }} && apt-get install -y /tmp/libsimdutf.deb
+          curl -sL -o /tmp/libsimdutf-dev.deb ${{ env.SIMDUTF_DEV_PACKAGE }} && apt-get install -y /tmp/libsimdutf-dev.deb
           curl -sL -o /tmp/libopendht.deb ${{ env.OPENDHT_LIB_PACKAGE }} && apt-get install -y /tmp/libopendht.deb
           curl -sL -o /tmp/libopendht-dev.deb ${{ env.OPENDHT_DEV_PACKAGE }} && apt-get install -y /tmp/libopendht-dev.deb
           curl -sL -o /tmp/ricochet-client.deb ${{ env.RICOCHET_DEV_PACKAGE }} && apt-get install -y /tmp/ricochet-client.deb
@@ -92,6 +96,8 @@ jobs:
       OPENDHT_LIB_PACKAGE: ${{ vars.OPENDHT_LIB_RPM_PACKAGE }}
       OPENDHT_DEV_PACKAGE: ${{ vars.OPENDHT_DEV_RPM_PACKAGE }}
       RICOCHET_DEV_PACKAGE: ${{ vars.RICOCHET_DEV_RPM_PACKAGE }}
+      SIMDUTF_LIB_PACKAGE: ${{ vars.SIMDUTF_LIB_RPM_PACKAGE }}
+      SIMDUTF_DEV_PACKAGE: ${{ vars.SIMDUTF_DEV_RPM_PACKAGE }}
 
     steps:
       - uses: actions/checkout@v4
@@ -103,6 +109,8 @@ jobs:
           curl -sL -o /tmp/libtubus-devel.rpm ${{ env.TUBUS_DEV_PACKAGE }} && dnf -y install /tmp/libtubus-devel.rpm
           curl -sL -o /tmp/libwormhole.rpm ${{ env.WORMHOLE_LIB_PACKAGE }} && dnf -y install /tmp/libwormhole.rpm
           curl -sL -o /tmp/libwormhole-devel.rpm ${{ env.WORMHOLE_DEV_PACKAGE }} && dnf -y install /tmp/libwormhole-devel.rpm
+          curl -sL -o /tmp/libsimdutf.rpm ${{ env.SIMDUTF_LIB_PACKAGE }} && dnf -y install /tmp/libsimdutf.rpm
+          curl -sL -o /tmp/libsimdutf-devel.rpm ${{ env.SIMDUTF_DEV_PACKAGE }} && dnf -y install /tmp/libsimdutf-devel.rpm
           curl -sL -o /tmp/libopendht.rpm ${{ env.OPENDHT_LIB_PACKAGE }} && dnf -y install /tmp/libopendht.rpm
           curl -sL -o /tmp/libopendht-devel.rpm ${{ env.OPENDHT_DEV_PACKAGE }} && dnf -y install /tmp/libopendht-devel.rpm
           curl -sL -o /tmp/ricochet-client.rpm ${{ env.RICOCHET_DEV_PACKAGE }} && dnf -y install /tmp/ricochet-client.rpm

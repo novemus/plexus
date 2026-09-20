@@ -92,16 +92,17 @@ class node_factory
         for(auto& url : urls)
         {
             auto ep = dht::splitPort(url);
+            auto peer = std::make_pair(std::string(ep.first), std::string(ep.second));
 
-            if (ep.second.empty())
-                ep.second = std::to_string(dht::net::DHT_DEFAULT_PORT);
+            if (peer.second.empty())
+                peer.second = std::to_string(dht::net::DHT_DEFAULT_PORT);
 
-            if (peers.count(ep) == 0)
+            if (peers.count(peer) == 0)
             {
-                _dbg_ << "connect: node=" << node->getNodeId() << " url=" << url;
+                _dbg_ << "connect: node=" << node->getNodeId() << " address=" << peer.first << " port=" << peer.second;
 
-                node->bootstrap(ep.first, ep.second);
-                peers.insert(ep);
+                node->bootstrap(peer.first, peer.second);
+                peers.insert(peer);
             }
         }
 

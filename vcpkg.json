@@ -31,6 +31,7 @@
             "version>=": "3.8.10"
         },
         "fmt",
+        "simdutf",
         "openssl",
         "msgpack",
         "nettle",
