@@ -1,5 +1,12 @@
 # Change Log
 
+## 3.4.3 (Oct 31, 2026)
+
+- Using classic STUN protocol for full investigation of NAT
+- Upgrade of the opendht dependency to version 4.4.0
+- Upgrade of the wormhole dependency to version 1.3.3
+- Upgrade of the ricochet dependency to version 1.0.1
+
 ## 3.4.2 (Jul 31, 2026)
 
 - Ability to configure list of stun servers

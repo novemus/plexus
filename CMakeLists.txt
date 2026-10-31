@@ -58,7 +58,7 @@ message("* wormhole Version: ${wormhole_VERSION}")
 message("* wormhole Include Dirs: ${wormhole_INCLUDE_DIRS}")
 message("* wormhole Library: ${wormhole_LIBRARY}")
 
-find_package(ricochet 1.0.0 REQUIRED COMPONENTS libricochet)
+find_package(ricochet 1.0.1 REQUIRED COMPONENTS libricochet)
 
 message("* ricochet Version: ${ricochet_VERSION}")
 message("* ricochet Include Dirs: ${ricochet_INCLUDE_DIRS}")
