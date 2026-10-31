@@ -155,6 +155,7 @@ jobs:
       TARGET_ARCH: x64
       VCPKG_TOOLCHAIN_FILE: "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
       GNULIB_ARCHIVE: ${{ vars.GNULIB_ARCHIVE }}
+      AUTOCONF_ARCHIVE: ${{ vars.AUTOCONF_ARCHIVE }}
       TUBUS_ARCHIVE: ${{ vars.TUBUS_WINDOWS_ARCHIVE }}
       WORMHOLE_ARCHIVE: ${{ vars.WORMHOLE_WINDOWS_ARCHIVE }}
       OPENDHT_ARCHIVE: ${{ vars.OPENDHT_WINDOWS_ARCHIVE }}
@@ -188,17 +189,23 @@ jobs:
           Invoke-WebRequest -Uri ${{ env.RICOCHET_ARCHIVE }} -OutFile C:\tmp\ricochet-client.zip
           Expand-Archive -Path C:\tmp\ricochet-client.zip -DestinationPath "${{ github.workspace }}\out\${{ env.TARGET_OS }}\${{ env.TARGET_ARCH }}\install"
 
-      - name: Prefetch gnulib for vcpkg
+      - name: Prefetch gnulib ang autoconf for vcpkg
         shell: pwsh
         run: |
           $downloads = "C:\vcpkg\downloads"
-          $filename  = "gnulib-3639c57.tar.gz"
-          $dest      = Join-Path $downloads $filename
+          $gnulibarchive    = "gnulib-3639c57.tar.gz"
+          $autoconfarchive  = "autoconf2.71-2.71-3-any.pkg.tar.zst"
+          $gnulibdest       = Join-Path $downloads $gnulibarchive
+          $autoconfdest       = Join-Path $downloads $autoconfarchive
 
           New-Item -ItemType Directory -Path $downloads -Force | Out-Null
 
-          if (-not (Test-Path $dest)) {
-            Invoke-WebRequest -Uri "${{ env.GNULIB_ARCHIVE }}" -OutFile $dest
+          if (-not (Test-Path $gnulibdest)) {
+            Invoke-WebRequest -Uri "${{ env.GNULIB_ARCHIVE }}" -OutFile $gnulibdest
+          }
+
+          if (-not (Test-Path $autoconfdest)) {
+            Invoke-WebRequest -Uri "${{ env.AUTOCONF_ARCHIVE }}" -OutFile $autoconfdest
           }
 
       - name: Build static
