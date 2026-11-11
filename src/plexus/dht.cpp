@@ -754,31 +754,51 @@ public:
 }
 
 template<>
-void spawn_accept(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+void spawn_accept(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(false)
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
-        opendht::repository repo(ctx);
-        auto op = opendht::listen::start(io, repo, host, peer, opendht::invite_token);
-        do
+        try
         {
-            auto invite = op->wait(yield);
-            boost::asio::spawn(io, [&io, repo, invite, handler](boost::asio::yield_context yield)
+            opendht::repository repo(ctx);
+            auto op = opendht::listen::start(io, repo, host, peer, opendht::invite_token);
+            do
             {
-                handler(yield, std::make_shared<opendht::pipe_impl>(io, repo, std::get<0>(invite), std::get<1>(invite), std::get<2>(invite)));
-            }, boost::asio::detached);
+                auto invite = op->wait(yield);
+                boost::asio::spawn(io, [&io, repo, invite, handler](boost::asio::yield_context yield)
+                {
+                    handler(yield, std::make_shared<opendht::pipe_impl>(io, repo, std::get<0>(invite), std::get<1>(invite), std::get<2>(invite)));
+                }, boost::asio::detached);
+            }
+            while (true);
         }
-        while (true);
+        catch(...)
+        {
+            boost::asio::post(io, [ce = std::current_exception()]()
+            {
+                std::rethrow_exception(ce);
+            });
+        }
     }, boost::asio::detached);
 }
 
 template<>
-void spawn_invite(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+void spawn_invite(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(false)
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
-        opendht::repository repo(ctx);
-        handler(yield, std::make_shared<opendht::pipe_impl>(io, repo, std::time(nullptr), host, peer));
+        try
+        {
+            opendht::repository repo(ctx);
+            handler(yield, std::make_shared<opendht::pipe_impl>(io, repo, std::time(nullptr), host, peer));
+        }
+        catch(...)
+        {
+            boost::asio::post(io, [ce = std::current_exception()]()
+            {
+                std::rethrow_exception(ce);
+            });
+        }
     }, boost::asio::detached);
 }
 
@@ -809,33 +829,41 @@ void receive_advent(boost::asio::io_context& io, const opendht::context& ctx, co
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler, failure](boost::asio::yield_context yield)
     {
-        opendht::repository repo(ctx);
-        auto op = opendht::listen::start(io, repo, host, peer, opendht::advent_token);
-        do
+        try
         {
-            auto advent = op->wait(yield);
-            boost::asio::spawn(io, [&io, repo, advent, handler, failure](boost::asio::yield_context yield)
+            opendht::repository repo(ctx);
+            auto op = opendht::listen::start(io, repo, host, peer, opendht::advent_token);
+            do
             {
-                auto id = std::get<0>(advent);
-                auto host = std::get<1>(advent);
-                auto peer = std::get<2>(advent);
-
-                try
+                auto advent = op->wait(yield);
+                boost::asio::spawn(io, [&io, repo, advent, handler, failure](boost::asio::yield_context yield)
                 {
-                    auto op = opendht::acquire::start(io, repo, host, peer, id, opendht::advent_token);
-                    op->wait(yield);
+                    auto id = std::get<0>(advent);
+                    auto host = std::get<1>(advent);
+                    auto peer = std::get<2>(advent);
 
-                    _dbg_ << "advent: " << peer << ":" << repo.app << " -> " << host;
-                    handler(host, peer);
-                }
-                catch (const std::exception& ex) 
-                {
-                    _err_ << "advent: " << peer << ":" << repo.app << " -> " << host << " error: " << ex.what();
-                    failure(host, peer, ex.what());
-                }
-            }, boost::asio::detached);
+                    try
+                    {
+                        auto op = opendht::acquire::start(io, repo, host, peer, id, opendht::advent_token);
+                        op->wait(yield);
+
+                        _dbg_ << "advent: " << peer << ":" << repo.app << " -> " << host;
+                        handler(host, peer);
+                    }
+                    catch (const std::exception& ex) 
+                    {
+                        _err_ << "advent: " << peer << ":" << repo.app << " -> " << host << " error: " << ex.what();
+                        failure(host, peer, ex.what());
+                    }
+                }, boost::asio::detached);
+            }
+            while (true);
         }
-        while (true);
+        catch(const std::exception& ex)
+        {
+            _err_ << "advent: " << peer << ":" << ctx.app << " -> "  << host << " error: " << ex.what();
+            failure(host, peer, ex.what());
+        }
     }, boost::asio::detached);
 }
 

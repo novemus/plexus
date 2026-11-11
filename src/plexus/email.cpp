@@ -793,40 +793,60 @@ public:
 }
 
 template<>
-void spawn_accept(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+void spawn_accept(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(false)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
     {
-        email::smtp pusher(io, conf, host, peer);
-        email::imap puller(io, conf, host, peer);
-
-        do
+        try
         {
-            puller.wait(yield, email::invite_token);
+            email::smtp pusher(io, conf, host, peer);
+            email::imap puller(io, conf, host, peer);
 
-            pusher.host(puller.host());
-            pusher.peer(puller.peer());
-
-            boost::asio::spawn(io, [pipe = std::make_shared<email::pipe_impl>(pusher, puller), handler](boost::asio::yield_context yield)
+            do
             {
-                handler(yield, pipe);
-            }, boost::asio::detached);
+                puller.wait(yield, email::invite_token);
+
+                pusher.host(puller.host());
+                pusher.peer(puller.peer());
+
+                boost::asio::spawn(io, [pipe = std::make_shared<email::pipe_impl>(pusher, puller), handler](boost::asio::yield_context yield)
+                {
+                    handler(yield, pipe);
+                }, boost::asio::detached);
+            }
+            while (true);
         }
-        while (true);
+        catch(...)
+        {
+            boost::asio::post(io, [ce = std::current_exception()]()
+            {
+                std::rethrow_exception(ce);
+            });
+        }
     }, boost::asio::detached);
 }
 
 template<>
-void spawn_invite(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
+void spawn_invite(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(false)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
     {
-        email::smtp pusher(io, conf, host, peer);
-        email::imap puller(io, conf, host, peer);
+        try
+        {
+            email::smtp pusher(io, conf, host, peer);
+            email::imap puller(io, conf, host, peer);
 
-        puller.init(yield);
+            puller.init(yield);
 
-        handler(yield, std::make_shared<email::pipe_impl>(pusher, puller));
+            handler(yield, std::make_shared<email::pipe_impl>(pusher, puller));
+        }
+        catch(...)
+        {
+            boost::asio::post(io, [ce = std::current_exception()]()
+            {
+                std::rethrow_exception(ce);
+            });
+        }
     }, boost::asio::detached);
 }
 

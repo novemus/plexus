@@ -175,9 +175,9 @@ void forward_advent(boost::asio::io_context& io, const rendezvous& mediator, con
 LIBPLEXUS_EXPORT
 void receive_advent(boost::asio::io_context& io, const rendezvous& mediator, const std::string& app, const std::string& repo, const identity& host, const identity& peer, const observer& handler, const fallback& failure) noexcept(true);
 LIBPLEXUS_EXPORT
-void spawn_accept(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
+void spawn_accept(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(false);
 LIBPLEXUS_EXPORT
-void spawn_invite(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(true);
+void spawn_invite(boost::asio::io_context& io, const options& config, const identity& host, const identity& peer, const connector& connect, const fallback& failure = nullptr) noexcept(false);
 
 LIBPLEXUS_EXPORT std::ostream& operator<<(std::ostream& out, const identity& val) noexcept(false);
 LIBPLEXUS_EXPORT std::istream& operator>>(std::istream& in, identity& val) noexcept(false);

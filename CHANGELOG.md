@@ -1,5 +1,9 @@
 # Change Log
 
+## 3.4.4 (Nov 11, 2026)
+
+- fix of the email rendezvous silent failure
+
 ## 3.4.3 (Oct 31, 2026)
 
 - Using classic STUN protocol for full investigation of NAT

@@ -170,9 +170,9 @@ template<class mediator> struct context : public mediator
 };
 
 template<class mediator>
-void spawn_accept(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
+void spawn_accept(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(false);
 template<class mediator>
-void spawn_invite(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true);
+void spawn_invite(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(false);
 
 template<class mediator>
 void forward_advent(boost::asio::io_context& io, const context<mediator>& conf, const identity& host, const identity& peer, const observer& reveal, const fallback& failure = nullptr) noexcept(true);
