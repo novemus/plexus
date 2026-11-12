@@ -754,7 +754,7 @@ public:
 }
 
 template<>
-void spawn_accept(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(false)
+void spawn_accept(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
@@ -772,7 +772,7 @@ void spawn_accept(boost::asio::io_context& io, const opendht::context& ctx, cons
             }
             while (true);
         }
-        catch(...)
+        catch(const std::exception&)
         {
             boost::asio::post(io, [ce = std::current_exception()]()
             {
@@ -783,7 +783,7 @@ void spawn_accept(boost::asio::io_context& io, const opendht::context& ctx, cons
 }
 
 template<>
-void spawn_invite(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(false)
+void spawn_invite(boost::asio::io_context& io, const opendht::context& ctx, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, ctx, host, peer, handler](boost::asio::yield_context yield)
     {
@@ -792,7 +792,7 @@ void spawn_invite(boost::asio::io_context& io, const opendht::context& ctx, cons
             opendht::repository repo(ctx);
             handler(yield, std::make_shared<opendht::pipe_impl>(io, repo, std::time(nullptr), host, peer));
         }
-        catch(...)
+        catch(const std::exception&)
         {
             boost::asio::post(io, [ce = std::current_exception()]()
             {

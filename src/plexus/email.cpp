@@ -793,7 +793,7 @@ public:
 }
 
 template<>
-void spawn_accept(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(false)
+void spawn_accept(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
     {
@@ -816,7 +816,7 @@ void spawn_accept(boost::asio::io_context& io, const email::context& conf, const
             }
             while (true);
         }
-        catch(...)
+        catch(const std::exception&)
         {
             boost::asio::post(io, [ce = std::current_exception()]()
             {
@@ -827,7 +827,7 @@ void spawn_accept(boost::asio::io_context& io, const email::context& conf, const
 }
 
 template<>
-void spawn_invite(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(false)
+void spawn_invite(boost::asio::io_context& io, const email::context& conf, const identity& host, const identity& peer, const coroutine& handler) noexcept(true)
 {
     boost::asio::spawn(io, [&io, conf, host, peer, handler](boost::asio::yield_context yield)
     {
@@ -840,7 +840,7 @@ void spawn_invite(boost::asio::io_context& io, const email::context& conf, const
 
             handler(yield, std::make_shared<email::pipe_impl>(pusher, puller));
         }
-        catch(...)
+        catch(const std::exception&)
         {
             boost::asio::post(io, [ce = std::current_exception()]()
             {
